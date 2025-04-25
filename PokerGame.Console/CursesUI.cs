@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Mindmagma.Curses;
 using PokerGame.Core.Game;
 using PokerGame.Core.Interfaces;
 using PokerGame.Core.Models;
@@ -9,7 +11,7 @@ using PokerGame.Core.Models;
 namespace PokerGame.Console
 {
     /// <summary>
-    /// Provides an enhanced text-based user interface for the poker game using System.Console.
+    /// Provides an enhanced text-based user interface for the poker game using NCurses.
     /// </summary>
     public class CursesUI : IPokerGameUI, IDisposable
     {
@@ -18,7 +20,15 @@ namespace PokerGame.Console
         private CancellationTokenSource _cancelSource;
         private PokerGameEngine _gameEngine = null!;
         
-        // Player and card display positions
+        // NCurses main window and player info windows
+        private Window _mainWindow;
+        private Window _statusWindow;
+        private Window _communityCardsWindow;
+        private Window _potWindow;
+        private Window _actionWindow;
+        private Dictionary<int, Window> _playerWindows;
+        
+        // Player positions around the table
         private readonly Dictionary<int, (int Row, int Col)> _playerPositions;
         
         public CursesUI()
@@ -54,37 +64,192 @@ namespace PokerGame.Console
         {
             if (_gameEngine == null)
                 throw new InvalidOperationException("Game engine not set");
-            
-            // Display welcome message
-            System.Console.Clear();
-            DrawBorder();
-            WriteAt("TEXAS HOLD'EM POKER GAME", 20, 1);
-            WriteAt("===============================================", 1, 3);
-            
-            // Get number of players
-            int numPlayers = GetNumberInRange("Enter number of players (2-8): ", 2, 8, 2, 5);
-            
-            // Get player names
-            string[] playerNames = new string[numPlayers];
-            for (int i = 0; i < numPlayers; i++)
+                
+            try
             {
-                string defaultName = $"Player {i+1}";
-                WriteAt($"Enter name for player {i+1} (or press Enter for '{defaultName}'): ", 2, 7 + i);
-                SetCursorPosition(60, 7 + i);
-                string name = System.Console.ReadLine();
-                playerNames[i] = string.IsNullOrWhiteSpace(name) ? defaultName : name;
+                // Initialize NCurses
+                Curses.InitScreen();
+                Curses.Raw();
+                Curses.KeyPad(Curses.StdScr, true);
+                Curses.NoEcho();
+                Curses.Start_Color();
+                Curses.Refresh();
+                
+                // Initialize color pairs
+                InitializeColors();
+                
+                // Create main window and draw borders
+                int height = Curses.Lines;
+                int width = Curses.Cols;
+                _mainWindow = new Window(height, width, 0, 0);
+                _mainWindow.Box(0, 0);
+                _mainWindow.Refresh();
+                
+                // Create status window
+                _statusWindow = new Window(3, width - 4, 1, 2);
+                _statusWindow.Box(0, 0);
+                _statusWindow.MvAddStr(1, 2, "TEXAS HOLD'EM POKER GAME");
+                _statusWindow.Refresh();
+                
+                // Create community cards window
+                _communityCardsWindow = new Window(5, width - 4, 5, 2);
+                _communityCardsWindow.Box(0, 0);
+                _communityCardsWindow.MvAddStr(1, 2, "Community Cards: [None]");
+                _communityCardsWindow.Refresh();
+                
+                // Create pot window
+                _potWindow = new Window(3, 20, 5, width - 24);
+                _potWindow.Box(0, 0);
+                _potWindow.MvAddStr(1, 2, "Pot: $0");
+                _potWindow.Refresh();
+                
+                // Create action window
+                _actionWindow = new Window(5, width - 4, height - 6, 2);
+                _actionWindow.Box(0, 0);
+                _actionWindow.MvAddStr(1, 2, "Actions:");
+                _actionWindow.Refresh();
+                
+                // Display welcome message
+                _statusWindow.Clear();
+                _statusWindow.Box(0, 0);
+                _statusWindow.MvAddStr(1, 2, "Welcome to Texas Hold'em Poker!");
+                _statusWindow.Refresh();
+                
+                // Get number of players
+                _actionWindow.Clear();
+                _actionWindow.Box(0, 0);
+                _actionWindow.MvAddStr(1, 2, "Enter number of players (2-8): ");
+                _actionWindow.Refresh();
+                Curses.Echo();
+                string input = GetInput(_actionWindow, 1, 32, 1);
+                Curses.NoEcho();
+                int numPlayers;
+                if (!int.TryParse(input, out numPlayers) || numPlayers < 2 || numPlayers > 8)
+                {
+                    numPlayers = 4; // Default to 4 players
+                }
+                
+                // Initialize player windows
+                _playerWindows = new Dictionary<int, Window>();
+                for (int i = 0; i < numPlayers; i++)
+                {
+                    var pos = _playerPositions[i];
+                    Window playerWindow = new Window(3, 28, pos.Row, pos.Col);
+                    playerWindow.Box(0, 0);
+                    _playerWindows[i] = playerWindow;
+                }
+                
+                // Get player names
+                string[] playerNames = new string[numPlayers];
+                for (int i = 0; i < numPlayers; i++)
+                {
+                    string defaultName = $"Player {i+1}";
+                    _actionWindow.Clear();
+                    _actionWindow.Box(0, 0);
+                    _actionWindow.MvAddStr(1, 2, $"Enter name for player {i+1} (Enter for '{defaultName}'): ");
+                    _actionWindow.Refresh();
+                    Curses.Echo();
+                    string name = GetInput(_actionWindow, 1, 55, 20);
+                    Curses.NoEcho();
+                    playerNames[i] = string.IsNullOrWhiteSpace(name) ? defaultName : name;
+                    
+                    // Display player in their window
+                    _playerWindows[i].Clear();
+                    _playerWindows[i].Box(0, 0);
+                    _playerWindows[i].MvAddStr(1, 2, playerNames[i]);
+                    _playerWindows[i].Refresh();
+                }
+                
+                // Initialize the UI
+                _initialized = true;
+                
+                // Start the game with the provided player names
+                _gameEngine.StartGame(playerNames);
+                
+                // Main game loop (handled by the game engine and callbacks)
+                while (true)
+                {
+                    Thread.Sleep(100);
+                    Curses.Refresh();
+                }
+            }
+            catch (Exception ex)
+            {
+                EndCurses();
+                System.Console.WriteLine($"Error initializing NCurses: {ex.Message}");
+                System.Console.WriteLine(ex.StackTrace);
+            }
+        }
+        
+        /// <summary>
+        /// Initialize color pairs for the UI
+        /// </summary>
+        private void InitializeColors()
+        {
+            // Initialize color pairs
+            Curses.Init_Pair(1, Curses.COLOR_WHITE, Curses.COLOR_BLUE);   // Title
+            Curses.Init_Pair(2, Curses.COLOR_RED, Curses.COLOR_BLACK);    // Hearts/Diamonds
+            Curses.Init_Pair(3, Curses.COLOR_WHITE, Curses.COLOR_BLACK);  // Clubs/Spades
+            Curses.Init_Pair(4, Curses.COLOR_BLACK, Curses.COLOR_GREEN);  // Table
+            Curses.Init_Pair(5, Curses.COLOR_YELLOW, Curses.COLOR_BLACK); // Active player
+            Curses.Init_Pair(6, Curses.COLOR_RED, Curses.COLOR_BLACK);    // Folded player
+        }
+        
+        /// <summary>
+        /// Gets input from the user within an NCurses window
+        /// </summary>
+        private string GetInput(Window window, int y, int x, int maxLength)
+        {
+            Curses.Echo();
+            window.Move(y, x);
+            window.Refresh();
+            
+            char[] buffer = new char[maxLength];
+            int pos = 0;
+            
+            while (pos < maxLength)
+            {
+                int ch = Curses.GetCh();
+                
+                if (ch == Curses.KEY_ENTER || ch == 10 || ch == 13) // Enter key (different key codes)
+                {
+                    break;
+                }
+                else if (ch == Curses.KEY_BACKSPACE || ch == 127) // Backspace
+                {
+                    if (pos > 0)
+                    {
+                        pos--;
+                        window.MvAddCh(y, x + pos, ' ');
+                        window.Move(y, x + pos);
+                        window.Refresh();
+                    }
+                }
+                else if (ch >= 32 && ch <= 126) // Printable ASCII
+                {
+                    buffer[pos] = (char)ch;
+                    window.MvAddCh(y, x + pos, ch);
+                    pos++;
+                    window.Refresh();
+                }
             }
             
-            // Initialize the UI
-            _initialized = true;
-            
-            // Start the game with the provided player names
-            _gameEngine.StartGame(playerNames);
-            
-            // Main game loop (handled by the game engine and callbacks)
-            while (true)
+            Curses.NoEcho();
+            return new string(buffer, 0, pos);
+        }
+        
+        /// <summary>
+        /// Safely ends curses mode
+        /// </summary>
+        private void EndCurses()
+        {
+            try
             {
-                Thread.Sleep(100);
+                Curses.EndWin();
+            }
+            catch
+            {
+                // Ignore errors during cleanup
             }
         }
 
@@ -96,8 +261,19 @@ namespace PokerGame.Console
             if (!_initialized)
                 return;
                 
-            // Display message in a prominent location
-            WriteAt(message.PadRight(60), 2, 22);
+            // Display message in status window
+            try
+            {
+                _statusWindow?.Clear();
+                _statusWindow?.Box(0, 0);
+                _statusWindow?.MvAddStr(1, 2, message.Length > 60 ? message.Substring(0, 60) : message);
+                _statusWindow?.Refresh();
+            }
+            catch (Exception ex)
+            {
+                // If NCurses fails, fall back to console
+                System.Console.WriteLine($"Message: {message}");
+            }
         }
         
         /// <summary>
@@ -108,80 +284,158 @@ namespace PokerGame.Console
             if (!_initialized)
                 return;
             
-            // Clear the action area
-            ClearArea(2, 20, 60, 3);
-            
-            WriteAt($"{player.Name}'s turn", 2, 20);
-            
-            // Show player's hole cards
-            string cardsText = FormatCards(player.HoleCards);
-            WriteAt($"Your hole cards: {cardsText}", 2, 21);
-            
-            // Show available actions
-            bool canCheck = player.CurrentBet == gameEngine.CurrentBet;
-            int callAmount = gameEngine.CurrentBet - player.CurrentBet;
-            
-            string actionPrompt = "Actions: ";
-            if (canCheck)
-                actionPrompt += "[C]heck, ";
-            else
-                actionPrompt += $"[C]all ${callAmount}, ";
-                
-            actionPrompt += "[F]old, [R]aise";
-            WriteAt(actionPrompt, 2, 22);
-            
-            // Get player action
-            bool validAction = false;
-            while (!validAction)
+            try
             {
-                WriteAt("Enter your action: ", 2, 23);
-                SetCursorPosition(20, 23);
-                string actionInput = System.Console.ReadLine()?.ToUpper() ?? "";
+                // Update status window to show whose turn it is
+                _statusWindow.Clear();
+                _statusWindow.Box(0, 0);
+                _statusWindow.MvAddStr(1, 2, $"{player.Name}'s turn");
+                _statusWindow.Refresh();
                 
-                switch (actionInput)
+                // Highlight active player's window
+                int playerIndex = -1;
+                for (int i = 0; i < gameEngine.Players.Count; i++)
+                {
+                    if (gameEngine.Players[i] == player)
+                    {
+                        playerIndex = i;
+                        break;
+                    }
+                }
+                
+                if (playerIndex >= 0 && _playerWindows.ContainsKey(playerIndex))
+                {
+                    // Highlight the active player's window
+                    _playerWindows[playerIndex].AttrOn(Curses.COLOR_PAIR(5));
+                    _playerWindows[playerIndex].Box(0, 0);
+                    _playerWindows[playerIndex].AttrOff(Curses.COLOR_PAIR(5));
+                    _playerWindows[playerIndex].Refresh();
+                }
+                
+                // Show player's hole cards in the action window
+                _actionWindow.Clear();
+                _actionWindow.Box(0, 0);
+                
+                string cardsText = FormatCards(player.HoleCards);
+                _actionWindow.MvAddStr(1, 2, $"Your hole cards: {cardsText}");
+                
+                // Show available actions
+                bool canCheck = player.CurrentBet == gameEngine.CurrentBet;
+                int callAmount = gameEngine.CurrentBet - player.CurrentBet;
+                
+                string actionPrompt = "Actions: ";
+                if (canCheck)
+                    actionPrompt += "[C]heck, ";
+                else
+                    actionPrompt += $"[C]all ${callAmount}, ";
+                    
+                actionPrompt += "[F]old, [R]aise";
+                _actionWindow.MvAddStr(2, 2, actionPrompt);
+                _actionWindow.Refresh();
+                
+                // Get player action
+                bool validAction = false;
+                while (!validAction)
+                {
+                    _actionWindow.MvAddStr(3, 2, "Enter your action (C/F/R): ");
+                    _actionWindow.Refresh();
+                    
+                    Curses.Echo();
+                    string actionInput = GetInput(_actionWindow, 3, 27, 1).ToUpper();
+                    Curses.NoEcho();
+                    
+                    switch (actionInput)
+                    {
+                        case "F":
+                            gameEngine.ProcessPlayerAction("fold");
+                            validAction = true;
+                            break;
+                            
+                        case "C":
+                            if (canCheck)
+                                gameEngine.ProcessPlayerAction("check");
+                            else
+                                gameEngine.ProcessPlayerAction("call");
+                            validAction = true;
+                            break;
+                            
+                        case "R":
+                            int minRaise = gameEngine.CurrentBet + 10;
+                            _actionWindow.MvAddStr(3, 2, $"Enter raise amount (min ${minRaise}): $");
+                            _actionWindow.Clrtoeol();
+                            _actionWindow.Refresh();
+                            
+                            Curses.Echo();
+                            string raiseInput = GetInput(_actionWindow, 3, 37, 5);
+                            Curses.NoEcho();
+                            
+                            if (int.TryParse(raiseInput, out int raiseAmount) && 
+                                raiseAmount >= minRaise && 
+                                raiseAmount <= player.Chips + player.CurrentBet)
+                            {
+                                gameEngine.ProcessPlayerAction("raise", raiseAmount);
+                                validAction = true;
+                            }
+                            else
+                            {
+                                _actionWindow.MvAddStr(3, 2, "Invalid amount. Try again.");
+                                _actionWindow.Clrtoeol();
+                                _actionWindow.Refresh();
+                                Thread.Sleep(1000);
+                            }
+                            break;
+                            
+                        default:
+                            _actionWindow.MvAddStr(3, 2, "Invalid action. Use F (fold), C (check/call), or R (raise).");
+                            _actionWindow.Clrtoeol();
+                            _actionWindow.Refresh();
+                            Thread.Sleep(1000);
+                            break;
+                    }
+                }
+                
+                // Clear highlight from player window
+                if (playerIndex >= 0 && _playerWindows.ContainsKey(playerIndex))
+                {
+                    _playerWindows[playerIndex].Box(0, 0);
+                    _playerWindows[playerIndex].Refresh();
+                }
+                
+                // Clear action window
+                _actionWindow.Clear();
+                _actionWindow.Box(0, 0);
+                _actionWindow.Refresh();
+            }
+            catch (Exception ex)
+            {
+                // Fall back to console if NCurses fails
+                System.Console.WriteLine($"Error in GetPlayerAction: {ex.Message}");
+                System.Console.WriteLine($"Enter action for {player.Name} (F=fold, C=check/call, R=raise): ");
+                string input = System.Console.ReadLine()?.ToUpper() ?? "";
+                
+                switch (input)
                 {
                     case "F":
                         gameEngine.ProcessPlayerAction("fold");
-                        validAction = true;
                         break;
-                        
                     case "C":
-                        if (canCheck)
+                        if (player.CurrentBet == gameEngine.CurrentBet)
                             gameEngine.ProcessPlayerAction("check");
                         else
                             gameEngine.ProcessPlayerAction("call");
-                        validAction = true;
                         break;
-                        
                     case "R":
-                        int minRaise = gameEngine.CurrentBet + 10;
-                        WriteAt($"Enter raise amount (min {minRaise}): $", 2, 24);
-                        SetCursorPosition(35, 24);
-                        if (int.TryParse(System.Console.ReadLine(), out int raiseAmount) && 
-                            raiseAmount >= minRaise && 
-                            raiseAmount <= player.Chips + player.CurrentBet)
-                        {
-                            gameEngine.ProcessPlayerAction("raise", raiseAmount);
-                            validAction = true;
-                        }
+                        System.Console.Write("Enter raise amount: $");
+                        if (int.TryParse(System.Console.ReadLine(), out int amount))
+                            gameEngine.ProcessPlayerAction("raise", amount);
                         else
-                        {
-                            WriteAt("Invalid amount. Try again.", 2, 24);
-                            Thread.Sleep(1000);
-                            WriteAt("                          ", 2, 24);
-                        }
+                            gameEngine.ProcessPlayerAction("fold");
                         break;
-                        
                     default:
-                        WriteAt("Invalid action. Use F (fold), C (check/call), or R (raise).", 2, 24);
-                        Thread.Sleep(1000);
-                        WriteAt("                                                           ", 2, 24);
+                        gameEngine.ProcessPlayerAction("fold");
                         break;
                 }
             }
-            
-            // Clear action area after processing
-            ClearArea(2, 20, 60, 5);
         }
         
         /// <summary>
@@ -192,50 +446,115 @@ namespace PokerGame.Console
             if (!_initialized || gameEngine.State == GameState.HandComplete)
                 return;
             
-            // Refresh the screen
-            System.Console.Clear();
-            DrawBorder();
-            WriteAt("TEXAS HOLD'EM POKER GAME", 20, 1);
-            
-            // Show game state
-            WriteAt($"GAME STATE: {gameEngine.State}", 2, 3);
-            
-            // Show community cards if any
-            if (gameEngine.CommunityCards.Count > 0)
+            try
             {
-                string communityCards = FormatCards(new List<Card>(gameEngine.CommunityCards));
-                WriteAt($"Community cards: {communityCards}", 2, 5);
-            }
-            else
-            {
-                WriteAt("Community cards: [None]", 2, 5);
-            }
-            
-            // Show pot and current bet
-            WriteAt($"Pot: ${gameEngine.Pot}   Current bet: ${gameEngine.CurrentBet}", 2, 6);
-            
-            // Show player information at their table positions
-            for (int i = 0; i < gameEngine.Players.Count && i < _maxPlayers; i++)
-            {
-                var player = gameEngine.Players[i];
-                var pos = _playerPositions[i];
+                // Update status window with game state
+                _statusWindow.Clear();
+                _statusWindow.Box(0, 0);
+                _statusWindow.MvAddStr(1, 2, $"TEXAS HOLD'EM POKER - {gameEngine.State}");
+                _statusWindow.Refresh();
                 
-                string status = player.HasFolded ? "FOLDED" : 
-                                player.IsAllIn ? "ALL-IN" : 
-                                player == gameEngine.CurrentPlayer ? ">> ACTIVE <<" : "";
-                                
-                WriteAt($"{player.Name}: ${player.Chips} {status}", pos.Col, pos.Row);
+                // Update community cards window
+                _communityCardsWindow.Clear();
+                _communityCardsWindow.Box(0, 0);
                 
-                if (player.HoleCards.Count > 0 && !player.HasFolded && player == gameEngine.CurrentPlayer)
+                if (gameEngine.CommunityCards.Count > 0)
                 {
-                    // Only show cards for the current player
-                    string cards = FormatCards(player.HoleCards);
-                    WriteAt(cards, pos.Col, pos.Row + 1);
+                    string communityCards = FormatCards(new List<Card>(gameEngine.CommunityCards));
+                    _communityCardsWindow.MvAddStr(1, 2, $"Community cards: {communityCards}");
                 }
-                else if (player.HoleCards.Count > 0 && !player.HasFolded)
+                else
                 {
-                    // Show card backs for other players
-                    WriteAt("[??] [??]", pos.Col, pos.Row + 1);
+                    _communityCardsWindow.MvAddStr(1, 2, "Community cards: [None]");
+                }
+                _communityCardsWindow.Refresh();
+                
+                // Update pot window
+                _potWindow.Clear();
+                _potWindow.Box(0, 0);
+                _potWindow.MvAddStr(1, 2, $"Pot: ${gameEngine.Pot}");
+                if (gameEngine.CurrentBet > 0)
+                {
+                    _potWindow.MvAddStr(2, 2, $"Current bet: ${gameEngine.CurrentBet}");
+                }
+                _potWindow.Refresh();
+                
+                // Update player windows
+                for (int i = 0; i < gameEngine.Players.Count && i < _maxPlayers; i++)
+                {
+                    if (!_playerWindows.ContainsKey(i))
+                        continue;
+                        
+                    var player = gameEngine.Players[i];
+                    var window = _playerWindows[i];
+                    
+                    window.Clear();
+                    
+                    // Set color based on player status
+                    if (player.HasFolded)
+                        window.AttrOn(Curses.COLOR_PAIR(6));
+                    else if (player == gameEngine.CurrentPlayer)
+                        window.AttrOn(Curses.COLOR_PAIR(5));
+                    
+                    window.Box(0, 0);
+                    
+                    // Reset attributes
+                    window.AttrOff(Curses.COLOR_PAIR(5));
+                    window.AttrOff(Curses.COLOR_PAIR(6));
+                    
+                    // Display player info
+                    string status = player.HasFolded ? "FOLDED" : 
+                                    player.IsAllIn ? "ALL-IN" : 
+                                    player == gameEngine.CurrentPlayer ? "ACTIVE" : "";
+                                    
+                    window.MvAddStr(1, 2, $"{player.Name}: ${player.Chips} {status}");
+                    
+                    // Show cards for current player or card backs for others
+                    if (player.HoleCards.Count > 0 && !player.HasFolded && player == gameEngine.CurrentPlayer)
+                    {
+                        string cards = FormatCards(player.HoleCards);
+                        window.MvAddStr(2, 2, cards);
+                    }
+                    else if (player.HoleCards.Count > 0 && !player.HasFolded)
+                    {
+                        window.MvAddStr(2, 2, "[??] [??]");
+                    }
+                    
+                    window.Refresh();
+                }
+                
+                Curses.Refresh();
+            }
+            catch (Exception ex)
+            {
+                // Fall back to console if NCurses fails
+                System.Console.Clear();
+                System.Console.WriteLine($"TEXAS HOLD'EM POKER - {gameEngine.State}");
+                System.Console.WriteLine($"Pot: ${gameEngine.Pot}  Current bet: ${gameEngine.CurrentBet}");
+                
+                if (gameEngine.CommunityCards.Count > 0)
+                {
+                    string communityCards = FormatCards(new List<Card>(gameEngine.CommunityCards));
+                    System.Console.WriteLine($"Community cards: {communityCards}");
+                }
+                else
+                {
+                    System.Console.WriteLine("Community cards: [None]");
+                }
+                
+                foreach (var player in gameEngine.Players)
+                {
+                    string status = player.HasFolded ? "FOLDED" : 
+                                    player.IsAllIn ? "ALL-IN" : 
+                                    player == gameEngine.CurrentPlayer ? ">> ACTIVE <<" : "";
+                                    
+                    System.Console.WriteLine($"{player.Name}: ${player.Chips} {status}");
+                    
+                    if (player == gameEngine.CurrentPlayer)
+                    {
+                        string cards = FormatCards(player.HoleCards);
+                        System.Console.WriteLine($"  Your cards: {cards}");
+                    }
                 }
             }
         }
@@ -326,77 +645,32 @@ namespace PokerGame.Console
             return number;
         }
         
-        /// <summary>
-        /// Draws a border around the console
-        /// </summary>
-        private void DrawBorder()
-        {
-            int width = System.Console.WindowWidth - 2;
-            int height = System.Console.WindowHeight - 2;
-            
-            // Draw top and bottom borders
-            WriteAt("+" + new string('-', width) + "+", 0, 0);
-            WriteAt("+" + new string('-', width) + "+", 0, height);
-            
-            // Draw left and right borders
-            for (int i = 1; i < height; i++)
-            {
-                WriteAt("|", 0, i);
-                WriteAt("|", width + 1, i);
-            }
-        }
-        
-        /// <summary>
-        /// Writes text at the specified position
-        /// </summary>
-        private void WriteAt(string text, int left, int top)
-        {
-            SetCursorPosition(left, top);
-            System.Console.Write(text);
-        }
-        
-        /// <summary>
-        /// Sets the cursor position safely
-        /// </summary>
-        private void SetCursorPosition(int left, int top)
+        public void Dispose()
         {
             try
             {
-                System.Console.SetCursorPosition(left, top);
-            }
-            catch (Exception)
-            {
-                // Handle out-of-range cursor positions
-                try
+                // Clean up NCurses windows
+                _playerWindows?.Values.ToList().ForEach(w => w?.Dispose());
+                _actionWindow?.Dispose();
+                _potWindow?.Dispose();
+                _communityCardsWindow?.Dispose();
+                _statusWindow?.Dispose();
+                _mainWindow?.Dispose();
+                
+                // End NCurses mode
+                EndCurses();
+                
+                // Clean up other resources
+                if (_cancelSource != null)
                 {
-                    System.Console.SetCursorPosition(0, 0);
-                }
-                catch
-                {
-                    // Last resort, just skip positioning
+                    _cancelSource.Cancel();
+                    _cancelSource.Dispose();
+                    _cancelSource = null;
                 }
             }
-        }
-        
-        /// <summary>
-        /// Clears a rectangular area of the console
-        /// </summary>
-        private void ClearArea(int left, int top, int width, int height)
-        {
-            string blank = new string(' ', width);
-            for (int i = 0; i < height; i++)
+            catch
             {
-                WriteAt(blank, left, top + i);
-            }
-        }
-        
-        public void Dispose()
-        {
-            if (_cancelSource != null)
-            {
-                _cancelSource.Cancel();
-                _cancelSource.Dispose();
-                _cancelSource = null;
+                // Ignore errors during cleanup
             }
         }
     }

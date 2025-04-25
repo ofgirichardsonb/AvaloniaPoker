@@ -1,0 +1,1 @@
+using System; using System.Reflection; using Mindmagma.Curses; class Program { static void Main() { Console.WriteLine("NCurses Methods:"); foreach (var method in typeof(NCurses).GetMethods(BindingFlags.Public | BindingFlags.Static)) { Console.WriteLine($"- {method.Name}"); } } }
