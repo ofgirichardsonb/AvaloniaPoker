@@ -15,6 +15,8 @@ jobs:
 
       - name: Install Azure CLI
         uses: azure/setup-azure-cli@v1
+        with:
+          version: '2.0.81'
 
       - name: Authenticate with Azure
         env:
