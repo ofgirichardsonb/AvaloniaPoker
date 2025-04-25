@@ -22,4 +22,4 @@ jobs:
         with:
           inlineScript: |
             az devops configure --defaults organization=https://dev.azure.com/ofgi project="Architecture Lab"
-            az repos import create --git-source-url https://github.com/ofgirichardsonb/AvaloniaPoker --repository AvaloniaPoker --requires-authorization false
+            az repos import create --git-source-url https://github.com/ofgirichardsonb/AvaloniaPoker --repository AvaloniaPoker
