@@ -1,5 +1,6 @@
 using System;
 using PokerGame.Core.Game;
+using PokerGame.Core.Interfaces;
 
 namespace PokerGame.Console
 {
@@ -11,6 +12,11 @@ namespace PokerGame.Console
             bool useMicroservices = Array.Exists(args, arg => 
                 arg.Equals("--microservices", StringComparison.OrdinalIgnoreCase) || 
                 arg.Equals("-m", StringComparison.OrdinalIgnoreCase));
+                
+            // Check if we should use the enhanced NCurses UI
+            bool useCursesUi = Array.Exists(args, arg => 
+                arg.Equals("--curses", StringComparison.OrdinalIgnoreCase) || 
+                arg.Equals("-c", StringComparison.OrdinalIgnoreCase));
 
             if (useMicroservices)
             {
@@ -19,24 +25,40 @@ namespace PokerGame.Console
             }
             else
             {
-                // Run in traditional mode
-                RunTraditionalMode();
+                // Run in traditional mode with either standard or enhanced UI
+                RunTraditionalMode(useCursesUi);
             }
         }
         
-        static void RunTraditionalMode()
+        static void RunTraditionalMode(bool useCursesUi)
         {
-            // Create the console UI
-            ConsoleUI ui = new ConsoleUI();
+            // Create the appropriate UI
+            IPokerGameUI ui;
             
-            // Create the game engine with the console UI
+            if (useCursesUi)
+            {
+                System.Console.WriteLine("Starting with enhanced UI...");
+                ui = new CursesUI();
+            }
+            else
+            {
+                ui = new ConsoleUI();
+            }
+            
+            // Create the game engine with the selected UI
             PokerGameEngine gameEngine = new PokerGameEngine(ui);
             
             // Set the UI's reference to the game engine
-            ui.SetGameEngine(gameEngine);
-            
-            // Start the game with UI
-            ui.StartGame();
+            if (ui is ConsoleUI consoleUi)
+            {
+                consoleUi.SetGameEngine(gameEngine);
+                consoleUi.StartGame();
+            }
+            else if (ui is CursesUI cursesUi)
+            {
+                cursesUi.SetGameEngine(gameEngine);
+                cursesUi.StartGame();
+            }
             
             // This will run until the user exits
         }

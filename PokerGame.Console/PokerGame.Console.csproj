@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Mono.Terminal" Version="5.4.2" />
     <PackageReference Include="NetMQ" Version="4.0.1.14" />
   </ItemGroup>
 

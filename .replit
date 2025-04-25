@@ -30,8 +30,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj"
-waitForPort = 5000
+args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --curses"
 
 [[workflows.workflow]]
 name = "poker_console_workflow"
@@ -50,4 +49,4 @@ task = "shell.exec"
 args = "echo 3 | dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --microservices"
 
 [deployment]
-run = ["sh", "-c", "dotnet run --project PokerGame.Console/PokerGame.Console.csproj"]
+run = ["sh", "-c", "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --curses"]

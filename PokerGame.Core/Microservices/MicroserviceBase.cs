@@ -121,7 +121,7 @@ namespace PokerGame.Core.Microservices
         /// Sends a message to all microservices
         /// </summary>
         /// <param name="message">The message to send</param>
-        protected void Broadcast(Message message)
+        protected internal virtual void Broadcast(Message message)
         {
             message.SenderId = _serviceId;
             _publisherSocket.SendFrame(message.ToJson());
@@ -132,7 +132,7 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         /// <param name="message">The message to send</param>
         /// <param name="receiverId">The ID of the receiving service</param>
-        protected void SendTo(Message message, string receiverId)
+        protected internal virtual void SendTo(Message message, string receiverId)
         {
             message.SenderId = _serviceId;
             message.ReceiverId = receiverId;
@@ -319,7 +319,7 @@ namespace PokerGame.Core.Microservices
         /// Handles a message received from another service
         /// </summary>
         /// <param name="message">The message to handle</param>
-        protected virtual Task HandleMessageAsync(Message message)
+        protected internal virtual Task HandleMessageAsync(Message message)
         {
             // Base implementation does nothing
             return Task.CompletedTask;
