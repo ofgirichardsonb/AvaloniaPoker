@@ -10,12 +10,16 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
       - name: Sync to DevOps
         uses: azure/cli@v2
         with:
           inlineScript: |
             az devops configure --defaults organization=https://dev.azure.com/ofgi project="Architecture Lab"
-            echo "${{ secrets.AZURE_DEVOPS_EXT_PAT }}" | az devops login
+            $pat = "${{ secrets.AZURE_DEVOPS_EXT_PAT }}"
+            echo $pat | az devops login
             branchName="${{ github.ref_name }}"
             branchExists=$(az repos ref list -r AvaloniaPoker --filter heads/$branchName | grep $branchName)
             if ([ -z $branchExists ]); then
