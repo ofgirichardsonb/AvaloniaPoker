@@ -16,7 +16,7 @@ jobs:
       - name: Install Azure CLI
         uses: azure/setup-azure-cli@v1
         with:
-          version: '2.69.0'
+          version: '2.30.0'
 
       - name: Login to Azure
         uses: azure/login@v1
