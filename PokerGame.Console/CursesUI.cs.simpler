@@ -1,16 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
+using Mindmagma.Curses;
 using PokerGame.Core.Game;
 using PokerGame.Core.Interfaces;
 using PokerGame.Core.Models;
-using Mindmagma.Curses;
 
 namespace PokerGame.Console
 {
     /// <summary>
-    /// A simplified implementation of the poker game UI
+    /// A simple NCurses-based UI for the poker game
     /// </summary>
     public class CursesUI : IPokerGameUI, IDisposable
     {
@@ -18,6 +20,9 @@ namespace PokerGame.Console
         private bool _initialized;
         private CancellationTokenSource _cancelSource;
         private PokerGameEngine _gameEngine = null!;
+        
+        // NCurses resources
+        private IntPtr _mainWindow;
         
         public CursesUI()
         {
@@ -43,8 +48,6 @@ namespace PokerGame.Console
             try
             {
                 System.Console.WriteLine("Starting with enhanced UI...");
-                System.Console.WriteLine("Enhanced UI (NCurses) is still in development.");
-                System.Console.WriteLine("Using simplified console UI for now...");
                 
                 // Get number of players and initialize game
                 System.Console.Write("Enter number of players (2-8): ");
@@ -69,37 +72,79 @@ namespace PokerGame.Console
                 }
                 
                 // Initialize game
-                // Convert player list to names for the engine
-                string[] playerNames = players.Select(p => p.Name).ToArray();
-                _gameEngine.StartGame(playerNames, 1000);
-                System.Console.WriteLine("=============================================");
-                System.Console.WriteLine("    TEXAS HOLD'EM POKER GAME (CONSOLE UI)   ");
-                System.Console.WriteLine("=============================================");
+                _gameEngine.InitializeGame(players);
+                
+                // Initialize NCurses UI
+                Initialize();
+                
+                if (!_initialized)
+                {
+                    System.Console.WriteLine("Enhanced UI (NCurses) is still in development.");
+                    System.Console.WriteLine("Using simplified console UI for now...");
+                    System.Console.WriteLine("=============================================");
+                    System.Console.WriteLine("    TEXAS HOLD'EM POKER GAME (CONSOLE UI)   ");
+                    System.Console.WriteLine("=============================================");
+                }
                 
                 // Game loop
                 while (!_cancelSource.Token.IsCancellationRequested && _gameEngine.Players.Count(p => p.Chips > 0) > 1)
                 {
-                    _gameEngine.StartHand();
+                    _gameEngine.StartNewHand();
                 }
                 
                 System.Console.WriteLine("Game over!");
                 var winner = _gameEngine.Players.OrderByDescending(p => p.Chips).First();
                 System.Console.WriteLine($"{winner.Name} wins the game with {winner.Chips} chips!");
+                
+                // Clean up NCurses if it was initialized
+                if (_initialized)
+                {
+                    NCurses.EndWin();
+                }
             }
             catch (Exception ex)
             {
+                if (_initialized)
+                {
+                    // Clean up NCurses to restore terminal
+                    NCurses.EndWin();
+                }
+                
                 System.Console.WriteLine($"Error in game: {ex.Message}");
                 System.Console.WriteLine(ex.StackTrace);
             }
         }
         
         /// <summary>
-        /// Initialize the UI
+        /// Initialize the NCurses UI
         /// </summary>
         public void Initialize()
         {
-            // We're just using a simple console UI for now
-            _initialized = true;
+            try
+            {
+                // Initialize NCurses library
+                _mainWindow = NCurses.InitScreen();
+                if (_mainWindow == IntPtr.Zero)
+                {
+                    System.Console.WriteLine("Failed to initialize NCurses. Using simplified console UI.");
+                    return;
+                }
+                
+                // Check for compatibility and fall back if needed
+                System.Console.WriteLine("Enhanced UI (NCurses) is still in development.");
+                System.Console.WriteLine("Using simplified console UI for now...");
+                
+                // Clean up NCurses immediately as we're not using it yet
+                NCurses.EndWin();
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"Failed to initialize enhanced UI: {ex.Message}");
+                System.Console.WriteLine(ex.StackTrace);
+                
+                // Try to clean up NCurses if something went wrong
+                try { NCurses.EndWin(); } catch { }
+            }
         }
         
         /// <summary>

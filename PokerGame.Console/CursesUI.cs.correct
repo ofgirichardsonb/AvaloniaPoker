@@ -1,0 +1,1026 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Mindmagma.Curses;
+using PokerGame.Core.Game;
+using PokerGame.Core.Interfaces;
+using PokerGame.Core.Models;
+
+namespace PokerGame.Console
+{
+    /// <summary>
+    /// An NCurses-based user interface for the poker game
+    /// with stylized card display and advanced terminal rendering.
+    /// </summary>
+    public class CursesUI : IPokerGameUI, IDisposable
+    {
+        private readonly int _maxPlayers = 8;
+        private bool _initialized;
+        private CancellationTokenSource _cancelSource;
+        private PokerGameEngine _gameEngine = null!;
+        
+        // NCurses resources
+        private IntPtr _mainWindow;
+        private IntPtr _tableWindow;
+        private IntPtr _communityCardsWindow;
+        private IntPtr _playerInfoWindow;
+        private IntPtr _actionWindow;
+        private IntPtr _statusWindow;
+        
+        // Constants for layout
+        private const int CARD_WIDTH = 7;
+        private const int CARD_HEIGHT = 5;
+        private const int TABLE_HEIGHT = 15;
+        private const int ACTION_HEIGHT = 4;
+        private const int STATUS_HEIGHT = 3;
+        private int _screenWidth;
+        private int _screenHeight;
+        
+        // Color pairs
+        private const short COLOR_PAIR_RED = 1;     // For hearts and diamonds
+        private const short COLOR_PAIR_BLACK = 2;   // For spades and clubs
+        private const short COLOR_PAIR_GREEN = 3;   // For table
+        private const short COLOR_PAIR_HIGHLIGHT = 4; // For highlighting active elements
+        private const short COLOR_PAIR_STATUS = 5;  // For status messages
+        
+        public CursesUI()
+        {
+            _cancelSource = new CancellationTokenSource();
+        }
+        
+        /// <summary>
+        /// Sets the game engine reference for this UI
+        /// </summary>
+        public void SetGameEngine(PokerGameEngine gameEngine)
+        {
+            _gameEngine = gameEngine;
+        }
+        
+        /// <summary>
+        /// Starts the game UI and application flow
+        /// </summary>
+        public void StartGame()
+        {
+            if (_gameEngine == null)
+                throw new InvalidOperationException("Game engine not set");
+                
+            try
+            {
+                // Temporarily use standard console for setup
+                System.Console.WriteLine("Starting with enhanced UI...");
+                
+                // Get number of players and initialize game
+                System.Console.Write("Enter number of players (2-8): ");
+                string? input = System.Console.ReadLine();
+                
+                if (!int.TryParse(input, out int numPlayers) || numPlayers < 2 || numPlayers > _maxPlayers)
+                {
+                    System.Console.WriteLine($"Invalid number of players. Using default (4).");
+                    numPlayers = 4;
+                }
+                
+                // Initialize players
+                var players = new List<Player>();
+                for (int i = 0; i < numPlayers; i++)
+                {
+                    System.Console.Write($"Enter name for player {i+1} (or press Enter for 'Player {i+1}'): ");
+                    string name = System.Console.ReadLine() ?? "";
+                    if (string.IsNullOrWhiteSpace(name))
+                        name = $"Player {i+1}";
+                        
+                    players.Add(new Player(name, 1000)); // Start with 1000 chips
+                }
+                
+                // Initialize game
+                _gameEngine.InitializeGame(players);
+                
+                // Initialize NCurses UI
+                Initialize();
+                
+                if (!_initialized)
+                {
+                    System.Console.WriteLine("Enhanced UI (NCurses) is still in development.");
+                    System.Console.WriteLine("Using simplified console UI for now...");
+                    System.Console.WriteLine("=============================================");
+                    System.Console.WriteLine("    TEXAS HOLD'EM POKER GAME (CONSOLE UI)   ");
+                    System.Console.WriteLine("=============================================");
+                    
+                    // Game loop - non-NCurses fallback
+                    while (!_cancelSource.Token.IsCancellationRequested && _gameEngine.Players.Count(p => p.Chips > 0) > 1)
+                    {
+                        _gameEngine.StartNewHand();
+                    }
+                    
+                    System.Console.WriteLine("Game over!");
+                    var winner = _gameEngine.Players.OrderByDescending(p => p.Chips).First();
+                    System.Console.WriteLine($"{winner.Name} wins the game with {winner.Chips} chips!");
+                    return;
+                }
+                
+                // Game loop with NCurses
+                while (!_cancelSource.Token.IsCancellationRequested && _gameEngine.Players.Count(p => p.Chips > 0) > 1)
+                {
+                    _gameEngine.StartNewHand();
+                }
+                
+                // Game over screen
+                ShowMessage("Game over!");
+                
+                var winner = _gameEngine.Players.OrderByDescending(p => p.Chips).First();
+                NCurses.Move(_screenHeight / 2, (_screenWidth - 40) / 2);
+                NCurses.AddString($"Game over! {winner.Name} wins with {winner.Chips} chips!");
+                
+                NCurses.Refresh();
+                NCurses.GetChar(); // Wait for key press
+                
+                // Clean up NCurses
+                NCurses.EndWin();
+            }
+            catch (Exception ex)
+            {
+                if (_initialized)
+                {
+                    // Clean up NCurses to restore terminal
+                    NCurses.EndWin();
+                }
+                
+                System.Console.WriteLine($"Error in game: {ex.Message}");
+                System.Console.WriteLine(ex.StackTrace);
+            }
+        }
+        
+        /// <summary>
+        /// Initialize the NCurses UI
+        /// </summary>
+        public void Initialize()
+        {
+            try
+            {
+                // Initialize NCurses library
+                _mainWindow = NCurses.InitScreen();
+                if (_mainWindow == IntPtr.Zero)
+                {
+                    System.Console.WriteLine("Failed to initialize NCurses. Using simplified console UI.");
+                    return;
+                }
+                
+                // Basic NCurses setup
+                NCurses.Raw();              // Disable line buffering
+                NCurses.Keypad(_mainWindow, true); // Enable keypad for special keys
+                NCurses.NoEcho();           // Don't echo keyboard input
+                NCurses.SetCursor(CursesCursorState.Invisible); // Hide cursor
+                
+                // Check for color support
+                if (NCurses.HasColors())
+                {
+                    NCurses.StartColor();
+                    
+                    // Initialize color pairs
+                    NCurses.InitPair(COLOR_PAIR_RED, CursesColor.RED, CursesColor.BLACK);
+                    NCurses.InitPair(COLOR_PAIR_BLACK, CursesColor.WHITE, CursesColor.BLACK);
+                    NCurses.InitPair(COLOR_PAIR_GREEN, CursesColor.GREEN, CursesColor.BLACK);
+                    NCurses.InitPair(COLOR_PAIR_HIGHLIGHT, CursesColor.BLACK, CursesColor.WHITE);
+                    NCurses.InitPair(COLOR_PAIR_STATUS, CursesColor.YELLOW, CursesColor.BLUE);
+                }
+                
+                // Get screen dimensions
+                _screenWidth = NCurses.Columns;
+                _screenHeight = NCurses.Lines;
+                
+                // Create windows
+                _tableWindow = NCurses.NewWindow(TABLE_HEIGHT, _screenWidth - 2, 1, 1);
+                _communityCardsWindow = NCurses.NewWindow(CARD_HEIGHT + 2, 5 * CARD_WIDTH + 5, 3, (_screenWidth - (5 * CARD_WIDTH + 5)) / 2);
+                _playerInfoWindow = NCurses.NewWindow(10, _screenWidth - 2, TABLE_HEIGHT + 2, 1);
+                _actionWindow = NCurses.NewWindow(ACTION_HEIGHT, _screenWidth - 2, _screenHeight - STATUS_HEIGHT - ACTION_HEIGHT - 1, 1);
+                _statusWindow = NCurses.NewWindow(STATUS_HEIGHT, _screenWidth - 2, _screenHeight - STATUS_HEIGHT - 1, 1);
+                
+                // Draw initial layout
+                DrawLayout();
+                
+                _initialized = true;
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"Failed to initialize enhanced UI: {ex.Message}");
+                System.Console.WriteLine(ex.StackTrace);
+                
+                // Try to clean up NCurses if something went wrong
+                try { NCurses.EndWin(); } catch { }
+            }
+        }
+        
+        /// <summary>
+        /// Draws the basic layout
+        /// </summary>
+        private void DrawLayout()
+        {
+            // Title
+            NCurses.AttributeOn(CursesAttribute.BOLD);
+            NCurses.Move(0, (_screenWidth - 40) / 2);
+            NCurses.AddString("♣ ♦ ♥ ♠  TEXAS HOLD'EM POKER  ♠ ♥ ♦ ♣");
+            NCurses.AttributeOff(CursesAttribute.BOLD);
+            
+            // Table window
+            NCurses.Box(_tableWindow, (char)CursesLineAcs.VLINE, (char)CursesLineAcs.HLINE);
+            NCurses.WindowAttributeOn(_tableWindow, CursesAttribute.BOLD);
+            NCurses.WindowMove(_tableWindow, 0, 2);
+            NCurses.WindowAddString(_tableWindow, " Poker Table ");
+            NCurses.WindowAttributeOff(_tableWindow, CursesAttribute.BOLD);
+            NCurses.WindowRefresh(_tableWindow);
+            
+            // Community cards window
+            NCurses.Box(_communityCardsWindow, (char)CursesLineAcs.VLINE, (char)CursesLineAcs.HLINE);
+            NCurses.WindowMove(_communityCardsWindow, 0, 2);
+            NCurses.WindowAddString(_communityCardsWindow, " Community Cards ");
+            NCurses.WindowRefresh(_communityCardsWindow);
+            
+            // Player info window
+            NCurses.Box(_playerInfoWindow, (char)CursesLineAcs.VLINE, (char)CursesLineAcs.HLINE);
+            NCurses.WindowAttributeOn(_playerInfoWindow, CursesAttribute.BOLD);
+            NCurses.WindowMove(_playerInfoWindow, 0, 2);
+            NCurses.WindowAddString(_playerInfoWindow, " Players ");
+            NCurses.WindowAttributeOff(_playerInfoWindow, CursesAttribute.BOLD);
+            NCurses.WindowRefresh(_playerInfoWindow);
+            
+            // Action window
+            NCurses.Box(_actionWindow, (char)CursesLineAcs.VLINE, (char)CursesLineAcs.HLINE);
+            NCurses.WindowMove(_actionWindow, 0, 2);
+            NCurses.WindowAddString(_actionWindow, " Actions ");
+            NCurses.WindowRefresh(_actionWindow);
+            
+            // Status window
+            NCurses.Box(_statusWindow, (char)CursesLineAcs.VLINE, (char)CursesLineAcs.HLINE);
+            NCurses.WindowAttributeOn(_statusWindow, CursesAttribute.BOLD);
+            NCurses.WindowMove(_statusWindow, 0, 2);
+            NCurses.WindowAddString(_statusWindow, " Status ");
+            NCurses.WindowAttributeOff(_statusWindow, CursesAttribute.BOLD);
+            NCurses.WindowBackground(_statusWindow, NCurses.ColorPair(COLOR_PAIR_STATUS));
+            NCurses.WindowRefresh(_statusWindow);
+            
+            // Refresh main window
+            NCurses.Refresh();
+        }
+        
+        /// <summary>
+        /// Shows a message to the user
+        /// </summary>
+        public void ShowMessage(string message)
+        {
+            if (!_initialized)
+            {
+                // Fallback to standard console
+                System.Console.WriteLine(message);
+                return;
+            }
+            
+            // Clear previous message
+            NCurses.ClearWindow(_statusWindow);
+            NCurses.Box(_statusWindow, (char)CursesLineAcs.VLINE, (char)CursesLineAcs.HLINE);
+            NCurses.WindowMove(_statusWindow, 0, 2);
+            NCurses.WindowAddString(_statusWindow, " Status ");
+            
+            // Display new message
+            NCurses.WindowMove(_statusWindow, 1, 2);
+            NCurses.WindowAddString(_statusWindow, message);
+            NCurses.WindowRefresh(_statusWindow);
+        }
+        
+        /// <summary>
+        /// Gets the ante amount from the user
+        /// </summary>
+        public int GetAnteAmount()
+        {
+            try
+            {
+                if (!_initialized)
+                {
+                    // Fallback to standard console
+                    System.Console.Write("Enter ante amount: $");
+                    string? consoleInput = System.Console.ReadLine();
+                    
+                    if (!int.TryParse(consoleInput, out int consoleAnte) || consoleAnte < 1)
+                    {
+                        System.Console.WriteLine("Invalid ante amount. Using default ($10).");
+                        return 10;
+                    }
+                    
+                    return consoleAnte;
+                }
+                
+                ShowMessage("Enter ante amount: $");
+                
+                // Enable echo for input
+                NCurses.Echo();
+                
+                // Input buffer
+                StringBuilder buffer = new StringBuilder(10);
+                
+                // Get input
+                NCurses.Move(_screenHeight - 2, 20);
+                NCurses.GetString(buffer, 10);
+                
+                // Disable echo again
+                NCurses.NoEcho();
+                
+                string anteInput = buffer.ToString().TrimEnd('\0');
+                
+                if (!int.TryParse(anteInput, out int ante) || ante < 1)
+                {
+                    ShowMessage("Invalid ante amount. Using default ($10).");
+                    return 10;
+                }
+                
+                return ante;
+            }
+            catch (Exception ex)
+            {
+                ShowMessage($"Error getting ante: {ex.Message}");
+                return 10; // Default
+            }
+        }
+        
+        /// <summary>
+        /// Gets the player's action for their turn
+        /// </summary>
+        public void GetPlayerAction(Player player, PokerGameEngine gameEngine)
+        {
+            if (!_initialized)
+            {
+                // Simple console fallback
+                System.Console.WriteLine();
+                System.Console.WriteLine($"--- {player.Name}'s turn ---");
+                
+                if (player.HoleCards.Count == 2)
+                {
+                    System.Console.WriteLine($"Your cards: {FormatCards(player.HoleCards)}");
+                }
+                
+                bool validAction = false;
+                while (!validAction)
+                {
+                    // Determine what actions are allowed
+                    bool canCheck = gameEngine.CurrentBet == 0 || player.CurrentBet == gameEngine.CurrentBet;
+                    int callAmount = gameEngine.CurrentBet - player.CurrentBet;
+                    
+                    System.Console.WriteLine("Available actions:");
+                    System.Console.WriteLine("F - Fold");
+                    
+                    if (canCheck)
+                        System.Console.WriteLine("C - Check");
+                    else
+                        System.Console.WriteLine($"C - Call (${callAmount})");
+                        
+                    System.Console.WriteLine("R - Raise");
+                    
+                    System.Console.Write("Enter action: ");
+                    string actionText = (System.Console.ReadLine() ?? "").ToUpper();
+                    
+                    if (actionText == "F")
+                    {
+                        // Fold
+                        gameEngine.ProcessPlayerAction("fold");
+                        validAction = true;
+                    }
+                    else if (actionText == "C")
+                    {
+                        // Check or Call
+                        if (canCheck)
+                            gameEngine.ProcessPlayerAction("check");
+                        else
+                            gameEngine.ProcessPlayerAction("call");
+                        validAction = true;
+                    }
+                    else if (actionText == "R")
+                    {
+                        // Raise - get the amount
+                        System.Console.Write("Enter raise amount: $");
+                        string raiseInput = System.Console.ReadLine() ?? "";
+                        
+                        if (int.TryParse(raiseInput, out int raiseAmount) && raiseAmount > 0)
+                        {
+                            gameEngine.ProcessPlayerAction("raise", raiseAmount);
+                            validAction = true;
+                        }
+                        else
+                        {
+                            System.Console.WriteLine("Invalid amount! Try again.");
+                        }
+                    }
+                    else
+                    {
+                        System.Console.WriteLine("Invalid action! Try again.");
+                    }
+                }
+                
+                return;
+            }
+            
+            try
+            {
+                // Update UI with player's turn
+                ShowMessage($"{player.Name}'s turn");
+                
+                // Clear action window
+                NCurses.ClearWindow(_actionWindow);
+                NCurses.Box(_actionWindow, (char)CursesLineAcs.VLINE, (char)CursesLineAcs.HLINE);
+                NCurses.WindowMove(_actionWindow, 0, 2);
+                NCurses.WindowAddString(_actionWindow, " Actions ");
+                
+                // Draw player's cards
+                DrawPlayerCards(player.HoleCards);
+                
+                // Determine what actions are allowed
+                bool canCheck = gameEngine.CurrentBet == 0 || player.CurrentBet == gameEngine.CurrentBet;
+                int callAmount = gameEngine.CurrentBet - player.CurrentBet;
+                
+                // Display action options
+                NCurses.WindowMove(_actionWindow, 1, 2);
+                NCurses.WindowAddString(_actionWindow, "Available actions:");
+                
+                NCurses.WindowMove(_actionWindow, 2, 4);
+                NCurses.WindowAddString(_actionWindow, "[F] - Fold");
+                
+                NCurses.WindowMove(_actionWindow, 2, 20);
+                if (canCheck)
+                    NCurses.WindowAddString(_actionWindow, "[C] - Check");
+                else
+                    NCurses.WindowAddString(_actionWindow, $"[C] - Call (${callAmount})");
+                
+                NCurses.WindowMove(_actionWindow, 2, 40);
+                NCurses.WindowAddString(_actionWindow, "[R] - Raise");
+                
+                NCurses.WindowMove(_actionWindow, 3, 2);
+                NCurses.WindowAddString(_actionWindow, "Enter your choice: ");
+                NCurses.WindowRefresh(_actionWindow);
+                
+                bool validAction = false;
+                while (!validAction)
+                {
+                    int key = NCurses.GetChar();
+                    char action = char.ToUpper((char)key);
+                    
+                    if (action == 'F')
+                    {
+                        // Fold
+                        ShowMessage($"{player.Name} folds");
+                        gameEngine.ProcessPlayerAction("fold");
+                        validAction = true;
+                    }
+                    else if (action == 'C')
+                    {
+                        // Check or Call
+                        if (canCheck)
+                        {
+                            ShowMessage($"{player.Name} checks");
+                            gameEngine.ProcessPlayerAction("check");
+                        }
+                        else
+                        {
+                            ShowMessage($"{player.Name} calls ${callAmount}");
+                            gameEngine.ProcessPlayerAction("call");
+                        }
+                        validAction = true;
+                    }
+                    else if (action == 'R')
+                    {
+                        // Raise - get the amount
+                        NCurses.ClearWindow(_actionWindow);
+                        NCurses.Box(_actionWindow, (char)CursesLineAcs.VLINE, (char)CursesLineAcs.HLINE);
+                        NCurses.WindowMove(_actionWindow, 0, 2);
+                        NCurses.WindowAddString(_actionWindow, " Actions ");
+                        
+                        NCurses.WindowMove(_actionWindow, 1, 2);
+                        NCurses.WindowAddString(_actionWindow, "Enter raise amount: $");
+                        NCurses.WindowRefresh(_actionWindow);
+                        
+                        // Enable echo for input
+                        NCurses.Echo();
+                        
+                        // Get input
+                        StringBuilder buffer = new StringBuilder(10);
+                        NCurses.WindowMove(_actionWindow, 1, 23);
+                        NCurses.WindowGetChar(_actionWindow); // Consume existing character
+                        NCurses.GetString(buffer, 10);
+                        
+                        // Disable echo again
+                        NCurses.NoEcho();
+                        
+                        string raiseInput = buffer.ToString().TrimEnd('\0');
+                        
+                        if (int.TryParse(raiseInput, out int raiseAmount) && raiseAmount > 0)
+                        {
+                            ShowMessage($"{player.Name} raises ${raiseAmount}");
+                            gameEngine.ProcessPlayerAction("raise", raiseAmount);
+                            validAction = true;
+                        }
+                        else
+                        {
+                            ShowMessage("Invalid amount! Try again.");
+                            
+                            // Redraw action options
+                            NCurses.ClearWindow(_actionWindow);
+                            NCurses.Box(_actionWindow, (char)CursesLineAcs.VLINE, (char)CursesLineAcs.HLINE);
+                            NCurses.WindowMove(_actionWindow, 0, 2);
+                            NCurses.WindowAddString(_actionWindow, " Actions ");
+                            
+                            NCurses.WindowMove(_actionWindow, 1, 2);
+                            NCurses.WindowAddString(_actionWindow, "Available actions:");
+                            
+                            NCurses.WindowMove(_actionWindow, 2, 4);
+                            NCurses.WindowAddString(_actionWindow, "[F] - Fold");
+                            
+                            NCurses.WindowMove(_actionWindow, 2, 20);
+                            if (canCheck)
+                                NCurses.WindowAddString(_actionWindow, "[C] - Check");
+                            else
+                                NCurses.WindowAddString(_actionWindow, $"[C] - Call (${callAmount})");
+                            
+                            NCurses.WindowMove(_actionWindow, 2, 40);
+                            NCurses.WindowAddString(_actionWindow, "[R] - Raise");
+                            
+                            NCurses.WindowMove(_actionWindow, 3, 2);
+                            NCurses.WindowAddString(_actionWindow, "Enter your choice: ");
+                            NCurses.WindowRefresh(_actionWindow);
+                        }
+                    }
+                    else
+                    {
+                        ShowMessage("Invalid action! Try again.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowMessage($"Error getting player action: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Draws the player's cards
+        /// </summary>
+        private void DrawPlayerCards(List<Card> cards)
+        {
+            // Display player cards in the table area
+            if (cards.Count == 0) return;
+            
+            NCurses.WindowMove(_tableWindow, 10, (_screenWidth - 20) / 2);
+            NCurses.WindowAddString(_tableWindow, "Your Cards:");
+            
+            int startX = (_screenWidth - (cards.Count * (CARD_WIDTH + 1))) / 2;
+            
+            for (int i = 0; i < cards.Count; i++)
+            {
+                DrawCard(_tableWindow, cards[i], 12, startX + i * (CARD_WIDTH + 1));
+            }
+            
+            NCurses.WindowRefresh(_tableWindow);
+        }
+        
+        /// <summary>
+        /// Updates the game state display
+        /// </summary>
+        public void UpdateGameState(PokerGameEngine gameEngine)
+        {
+            if (!_initialized)
+            {
+                // Simple console fallback
+                System.Console.WriteLine();
+                System.Console.WriteLine("=============================================");
+                System.Console.WriteLine($"CURRENT STATE: {gameEngine.State}");
+                
+                // Show community cards
+                string communityCardsText = gameEngine.CommunityCards.Count > 0 
+                    ? FormatCards(gameEngine.CommunityCards) 
+                    : "[None]";
+                System.Console.WriteLine($"Community Cards: {communityCardsText}");
+                
+                // Show pot
+                System.Console.WriteLine($"Pot: ${gameEngine.Pot}");
+                if (gameEngine.CurrentBet > 0)
+                {
+                    System.Console.WriteLine($"Current bet: ${gameEngine.CurrentBet}");
+                }
+                System.Console.WriteLine();
+                
+                // Show player info
+                System.Console.WriteLine("PLAYERS:");
+                for (int i = 0; i < gameEngine.Players.Count; i++)
+                {
+                    var player = gameEngine.Players[i];
+                    string status = "";
+                    if (player.HasFolded) status = " (Folded)";
+                    else if (player.IsAllIn) status = " (All-In)";
+                    
+                    System.Console.WriteLine($"- {player.Name}{status}: ${player.Chips} chips");
+                }
+                System.Console.WriteLine("=============================================");
+                
+                return;
+            }
+            
+            try
+            {
+                // Clear table window (except borders)
+                for (int y = 1; y < TABLE_HEIGHT - 1; y++)
+                {
+                    NCurses.WindowMove(_tableWindow, y, 1);
+                    for (int x = 1; x < _screenWidth - 3; x++)
+                    {
+                        NCurses.WindowAddChar(_tableWindow, ' ');
+                    }
+                }
+                
+                // Show game state
+                NCurses.WindowMove(_tableWindow, 1, (_screenWidth - 30) / 2);
+                NCurses.WindowAddString(_tableWindow, $"CURRENT STATE: {gameEngine.State}");
+                
+                // Draw community cards
+                DrawCommunityCards(gameEngine.CommunityCards);
+                
+                // Show pot
+                string potInfo = $"Pot: ${gameEngine.Pot}";
+                if (gameEngine.CurrentBet > 0)
+                {
+                    potInfo += $"  |  Current bet: ${gameEngine.CurrentBet}";
+                }
+                NCurses.WindowMove(_tableWindow, 8, (_screenWidth - potInfo.Length) / 2);
+                NCurses.WindowAddString(_tableWindow, potInfo);
+                
+                // Update player information
+                UpdatePlayerInfo(gameEngine);
+                
+                // Refresh windows
+                NCurses.WindowRefresh(_tableWindow);
+            }
+            catch (Exception ex)
+            {
+                ShowMessage($"Error updating game state: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Draws the community cards
+        /// </summary>
+        private void DrawCommunityCards(List<Card> cards)
+        {
+            // Clear the community cards window (except borders)
+            for (int y = 1; y < CARD_HEIGHT + 1; y++)
+            {
+                NCurses.WindowMove(_communityCardsWindow, y, 1);
+                for (int x = 1; x < 5 * CARD_WIDTH + 3; x++)
+                {
+                    NCurses.WindowAddChar(_communityCardsWindow, ' ');
+                }
+            }
+            
+            // Draw each card
+            for (int i = 0; i < cards.Count; i++)
+            {
+                DrawCard(_communityCardsWindow, cards[i], 1, 1 + i * (CARD_WIDTH + 1));
+            }
+            
+            // If no cards to show yet
+            if (cards.Count == 0)
+            {
+                NCurses.WindowMove(_communityCardsWindow, CARD_HEIGHT / 2, (5 * CARD_WIDTH) / 2 - 5);
+                NCurses.WindowAddString(_communityCardsWindow, "[No cards yet]");
+            }
+            
+            NCurses.WindowRefresh(_communityCardsWindow);
+        }
+        
+        /// <summary>
+        /// Draws a single card at the specified position
+        /// </summary>
+        private void DrawCard(IntPtr window, Card card, int startY, int startX)
+        {
+            // Determine color based on suit
+            short colorPair = card.Suit == Suit.Hearts || card.Suit == Suit.Diamonds 
+                             ? COLOR_PAIR_RED 
+                             : COLOR_PAIR_BLACK;
+            
+            // Draw card outline
+            NCurses.WindowAttributeOn(window, CursesAttribute.BOLD);
+            
+            // Draw box
+            NCurses.WindowMove(window, startY, startX);
+            NCurses.WindowAddChar(window, (char)CursesLineAcs.ULCORNER);
+            
+            for (int i = 1; i < CARD_WIDTH - 1; i++)
+                NCurses.WindowAddChar(window, (char)CursesLineAcs.HLINE);
+                
+            NCurses.WindowAddChar(window, (char)CursesLineAcs.URCORNER);
+            
+            for (int y = 1; y < CARD_HEIGHT - 1; y++)
+            {
+                NCurses.WindowMove(window, startY + y, startX);
+                NCurses.WindowAddChar(window, (char)CursesLineAcs.VLINE);
+                NCurses.WindowMove(window, startY + y, startX + CARD_WIDTH - 1);
+                NCurses.WindowAddChar(window, (char)CursesLineAcs.VLINE);
+            }
+            
+            NCurses.WindowMove(window, startY + CARD_HEIGHT - 1, startX);
+            NCurses.WindowAddChar(window, (char)CursesLineAcs.LLCORNER);
+            
+            for (int i = 1; i < CARD_WIDTH - 1; i++)
+                NCurses.WindowAddChar(window, (char)CursesLineAcs.HLINE);
+                
+            NCurses.WindowAddChar(window, (char)CursesLineAcs.LRCORNER);
+            
+            NCurses.WindowAttributeOff(window, CursesAttribute.BOLD);
+            
+            // Draw card value and suit with color
+            NCurses.WindowAttributeOn(window, NCurses.ColorPair(colorPair) | CursesAttribute.BOLD);
+            
+            // Get rank symbol
+            string rank = GetRankSymbol(card.Rank);
+            
+            // Get suit symbol
+            string suit = GetSuitSymbol(card.Suit);
+            
+            // Draw rank in top-left
+            NCurses.WindowMove(window, startY + 1, startX + 1);
+            NCurses.WindowAddString(window, rank);
+            
+            // Draw rank in bottom-right
+            NCurses.WindowMove(window, startY + CARD_HEIGHT - 2, startX + CARD_WIDTH - 2);
+            NCurses.WindowAddString(window, rank);
+            
+            // Draw suit symbol in the center
+            NCurses.WindowMove(window, startY + CARD_HEIGHT / 2, startX + CARD_WIDTH / 2);
+            NCurses.WindowAddString(window, suit);
+            
+            NCurses.WindowAttributeOff(window, NCurses.ColorPair(colorPair) | CursesAttribute.BOLD);
+        }
+        
+        /// <summary>
+        /// Updates the player information display
+        /// </summary>
+        private void UpdatePlayerInfo(PokerGameEngine gameEngine)
+        {
+            // Clear player info window (except borders)
+            for (int y = 1; y < 9; y++)
+            {
+                NCurses.WindowMove(_playerInfoWindow, y, 1);
+                for (int x = 1; x < _screenWidth - 3; x++)
+                {
+                    NCurses.WindowAddChar(_playerInfoWindow, ' ');
+                }
+            }
+            
+            // Maximum players to display per column
+            int playersPerColumn = 4;
+            int columnWidth = 25;
+            
+            // Draw each player's info
+            for (int i = 0; i < gameEngine.Players.Count; i++)
+            {
+                var player = gameEngine.Players[i];
+                
+                // Calculate position
+                int column = i / playersPerColumn;
+                int row = i % playersPerColumn;
+                int xPos = 2 + column * columnWidth;
+                int yPos = 1 + row * 2;
+                
+                // Player name and status
+                string status = "";
+                if (player.HasFolded) status = " (Folded)";
+                else if (player.IsAllIn) status = " (All-In)";
+                
+                // Highlight current player
+                if (gameEngine.CurrentPlayerIndex == i && !player.HasFolded && !player.IsAllIn)
+                {
+                    NCurses.WindowAttributeOn(_playerInfoWindow, NCurses.ColorPair(COLOR_PAIR_HIGHLIGHT));
+                }
+                
+                NCurses.WindowMove(_playerInfoWindow, yPos, xPos);
+                NCurses.WindowAddString(_playerInfoWindow, $"{player.Name}{status}");
+                
+                // Player chips and bet
+                NCurses.WindowMove(_playerInfoWindow, yPos + 1, xPos);
+                string betInfo = player.CurrentBet > 0 ? $" | Bet: ${player.CurrentBet}" : "";
+                NCurses.WindowAddString(_playerInfoWindow, $"Chips: ${player.Chips}{betInfo}");
+                
+                // Turn off highlight
+                if (gameEngine.CurrentPlayerIndex == i && !player.HasFolded && !player.IsAllIn)
+                {
+                    NCurses.WindowAttributeOff(_playerInfoWindow, NCurses.ColorPair(COLOR_PAIR_HIGHLIGHT));
+                }
+            }
+            
+            NCurses.WindowRefresh(_playerInfoWindow);
+        }
+        
+        /// <summary>
+        /// Shows the winning player(s) for the hand
+        /// </summary>
+        public void ShowWinner(List<Player> winners, PokerGameEngine gameEngine)
+        {
+            if (!_initialized)
+            {
+                // Simple console fallback
+                System.Console.WriteLine();
+                System.Console.WriteLine("*** HAND COMPLETE ***");
+                
+                if (winners.Count == 1)
+                {
+                    var winner = winners[0];
+                    System.Console.WriteLine($"{winner.Name} wins the pot!");
+                    if (winner.CurrentHand != null)
+                    {
+                        System.Console.WriteLine($"Winning hand: {winner.CurrentHand.Rank}");
+                        System.Console.WriteLine($"Cards: {FormatCards(winner.CurrentHand.Cards)}");
+                    }
+                }
+                else
+                {
+                    System.Console.WriteLine("Split pot between: " + string.Join(", ", winners.Select(w => w.Name)));
+                    var firstWinner = winners[0];
+                    if (firstWinner.CurrentHand != null)
+                    {
+                        System.Console.WriteLine($"Winning hand: {firstWinner.CurrentHand.Rank}");
+                    }
+                }
+                
+                System.Console.WriteLine("Press Enter to continue...");
+                System.Console.ReadLine();
+                
+                return;
+            }
+            
+            try
+            {
+                // Create a popup window for winner announcement
+                int winWidth = 50;
+                int winHeight = 10;
+                int startY = (_screenHeight - winHeight) / 2;
+                int startX = (_screenWidth - winWidth) / 2;
+                
+                IntPtr winnerWindow = NCurses.NewWindow(winHeight, winWidth, startY, startX);
+                
+                // Draw window border
+                NCurses.Box(winnerWindow, (char)CursesLineAcs.VLINE, (char)CursesLineAcs.HLINE);
+                
+                // Title
+                NCurses.WindowAttributeOn(winnerWindow, CursesAttribute.BOLD);
+                NCurses.WindowMove(winnerWindow, 0, (winWidth - 15) / 2);
+                NCurses.WindowAddString(winnerWindow, " HAND COMPLETE ");
+                NCurses.WindowAttributeOff(winnerWindow, CursesAttribute.BOLD);
+                
+                // Display winner info
+                if (winners.Count == 1)
+                {
+                    var winner = winners[0];
+                    NCurses.WindowMove(winnerWindow, 2, 2);
+                    NCurses.WindowAddString(winnerWindow, $"{winner.Name} wins the pot!");
+                    
+                    if (winner.CurrentHand != null)
+                    {
+                        NCurses.WindowMove(winnerWindow, 3, 2);
+                        NCurses.WindowAddString(winnerWindow, $"Winning hand: {winner.CurrentHand.Rank}");
+                        
+                        // Draw winning cards
+                        if (winner.CurrentHand.Cards.Count > 0)
+                        {
+                            for (int i = 0; i < Math.Min(winner.CurrentHand.Cards.Count, 5); i++)
+                            {
+                                DrawCard(winnerWindow, winner.CurrentHand.Cards[i], 4, 2 + i * (CARD_WIDTH + 1));
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    // Multiple winners (split pot)
+                    NCurses.WindowMove(winnerWindow, 2, 2);
+                    NCurses.WindowAddString(winnerWindow, "Split pot between:");
+                    
+                    // Split winners across multiple lines if needed
+                    string[] winnerNames = winners.Select(w => w.Name).ToArray();
+                    for (int i = 0; i < Math.Min(winnerNames.Length, 3); i++)
+                    {
+                        NCurses.WindowMove(winnerWindow, 3 + i, 4);
+                        NCurses.WindowAddString(winnerWindow, $"- {winnerNames[i]}");
+                    }
+                    
+                    // Show hand type if available for first winner
+                    var firstWinner = winners[0];
+                    if (firstWinner.CurrentHand != null)
+                    {
+                        NCurses.WindowMove(winnerWindow, 7, 2);
+                        NCurses.WindowAddString(winnerWindow, $"Winning hand: {firstWinner.CurrentHand.Rank}");
+                    }
+                }
+                
+                // Footer
+                NCurses.WindowMove(winnerWindow, winHeight - 2, (winWidth - 26) / 2);
+                NCurses.WindowAddString(winnerWindow, "Press any key to continue...");
+                
+                NCurses.WindowRefresh(winnerWindow);
+                
+                // Wait for key press
+                NCurses.WindowGetChar(winnerWindow);
+                
+                // Clean up
+                NCurses.DeleteWindow(winnerWindow);
+                
+                // Refresh all windows
+                NCurses.TouchWindow(_mainWindow);
+                NCurses.WindowRefresh(_tableWindow);
+                NCurses.WindowRefresh(_communityCardsWindow);
+                NCurses.WindowRefresh(_playerInfoWindow);
+                NCurses.WindowRefresh(_actionWindow);
+                NCurses.WindowRefresh(_statusWindow);
+                NCurses.Refresh();
+            }
+            catch (Exception ex)
+            {
+                ShowMessage($"Error showing winner: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Gets a symbol for the card rank
+        /// </summary>
+        private string GetRankSymbol(Rank rank)
+        {
+            switch (rank)
+            {
+                case Rank.Ten: return "10";
+                case Rank.Jack: return "J";
+                case Rank.Queen: return "Q";
+                case Rank.King: return "K";
+                case Rank.Ace: return "A";
+                default: return ((int)rank + 2).ToString();
+            }
+        }
+        
+        /// <summary>
+        /// Gets a symbol for the card suit
+        /// </summary>
+        private string GetSuitSymbol(Suit suit)
+        {
+            switch (suit)
+            {
+                case Suit.Clubs: return "♣";
+                case Suit.Diamonds: return "♦";
+                case Suit.Hearts: return "♥";
+                case Suit.Spades: return "♠";
+                default: return "?";
+            }
+        }
+        
+        /// <summary>
+        /// Formats a list of cards for display (for console fallback)
+        /// </summary>
+        private string FormatCards(IEnumerable<Card> cards)
+        {
+            if (cards == null || !cards.Any())
+                return "";
+                
+            return string.Join(" ", cards.Select(card => FormatCard(card)));
+        }
+        
+        /// <summary>
+        /// Formats a single card for display (for console fallback)
+        /// </summary>
+        private string FormatCard(Card card)
+        {
+            string rank = GetRankSymbol(card.Rank);
+            string suit = GetSuitSymbol(card.Suit);
+            
+            return $"[{rank}{suit}]";
+        }
+        
+        /// <summary>
+        /// Releases resources
+        /// </summary>
+        public void Dispose()
+        {
+            _cancelSource.Cancel();
+            _cancelSource.Dispose();
+            
+            // Clean up NCurses resources
+            if (_initialized)
+            {
+                try
+                {
+                    NCurses.DeleteWindow(_communityCardsWindow);
+                    NCurses.DeleteWindow(_tableWindow);
+                    NCurses.DeleteWindow(_playerInfoWindow);
+                    NCurses.DeleteWindow(_actionWindow);
+                    NCurses.DeleteWindow(_statusWindow);
+                    NCurses.EndWin();
+                }
+                catch
+                {
+                    // Ignore errors during cleanup
+                }
+            }
+        }
+    }
+}
