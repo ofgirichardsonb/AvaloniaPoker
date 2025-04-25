@@ -16,4 +16,4 @@ jobs:
           inlineScript: |
             az devops configure --defaults organization=https://dev.azure.com/ofgi project="Architecture Lab"
             echo ${{ secrets.AZURE_DEVOPS_EXT_PAT }} | az devops login --organization https://dev.azure.com/ofgi
-            az repos import create --git-source-url https://github.com/ofgirichardsonb/AvaloniaPoker --repository AvaloniaPoker
+            az repos update --repository AvaloniaPoker --default-branch main
