@@ -31,6 +31,7 @@ jobs:
             echo $pat | az devops login
             branchName="${{ github.ref_name }}"
             branchExists="$(az repos ref list -r AvaloniaPoker --filter heads/$branchName | grep $branchName)"
+            echo "here"
             if [ -z $branchExists ]; then
               echo -n "Branch $branchName does not exist, creating it..."
               objectId="$(az repos ref list -r AvaloniaPoker --filter heads/main | jq -r '.[] | .objectId')"
