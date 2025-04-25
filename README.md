@@ -26,5 +26,5 @@ A Texas Hold'em poker game implementation with both GUI and console interfaces, 
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/poker-game.git
-cd poker-game
+git clone https://github.com/ofgirichardsonb/AvaloniaPoker
+cd AvaloniaPoker
