@@ -8,6 +8,20 @@ using PokerGame.Core.Models;
 namespace PokerGame.Core.Microservices
 {
     /// <summary>
+    /// A mock implementation of IPokerGameUI that does nothing - used for state display only
+    /// </summary>
+    public class MockPokerGameUI : Interfaces.IPokerGameUI
+    {
+        public void SetGameEngine(Game.PokerGameEngine gameEngine) { }
+        public void StartGame() { }
+        public void ShowMessage(string message) { }
+        public int GetAnteAmount() => 10;
+        public void GetPlayerAction(Models.Player player, Game.PokerGameEngine gameEngine) { }
+        public void UpdateGameState(Game.PokerGameEngine gameEngine) { }
+        public void ShowWinner(List<Models.Player> winners, Game.PokerGameEngine gameEngine) { }
+    }
+
+    /// <summary>
     /// Microservice that handles the console user interface
     /// </summary>
     public class ConsoleUIService : MicroserviceBase
@@ -514,12 +528,24 @@ namespace PokerGame.Core.Microservices
             // We need to create a dynamic PokerGameEngine instance that the CursesUI can use
             // This acts as an adapter between the microservice state and the local UI
             
+            if (_latestGameState == null)
+                throw new InvalidOperationException("No game state available");
+            
+            // Create a Mock UI for the engine
+            Type? uiInterfaceType = Type.GetType("PokerGame.Core.Interfaces.IPokerGameUI, PokerGame.Core");
+            if (uiInterfaceType == null)
+                throw new InvalidOperationException("Could not find IPokerGameUI interface");
+            
+            // Create a proxy UI that does nothing
+            var proxyUI = new MockPokerGameUI();
+            
+            // Create the engine with the proxy UI
             Type? engineType = Type.GetType("PokerGame.Core.Game.PokerGameEngine, PokerGame.Core");
-            if (engineType == null || _latestGameState == null)
-                throw new InvalidOperationException("Could not create proxy game engine");
+            if (engineType == null)
+                throw new InvalidOperationException("Could not find PokerGameEngine type");
                 
-            // Create the engine
-            object? gameEngine = Activator.CreateInstance(engineType);
+            // Create the engine with our mock UI
+            object? gameEngine = Activator.CreateInstance(engineType, new[] { proxyUI });
             if (gameEngine == null)
                 throw new InvalidOperationException("Failed to create game engine instance");
             
