@@ -13,7 +13,7 @@ jobs:
       - name: Login to DevOps
         uses: azure/cli@v2
         env:
-          AZURE_DEVOPS_EXT_PATH: ${{ secrets.AZURE_DEVOPS_EXT_PATH }}
+          AZURE_DEVOPS_EXT_PAT: ${{ secrets.AZURE_DEVOPS_EXT_PAT }}
         with:
           azcliversion: 2.69.0
           inlineScript: |
