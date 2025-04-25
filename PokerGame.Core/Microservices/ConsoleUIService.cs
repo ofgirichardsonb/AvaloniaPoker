@@ -438,29 +438,35 @@ namespace PokerGame.Core.Microservices
             }
             
             Console.WriteLine();
-            Console.WriteLine("===============================================");
-            Console.WriteLine($"GAME STATE: {_latestGameState.CurrentState}");
+            Console.WriteLine("=============================================");
+            Console.WriteLine($"CURRENT STATE: {_latestGameState.CurrentState}");
             
-            // Show community cards if any
-            if (_latestGameState.CommunityCards.Count > 0)
-            {
-                Console.WriteLine($"Community cards: {CardListToString(_latestGameState.CommunityCards)}");
-            }
+            // Show community cards
+            string communityCardsText = _latestGameState.CommunityCards.Count > 0 
+                ? CardListToString(_latestGameState.CommunityCards) 
+                : "[None]";
+            Console.WriteLine($"Community Cards: {communityCardsText}");
             
             // Show pot and current bet
-            Console.WriteLine($"Pot: {_latestGameState.Pot}   Current bet: {_latestGameState.CurrentBet}");
+            Console.WriteLine($"Pot: ${_latestGameState.Pot}");
+            if (_latestGameState.CurrentBet > 0)
+            {
+                Console.WriteLine($"Current bet: ${_latestGameState.CurrentBet}");
+            }
             Console.WriteLine();
             
             // Show player information
             Console.WriteLine("PLAYERS:");
             foreach (var player in _latestGameState.Players)
             {
-                string status = player.HasFolded ? "Folded" : player.IsAllIn ? "All-In" : "Active";
-                string currentBet = player.CurrentBet > 0 ? $" (Bet: {player.CurrentBet})" : "";
-                Console.WriteLine($"- {player.Name}: {player.Chips} chips, {status}{currentBet}");
+                string status = "";
+                if (player.HasFolded) status = " (Folded)";
+                else if (player.IsAllIn) status = " (All-In)";
+                
+                Console.WriteLine($"- {player.Name}{status}: ${player.Chips} chips");
             }
             
-            Console.WriteLine("===============================================");
+            Console.WriteLine("=============================================");
         }
         
         /// <summary>
@@ -490,19 +496,23 @@ namespace PokerGame.Core.Microservices
                 }
             }
             
-            // Fallback to simple enhanced text mode if reflection fails
+            // Fallback to match CursesUI format for consistency
             Console.WriteLine();
-            Console.WriteLine("=== ENHANCED UI MODE ===========================");
-            Console.WriteLine($"GAME STATE: {_latestGameState?.CurrentState}");
+            Console.WriteLine("=============================================");
+            Console.WriteLine($"CURRENT STATE: {_latestGameState?.CurrentState}");
             
-            // Show community cards if any
-            if (_latestGameState?.CommunityCards?.Count > 0)
-            {
-                Console.WriteLine($"Community cards: {CardListToString(_latestGameState.CommunityCards)}");
-            }
+            // Show community cards
+            string communityCardsText = _latestGameState?.CommunityCards?.Count > 0 
+                ? CardListToString(_latestGameState.CommunityCards) 
+                : "[None]";
+            Console.WriteLine($"Community Cards: {communityCardsText}");
             
             // Show pot and current bet
-            Console.WriteLine($"Pot: {_latestGameState?.Pot}   Current bet: {_latestGameState?.CurrentBet}");
+            Console.WriteLine($"Pot: ${_latestGameState?.Pot}");
+            if (_latestGameState?.CurrentBet > 0)
+            {
+                Console.WriteLine($"Current bet: ${_latestGameState.CurrentBet}");
+            }
             Console.WriteLine();
             
             // Show player information
@@ -511,13 +521,15 @@ namespace PokerGame.Core.Microservices
             {
                 foreach (var player in _latestGameState.Players)
                 {
-                    string status = player.HasFolded ? "Folded" : player.IsAllIn ? "All-In" : "Active";
-                    string currentBet = player.CurrentBet > 0 ? $" (Bet: {player.CurrentBet})" : "";
-                    Console.WriteLine($"- {player.Name}: {player.Chips} chips, {status}{currentBet}");
+                    string status = "";
+                    if (player.HasFolded) status = " (Folded)";
+                    else if (player.IsAllIn) status = " (All-In)";
+                    
+                    Console.WriteLine($"- {player.Name}{status}: ${player.Chips} chips");
                 }
             }
             
-            Console.WriteLine("===============================================");
+            Console.WriteLine("=============================================");
         }
         
         /// <summary>
