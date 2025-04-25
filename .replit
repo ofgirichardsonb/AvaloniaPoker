@@ -20,6 +20,10 @@ args = "PokerGame"
 task = "workflow.run"
 args = "poker_console_workflow"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "poker_microservice_workflow"
+
 [[workflows.workflow]]
 name = "PokerGame"
 author = "agent"
@@ -36,6 +40,14 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj"
+
+[[workflows.workflow]]
+name = "poker_microservice_workflow"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --microservices"
 
 [deployment]
 run = ["sh", "-c", "dotnet run --project PokerGame.Console/PokerGame.Console.csproj"]

@@ -9,6 +9,11 @@ namespace PokerGame.Core.Models
     public class Player
     {
         /// <summary>
+        /// The player's unique identifier
+        /// </summary>
+        public string Id { get; } = Guid.NewGuid().ToString();
+        
+        /// <summary>
         /// The player's name
         /// </summary>
         public string Name { get; set; }
