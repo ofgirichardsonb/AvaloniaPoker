@@ -16,7 +16,10 @@ jobs:
           inlineScript: |
             az devops configure --defaults organization=https://dev.azure.com/ofgi project="Architecture Lab"
             echo ${{ secrets.AZURE_DEVOPS_EXT_PAT }} | az devops login --organization https://dev.azure.com/ofgi
-            if ! az repos ref list -r AvaloniaPoker --filter "refs/heads/${{ github.ref_name }}" --query "count" -o tsv; then
-              az repos ref create -r AvaloniaPoker --name "refs/heads/${{ github.ref_name }}" --object-id $(git rev-parse HEAD)
-            fi
-            az repos update -r AvaloniaPoker --default-branch ${{ github.ref_name }}
+            $branchName = "${{ github.ref_name }}"
+            $branchExists = az repos ref list -r AvaloniaPoker --filter heads/$branchName | Select-String -Pattern $branchName
+            if (-not $branchExists) {
+              $commitId = git rev-parse HEAD
+              az repos ref create -r AvaloniaPoker --name "refs/heads/$branchName" --object-id $commitId
+            }
+            az repos update -r AvaloniaPoker --default-branch $branchName
