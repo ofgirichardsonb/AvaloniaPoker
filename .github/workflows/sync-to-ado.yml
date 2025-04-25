@@ -1,5 +1,8 @@
 name: Sync to Azure DevOps
 
+env:
+  ACTIONS_STEP_DEBUG: true
+
 on:
   push:
     branches:
@@ -27,6 +30,7 @@ jobs:
         uses: azure/cli@v2
         with:
           inlineScript: |
+            set -x
             az devops configure --defaults organization=https://dev.azure.com/ofgi project="Architecture Lab"
             pat="${{ secrets.AZURE_DEVOPS_EXT_PAT }}"
             echo $pat | az devops login
@@ -43,4 +47,4 @@ jobs:
 
       - name: Push changes to Azure DevOps
         run: |
-          git push azure $branchName
+          git push azure $branchName || echo "Git push failed"
