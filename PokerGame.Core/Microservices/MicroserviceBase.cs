@@ -22,11 +22,11 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         public string ServiceId => _serviceId;
         
-        private readonly PublisherSocket _publisherSocket;
-        private readonly SubscriberSocket _subscriberSocket;
+        private PublisherSocket? _publisherSocket;
+        private SubscriberSocket? _subscriberSocket;
         private readonly ConcurrentQueue<Message> _messageQueue = new ConcurrentQueue<Message>();
         
-        private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+        private CancellationTokenSource? _cancellationTokenSource = new CancellationTokenSource();
         private Task? _processingTask;
         private Task? _heartbeatTask;
         
@@ -151,7 +151,7 @@ namespace PokerGame.Core.Microservices
         /// <summary>
         /// Disposes of resources used by the microservice
         /// </summary>
-        public void Dispose()
+        public virtual void Dispose()
         {
             try 
             {
@@ -183,7 +183,7 @@ namespace PokerGame.Core.Microservices
         protected internal virtual void Broadcast(Message message)
         {
             message.SenderId = _serviceId;
-            _publisherSocket.SendFrame(message.ToJson());
+            _publisherSocket?.SendFrame(message.ToJson());
         }
         
         /// <summary>
@@ -195,7 +195,7 @@ namespace PokerGame.Core.Microservices
         {
             message.SenderId = _serviceId;
             message.ReceiverId = receiverId;
-            _publisherSocket.SendFrame(message.ToJson());
+            _publisherSocket?.SendFrame(message.ToJson());
         }
         
         /// <summary>
@@ -266,7 +266,7 @@ namespace PokerGame.Core.Microservices
                 try
                 {
                     // Check for incoming messages
-                    if (_subscriberSocket.TryReceiveFrameString(TimeSpan.FromMilliseconds(100), out string? messageJson) && messageJson != null)
+                    if (_subscriberSocket != null && _subscriberSocket.TryReceiveFrameString(TimeSpan.FromMilliseconds(100), out string? messageJson) && messageJson != null)
                     {
                         try 
                         {

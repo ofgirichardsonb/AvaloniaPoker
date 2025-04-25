@@ -1,0 +1,85 @@
+Starting enhanced NCurses UI for poker game...
+Enhanced UI in microservices mode is ready!
+Enter number of players (2-8): Verifying service connections...
+Notifying game engine about card deck service...
+Waiting for card deck service registration to be processed...
+2
+Enter name for player 1 (or press Enter for 'Player 1'): Directly registered card deck service: Card Deck Service (ID: 066d21bd-8973-4a61-84b4-6a442688d2ee)
+Ensuring players are properly registered with the game engine...
+BriSending forced StartHand command to engine service
+Received StartHand message
+No deck ID found, creating a new deck
+Creating new deck with ID: deck-a3001e57-efa6-468c-9c19-8fcdd53d7c94
+Created deck: deck-a3001e57-efa6-468c-9c19-8fcdd53d7c94 (Shuffled: True)
+anFinished creating deck deck-a3001e57-efa6-468c-9c19-8fcdd53d7c94
+Created new deck with ID: deck-a3001e57-efa6-468c-9c19-8fcdd53d7c94
+Dealing hole cards to players
+Starting hand with 0 players (current state: Setup)
+ERROR: Need at least 2 players to start a hand. Creating default players for testing.
+Added 3 test players
+PokerGameEngine.StartHand() called with current state: Setup
+New hand started. Hole cards dealt.
+Game state broadcast successful
+Game state changed to: PreFlop
+Game state broadcast successful
+
+=== ENHANCED UI MODE ===========================
+GAME STATE: Setup
+Pot: 0   Current bet: 0
+
+PLAYERS:
+- Test Player 1: 1000 chips, Active
+- Test Player 2: 1000 chips, Active
+- Test Player 3: 1000 chips, Active
+===============================================
+New game state: PreFlop
+Game state broadcast successful
+Game state broadcast successful
+Test Player 2 posts small blind: 5
+Test Player 3 posts big blind: 10
+
+=== ENHANCED UI MODE ===========================
+GAME STATE: PreFlop
+Pot: 0   Current bet: 10
+
+PLAYERS:
+- Test Player 1: 1000 chips, Active
+- Test Player 2: 995 chips, Active (Bet: 5)
+- Test Player 3: 990 chips, Active (Bet: 10)
+===============================================
+
+=== Test Player 1's turn ===
+Your hole cards: [3♦] [6♦]
+Available actions:
+- Call 10 (C)
+- Fold (F)
+- Raise (R) (Minimum raise: 20)
+Enter your action: 
+=== ENHANCED UI MODE ===========================
+GAME STATE: PreFlop
+Pot: 0   Current bet: 10
+
+PLAYERS:
+- Test Player 1: 1000 chips, Active
+- Test Player 2: 995 chips, Active (Bet: 5)
+- Test Player 3: 990 chips, Active (Bet: 10)
+===============================================
+
+=== ENHANCED UI MODE ===========================
+GAME STATE: PreFlop
+Pot: 0   Current bet: 10
+
+PLAYERS:
+- Test Player 1: 1000 chips, Active
+- Test Player 2: 995 chips, Active (Bet: 5)
+- Test Player 3: 990 chips, Active (Bet: 10)
+===============================================
+All microservices started successfully
+Press Ctrl+C to exit
+
+Enter name for player 2 (or press Enter for 'Player 2'): Replit
+Sending GameStart message to 80236c6d-937d-448b-b0d8-6f1d39473f22 with 2 players
+Sending StartHand message to 80236c6d-937d-448b-b0d8-6f1d39473f22
+StartHand message sent, waiting for response
+
+
