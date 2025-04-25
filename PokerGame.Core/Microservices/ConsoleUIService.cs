@@ -18,6 +18,7 @@ namespace PokerGame.Core.Microservices
         private bool _waitingForPlayerAction = false;
         private string _activePlayerId = string.Empty;
         private readonly bool _useEnhancedUI;
+        private object? _enhancedUiInstance; // Will hold a dynamic reference to CursesUI when needed
         
         /// <summary>
         /// Creates a new console UI service
@@ -29,6 +30,36 @@ namespace PokerGame.Core.Microservices
             : base("PlayerUI", "Console UI", publisherPort, subscriberPort)
         {
             _useEnhancedUI = useEnhancedUI;
+            
+            // Initialize enhanced UI if requested
+            if (_useEnhancedUI)
+            {
+                try
+                {
+                    // Create CursesUI instance via reflection to avoid direct dependency
+                    // This allows the service to still function if Curses is not available
+                    var cursesUIType = Type.GetType("PokerGame.Console.CursesUI, PokerGame.Console");
+                    if (cursesUIType != null)
+                    {
+                        _enhancedUiInstance = Activator.CreateInstance(cursesUIType);
+                        Console.WriteLine("Successfully initialized Enhanced Console UI");
+                        
+                        // Call Initialize method
+                        var initMethod = cursesUIType.GetMethod("Initialize");
+                        initMethod?.Invoke(_enhancedUiInstance, null);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Enhanced UI requested but CursesUI class not found");
+                        _useEnhancedUI = false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error initializing enhanced UI: {ex.Message}");
+                    _useEnhancedUI = false;
+                }
+            }
         }
         
         /// <summary>
@@ -277,7 +308,7 @@ namespace PokerGame.Core.Microservices
             
             if (_useEnhancedUI)
             {
-                Console.WriteLine("Starting enhanced NCurses UI for poker game...");
+                Console.WriteLine("Starting enhanced Console UI for poker game...");
                 Console.WriteLine("Enhanced UI in microservices mode is ready!");
             }
             else
@@ -419,14 +450,33 @@ namespace PokerGame.Core.Microservices
         }
         
         /// <summary>
-        /// Displays an enhanced game state using features available in NCurses
+        /// Displays an enhanced game state using our enhanced console UI
         /// </summary>
         private void DisplayEnhancedGameState()
         {
-            // Enhanced UI is not fully implemented in microservices mode yet
-            // This is a placeholder for future implementation
-            // For now we'll use the standard display with a special header
-                
+            if (_enhancedUiInstance != null && _latestGameState != null)
+            {
+                try
+                {
+                    // Create a local game state for the CursesUI to display
+                    var gameEngine = CreateLocalGameEngineFromState();
+                    
+                    // Call CursesUI.UpdateGameState via reflection
+                    var updateMethod = _enhancedUiInstance.GetType().GetMethod("UpdateGameState");
+                    if (updateMethod != null)
+                    {
+                        updateMethod.Invoke(_enhancedUiInstance, new[] { gameEngine });
+                        return; // Success, early return
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // If anything fails, fall back to text UI
+                    Console.WriteLine($"Error in enhanced UI: {ex.Message}");
+                }
+            }
+            
+            // Fallback to simple enhanced text mode if reflection fails
             Console.WriteLine();
             Console.WriteLine("=== ENHANCED UI MODE ===========================");
             Console.WriteLine($"GAME STATE: {_latestGameState?.CurrentState}");
@@ -454,6 +504,106 @@ namespace PokerGame.Core.Microservices
             }
             
             Console.WriteLine("===============================================");
+        }
+        
+        /// <summary>
+        /// Creates a local game engine object from the current state for use with the CursesUI
+        /// </summary>
+        private object CreateLocalGameEngineFromState()
+        {
+            // We need to create a dynamic PokerGameEngine instance that the CursesUI can use
+            // This acts as an adapter between the microservice state and the local UI
+            
+            Type? engineType = Type.GetType("PokerGame.Core.Game.PokerGameEngine, PokerGame.Core");
+            if (engineType == null || _latestGameState == null)
+                throw new InvalidOperationException("Could not create proxy game engine");
+                
+            // Create the engine
+            object? gameEngine = Activator.CreateInstance(engineType);
+            if (gameEngine == null)
+                throw new InvalidOperationException("Failed to create game engine instance");
+            
+            // Set its properties via reflection
+            SetProperty(gameEngine, "Pot", _latestGameState.Pot);
+            SetProperty(gameEngine, "CurrentBet", _latestGameState.CurrentBet);
+            SetProperty(gameEngine, "State", _latestGameState.CurrentState);
+            
+            // Set community cards
+            var communityCardsProperty = engineType.GetProperty("CommunityCards");
+            if (communityCardsProperty != null)
+            {
+                communityCardsProperty.SetValue(gameEngine, _latestGameState.CommunityCards);
+            }
+            
+            // Set players
+            var playersProperty = engineType.GetProperty("Players");
+            if (playersProperty != null)
+            {
+                // Convert PlayerInfo to Player
+                var players = new List<Player>();
+                
+                foreach (var p in _latestGameState.Players)
+                {
+                    var player = new Player(p.Name, p.Chips);
+                    
+                    // Add hole cards - work around read-only collection
+                    if (p.HoleCards != null && p.HoleCards.Count > 0)
+                    {
+                        foreach (var card in p.HoleCards)
+                        {
+                            player.HoleCards.Add(card);
+                        }
+                    }
+                    
+                    // Handle other properties with private setters
+                    // We need to use reflection to set these properly
+                    if (p.HasFolded)
+                    {
+                        var foldMethod = typeof(Player).GetMethod("Fold");
+                        if (foldMethod != null)
+                        {
+                            foldMethod.Invoke(player, null);
+                        }
+                        else
+                        {
+                            Console.WriteLine("Warning: Could not find Fold method on Player");
+                        }
+                    }
+                    
+                    if (p.CurrentBet > 0)
+                    {
+                        var placeBetMethod = typeof(Player).GetMethod("PlaceBet");
+                        if (placeBetMethod != null)
+                        {
+                            placeBetMethod.Invoke(player, new object[] { p.CurrentBet });
+                        }
+                        else
+                        {
+                            Console.WriteLine("Warning: Could not find PlaceBet method on Player");
+                        }
+                    }
+                    
+                    // IsAllIn is set automatically by PlaceBet if chips are 0
+                    
+                    players.Add(player);
+                }
+                
+                playersProperty.SetValue(gameEngine, players);
+            }
+            
+            return gameEngine;
+        }
+        
+        /// <summary>
+        /// Helper to set a property via reflection
+        /// </summary>
+        private void SetProperty(object obj, string propertyName, object value)
+        {
+            var prop = obj.GetType().GetProperty(propertyName);
+            if (prop != null && prop.CanWrite)
+            {
+                prop.SetValue(obj, value);
+            }
         }
         
         /// <summary>
@@ -561,6 +711,29 @@ namespace PokerGame.Core.Microservices
             }
             
             return $"[{rank}{suit}]";
+        }
+        
+        /// <summary>
+        /// Clean up resources and dispose the Enhanced UI if it was initialized
+        /// </summary>
+        public override void Dispose()
+        {
+            base.Dispose();
+            
+            // Dispose the enhanced UI if it exists and is IDisposable
+            if (_enhancedUiInstance is IDisposable disposable)
+            {
+                try
+                {
+                    disposable.Dispose();
+                    Console.WriteLine("Enhanced Console UI properly disposed");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error disposing Enhanced Console UI: {ex.Message}");
+                }
+                _enhancedUiInstance = null;
+            }
         }
     }
 }

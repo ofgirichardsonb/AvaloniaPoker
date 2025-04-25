@@ -5,7 +5,6 @@ using System.Threading;
 using PokerGame.Core.Game;
 using PokerGame.Core.Interfaces;
 using PokerGame.Core.Models;
-using Mindmagma.Curses;
 
 namespace PokerGame.Console
 {
@@ -43,7 +42,7 @@ namespace PokerGame.Console
             try
             {
                 System.Console.WriteLine("Starting with enhanced UI...");
-                System.Console.WriteLine("Enhanced UI (NCurses) is still in development.");
+                System.Console.WriteLine("Enhanced Console UI is active.");
                 System.Console.WriteLine("Using simplified console UI for now...");
                 
                 // Get number of players and initialize game
@@ -94,12 +93,55 @@ namespace PokerGame.Console
         }
         
         /// <summary>
-        /// Initialize the UI
+        /// Initialize the enhanced UI
         /// </summary>
         public void Initialize()
         {
-            // We're just using a simple console UI for now
-            _initialized = true;
+            if (_initialized)
+                return;
+            
+            try
+            {
+                // Clear the console
+                System.Console.Clear();
+                
+                // Set console colors if supported
+                try 
+                {
+                    System.Console.BackgroundColor = ConsoleColor.Black;
+                    System.Console.ForegroundColor = ConsoleColor.Cyan;
+                }
+                catch
+                {
+                    // Ignore color setting errors - some terminals might not support it
+                }
+                
+                // Display a fancy header
+                System.Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
+                System.Console.WriteLine("║        TEXAS HOLD'EM POKER (ENHANCED CONSOLE UI)        ║");
+                System.Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
+                System.Console.WriteLine();
+                System.Console.WriteLine("Waiting for game data...");
+                System.Console.WriteLine();
+                
+                // Reset color
+                try 
+                {
+                    System.Console.ResetColor();
+                }
+                catch
+                {
+                    // Ignore color reset errors
+                }
+                
+                _initialized = true;
+                System.Console.WriteLine("Enhanced UI initialized successfully");
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"Error initializing enhanced UI: {ex.Message}");
+                System.Console.WriteLine("Using simplified console UI");
+            }
         }
         
         /// <summary>
