@@ -37,12 +37,14 @@ jobs:
             branchName="${{ github.ref_name }}"
             branchExists=$(az repos ref list -r AvaloniaPoker --filter heads/$branchName | grep $branchName)
             if ([ -z $branchExists ]); then
+              echo -n "Branch $branchName does not exist, creating it..."
               objectId=$(az repos ref list -r AvaloniaPoker --filter heads/main | jq -r '.[] | .objectId')
               if ([ -z $objectId]); then
                 echo "No main branch found!"
                 exit 1
               fi
               az repos ref create --name "heads/$branchName" -r AvaloniaPoker --object-id $objectId
+              echo "created"
             fi
 
       - name: Push changes to Azure DevOps
