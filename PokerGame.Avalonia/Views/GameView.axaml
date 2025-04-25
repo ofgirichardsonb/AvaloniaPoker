@@ -25,7 +25,7 @@
         <!-- Main Game Area -->
         <Grid Grid.Row="1" RowDefinitions="*,Auto,*">
             <!-- Players Area -->
-            <ItemsControl Grid.Row="0" Items="{Binding Players}" Margin="10">
+            <ItemsControl Grid.Row="0" ItemsSource="{Binding Players}" Margin="10">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <UniformGrid Rows="2" />
@@ -48,7 +48,7 @@
                                     <TextBlock Text="{Binding CurrentBet}" VerticalAlignment="Center" />
                                     <TextBlock Text=")" VerticalAlignment="Center" />
                                 </StackPanel>
-                                <ItemsControl Grid.Row="1" Items="{Binding HoleCards}" Margin="0,10,0,0">
+                                <ItemsControl Grid.Row="1" ItemsSource="{Binding HoleCards}" Margin="0,10,0,0">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <StackPanel Orientation="Horizontal" />
@@ -71,7 +71,7 @@
             <!-- Community Cards -->
             <StackPanel Grid.Row="1" Orientation="Vertical" HorizontalAlignment="Center" Margin="0,10">
                 <TextBlock Text="Community Cards" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,10" />
-                <ItemsControl Items="{Binding CommunityCards}">
+                <ItemsControl ItemsSource="{Binding CommunityCards}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Orientation="Horizontal" />

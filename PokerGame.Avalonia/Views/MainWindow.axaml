@@ -3,7 +3,7 @@
         xmlns:vm="using:PokerGame.Avalonia.ViewModels"
         xmlns:views="using:PokerGame.Avalonia.Views"
         x:Class="PokerGame.Avalonia.Views.MainWindow"
-        Icon="/Assets/card-spade.svg"
+        Icon="avares://PokerGame.Avalonia/Assets/poker-cards.ico"
         Title="Poker Game"
         Width="1000"
         Height="700"
