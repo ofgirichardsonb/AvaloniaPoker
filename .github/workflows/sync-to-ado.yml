@@ -14,12 +14,12 @@ jobs:
         uses: azure/cli@v2
         with:
           inlineScript: |
-            az devops configure --defaults organization=https://dev.azure.com/ofgi project=AvaloniaPoker
+            az devops configure --defaults organization=https://dev.azure.com/ofgi project="Architecture Lab"
             echo ${{ secrets.AZURE_DEVOPS_EXT_PAT }} | az devops login --organization https://dev.azure.com/ofgi
 
       - name: Sync repository to AzureDevOps
         uses: azure/cli@v2
         with:
           inlineScript: |
-            az devops configure --defaults organization=https://dev.azure.com/ofgi project=AvaloniaPoker
+            az devops configure --defaults organization=https://dev.azure.com/ofgi project="Architecture Lab"
             az repos import create --git-source-url https://github.com/ofgirichardsonb/AvaloniaPoker --repository AvaloniaPoker --requires-authorization false
