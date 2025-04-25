@@ -29,8 +29,14 @@ namespace PokerGame.Core.Microservices
         /// <summary>
         /// Creates and starts all the required microservices
         /// </summary>
-        public void StartMicroservices()
+        /// <param name="args">Command line arguments to pass UI configuration</param>
+        public void StartMicroservices(string[]? args = null)
         {
+            // Check if enhanced UI should be used
+            bool useCursesUi = args != null && Array.Exists(args, arg => 
+                arg.Equals("--curses", StringComparison.OrdinalIgnoreCase) || 
+                arg.Equals("-c", StringComparison.OrdinalIgnoreCase));
+                
             try
             {
                 Console.WriteLine("Starting Game Engine Service...");
@@ -53,11 +59,12 @@ namespace PokerGame.Core.Microservices
                 // Small delay for initialization
                 Thread.Sleep(500);
                 
-                Console.WriteLine("Starting Console UI Service...");
-                // Create the console UI service
+                Console.WriteLine($"Starting Console UI Service{(useCursesUi ? " with enhanced UI" : "")}...");
+                // Create the console UI service with enhanced UI preference
                 var consoleUIService = new ConsoleUIService(
                     ConsoleUIPublisherPort,
-                    GameEnginePublisherPort); // Connect to the game engine's publisher port
+                    GameEnginePublisherPort, // Connect to the game engine's publisher port
+                    useCursesUi); // Pass the UI preference
                 _services.Add(consoleUIService);
                 
                 // Start all services (in order)

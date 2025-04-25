@@ -12,17 +12,22 @@ namespace PokerGame.Console
         /// Starts the microservice-based application
         /// </summary>
         /// <param name="args">Command line arguments</param>
-        public static void StartMicroservices(string[] args)
+        /// <param name="useCursesUi">Whether to use the enhanced curses UI</param>
+        public static void StartMicroservices(string[] args, bool useCursesUi = false)
         {
             System.Console.WriteLine("Starting poker game with microservices architecture...");
+            if (useCursesUi)
+            {
+                System.Console.WriteLine("Using enhanced curses UI...");
+            }
             
             // Create the microservice manager
             using (var manager = new MicroserviceManager())
             {
                 try
                 {
-                    // Start all required microservices
-                    manager.StartMicroservices();
+                    // Start all required microservices with UI preference
+                    manager.StartMicroservices(args);
                     
                     // Keep the main thread alive until user wants to exit
                     System.Console.WriteLine("Press Ctrl+C to exit");

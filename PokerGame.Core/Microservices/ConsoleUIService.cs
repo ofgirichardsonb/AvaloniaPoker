@@ -17,15 +17,18 @@ namespace PokerGame.Core.Microservices
         private string? _gameEngineServiceId;
         private bool _waitingForPlayerAction = false;
         private string _activePlayerId = string.Empty;
+        private readonly bool _useEnhancedUI;
         
         /// <summary>
         /// Creates a new console UI service
         /// </summary>
         /// <param name="publisherPort">The port to use for publishing messages</param>
         /// <param name="subscriberPort">The port to use for subscribing to messages</param>
-        public ConsoleUIService(int publisherPort, int subscriberPort) 
+        /// <param name="useEnhancedUI">Whether to use the enhanced curses UI</param>
+        public ConsoleUIService(int publisherPort, int subscriberPort, bool useEnhancedUI = false) 
             : base("PlayerUI", "Console UI", publisherPort, subscriberPort)
         {
+            _useEnhancedUI = useEnhancedUI;
         }
         
         /// <summary>
@@ -220,10 +223,19 @@ namespace PokerGame.Core.Microservices
         private async Task SetupGameAsync()
         {
             Console.Clear();
-            Console.WriteLine("===============================================");
-            Console.WriteLine("           TEXAS HOLD'EM POKER GAME           ");
-            Console.WriteLine("===============================================");
-            Console.WriteLine();
+            
+            if (_useEnhancedUI)
+            {
+                Console.WriteLine("Starting enhanced NCurses UI for poker game...");
+                Console.WriteLine("Enhanced UI in microservices mode is ready!");
+            }
+            else
+            {
+                Console.WriteLine("===============================================");
+                Console.WriteLine("           TEXAS HOLD'EM POKER GAME           ");
+                Console.WriteLine("===============================================");
+                Console.WriteLine();
+            }
             
             // Wait for the game engine to be available
             while (_gameEngineServiceId == null)
@@ -297,6 +309,12 @@ namespace PokerGame.Core.Microservices
             if (_latestGameState == null)
                 return;
                 
+            if (_useEnhancedUI)
+            {
+                DisplayEnhancedGameState();
+                return;
+            }
+            
             Console.WriteLine();
             Console.WriteLine("===============================================");
             Console.WriteLine($"GAME STATE: {_latestGameState.CurrentState}");
@@ -318,6 +336,44 @@ namespace PokerGame.Core.Microservices
                 string status = player.HasFolded ? "Folded" : player.IsAllIn ? "All-In" : "Active";
                 string currentBet = player.CurrentBet > 0 ? $" (Bet: {player.CurrentBet})" : "";
                 Console.WriteLine($"- {player.Name}: {player.Chips} chips, {status}{currentBet}");
+            }
+            
+            Console.WriteLine("===============================================");
+        }
+        
+        /// <summary>
+        /// Displays an enhanced game state using features available in NCurses
+        /// </summary>
+        private void DisplayEnhancedGameState()
+        {
+            // Enhanced UI is not fully implemented in microservices mode yet
+            // This is a placeholder for future implementation
+            // For now we'll use the standard display with a special header
+                
+            Console.WriteLine();
+            Console.WriteLine("=== ENHANCED UI MODE ===========================");
+            Console.WriteLine($"GAME STATE: {_latestGameState?.CurrentState}");
+            
+            // Show community cards if any
+            if (_latestGameState?.CommunityCards?.Count > 0)
+            {
+                Console.WriteLine($"Community cards: {CardListToString(_latestGameState.CommunityCards)}");
+            }
+            
+            // Show pot and current bet
+            Console.WriteLine($"Pot: {_latestGameState?.Pot}   Current bet: {_latestGameState?.CurrentBet}");
+            Console.WriteLine();
+            
+            // Show player information
+            Console.WriteLine("PLAYERS:");
+            if (_latestGameState?.Players != null)
+            {
+                foreach (var player in _latestGameState.Players)
+                {
+                    string status = player.HasFolded ? "Folded" : player.IsAllIn ? "All-In" : "Active";
+                    string currentBet = player.CurrentBet > 0 ? $" (Bet: {player.CurrentBet})" : "";
+                    Console.WriteLine($"- {player.Name}: {player.Chips} chips, {status}{currentBet}");
+                }
             }
             
             Console.WriteLine("===============================================");

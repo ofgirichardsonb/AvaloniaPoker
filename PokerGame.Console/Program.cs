@@ -20,8 +20,8 @@ namespace PokerGame.Console
 
             if (useMicroservices)
             {
-                // Run in microservice mode
-                MicroserviceConsoleProgram.StartMicroservices(args);
+                // Run in microservice mode and pass the UI flag
+                MicroserviceConsoleProgram.StartMicroservices(args, useCursesUi);
             }
             else
             {
