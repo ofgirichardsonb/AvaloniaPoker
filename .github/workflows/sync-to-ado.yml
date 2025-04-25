@@ -11,9 +11,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Sync to DevOps
+      - name: Set up Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email actions@github.com"
+
+      - name: Add Azure DevOps remote
+        run: |
+          git remote add azure https://${{ secrets.AZURE_DEVOPS_EXT_PAT }}@dev.azure.com/ofgi/Architecture%20Lab/_git/AvaloniaPoker
+          git fetch azure
+
+      - name: Create branch in ADO if it doesn't exist
         uses: azure/cli@v2
         with:
           inlineScript: |
@@ -30,5 +40,7 @@ jobs:
               fi
               az repos ref create --name "heads/$branchName" -r AvaloniaPoker --object-id $objectId
             fi
-            git remote add azure "$pat@https://dev.azure.com/ofgi/Architecture%20Lab/_git/AvaloniaPoker"
-            git push azure $branchName
+
+      - name: Push changes to Azure DevOps
+        run: |
+          git push azure $branchName
