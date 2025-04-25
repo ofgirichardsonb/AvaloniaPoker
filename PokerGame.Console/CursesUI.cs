@@ -147,16 +147,16 @@ namespace PokerGame.Console
                     if (actionText == "F")
                     {
                         // Fold
-                        gameEngine.HandlePlayerAction(player, ActionType.Fold);
+                        gameEngine.ProcessPlayerAction("fold");
                         validAction = true;
                     }
                     else if (actionText == "C")
                     {
                         // Check or Call
                         if (canCheck)
-                            gameEngine.HandlePlayerAction(player, ActionType.Check);
+                            gameEngine.ProcessPlayerAction("check");
                         else
-                            gameEngine.HandlePlayerAction(player, ActionType.Call);
+                            gameEngine.ProcessPlayerAction("call");
                         validAction = true;
                     }
                     else if (actionText == "R")
@@ -167,7 +167,7 @@ namespace PokerGame.Console
                         
                         if (int.TryParse(raiseInput, out int raiseAmount) && raiseAmount > 0)
                         {
-                            gameEngine.HandlePlayerAction(player, ActionType.Raise, raiseAmount);
+                            gameEngine.ProcessPlayerAction("raise", raiseAmount);
                             validAction = true;
                         }
                         else
@@ -250,13 +250,21 @@ namespace PokerGame.Console
                 if (winners.Count == 1)
                 {
                     var winner = winners[0];
-                    System.Console.WriteLine($"{winner.Name} wins with {winner.BestHand.HandRank}!");
-                    System.Console.WriteLine($"Winning hand: {FormatCards(winner.BestHand.Cards)}");
+                    System.Console.WriteLine($"{winner.Name} wins the pot!");
+                    if (winner.CurrentHand != null)
+                    {
+                        System.Console.WriteLine($"Winning hand: {winner.CurrentHand.Rank}");
+                        System.Console.WriteLine($"Cards: {FormatCards(winner.CurrentHand.Cards)}");
+                    }
                 }
                 else
                 {
                     System.Console.WriteLine("Split pot between: " + string.Join(", ", winners.Select(w => w.Name)));
-                    System.Console.WriteLine($"Winning hand: {winners[0].BestHand.HandRank}");
+                    var firstWinner = winners[0];
+                    if (firstWinner.CurrentHand != null)
+                    {
+                        System.Console.WriteLine($"Winning hand: {firstWinner.CurrentHand.Rank}");
+                    }
                 }
                 
                 System.Console.WriteLine("Press Enter to continue...");
@@ -271,9 +279,9 @@ namespace PokerGame.Console
         /// <summary>
         /// Formats a list of cards for display
         /// </summary>
-        private string FormatCards(List<Card> cards)
+        private string FormatCards(IEnumerable<Card> cards)
         {
-            if (cards == null || cards.Count == 0)
+            if (cards == null || !cards.Any())
                 return "";
                 
             return string.Join(" ", cards.Select(card => FormatCard(card)));
