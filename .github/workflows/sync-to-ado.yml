@@ -18,7 +18,12 @@ jobs:
         with:
           version: '2.69.0'
 
-      - name: Authenticate with Azure
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to DevOps
         env:
           AZURE_DEVOPS_EXT_PATH: ${{ secrets.AZURE_DEVOPS_EXT_PATH }}
         run: |
