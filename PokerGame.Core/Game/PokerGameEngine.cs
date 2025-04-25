@@ -55,6 +55,23 @@ namespace PokerGame.Core.Game
         public IReadOnlyList<Card> CommunityCards => _communityCards.AsReadOnly();
         
         /// <summary>
+        /// Adds a card to the community cards
+        /// </summary>
+        /// <param name="card">The card to add</param>
+        public void AddCommunityCard(Card card)
+        {
+            _communityCards.Add(card);
+        }
+        
+        /// <summary>
+        /// Clears all community cards
+        /// </summary>
+        public void ClearCommunityCards()
+        {
+            _communityCards.Clear();
+        }
+        
+        /// <summary>
         /// Gets the players in the game
         /// </summary>
         public IReadOnlyList<Player> Players => _players.AsReadOnly();

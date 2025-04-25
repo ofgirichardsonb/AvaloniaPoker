@@ -16,6 +16,8 @@ namespace PokerGame.Core.Microservices
         private const int GameEngineSubscriberPort = 5557;
         private const int ConsoleUIPublisherPort = 5558;
         private const int ConsoleUISubscriberPort = 5557; // Same as GameEngine's publisher for subscription
+        private const int CardDeckPublisherPort = 5559;
+        private const int CardDeckSubscriberPort = 5557; // Same as GameEngine's publisher for subscription
         
         /// <summary>
         /// Creates a new microservice manager
@@ -37,6 +39,16 @@ namespace PokerGame.Core.Microservices
                     GameEnginePublisherPort, 
                     GameEngineSubscriberPort);
                 _services.Add(gameEngineService);
+                
+                // Small delay for initialization
+                Thread.Sleep(500);
+                
+                Console.WriteLine("Starting Card Deck Service...");
+                // Create the card deck service
+                var cardDeckService = new CardDeckService(
+                    CardDeckPublisherPort,
+                    CardDeckSubscriberPort);
+                _services.Add(cardDeckService);
                 
                 // Small delay for initialization
                 Thread.Sleep(500);

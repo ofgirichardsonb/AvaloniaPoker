@@ -34,6 +34,16 @@ namespace PokerGame.Core.Microservices
         DisplayUpdate,
         UserInput,
         
+        // Card deck messages
+        DeckCreate,
+        DeckShuffle,
+        DeckDeal,
+        DeckDealResponse,
+        DeckBurn,
+        DeckBurnResponse,
+        DeckReset,
+        DeckStatus,
+        
         // Error messages
         Error
     }
@@ -338,6 +348,10 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         public string Details { get; set; } = string.Empty;
     }
+    
+    // Note: The DeckCreatePayload, DeckIdPayload, DeckDealPayload, DeckDealResponsePayload, 
+    // DeckBurnPayload, DeckBurnResponsePayload, and DeckStatusPayload classes are 
+    // defined in CardDeckService.cs
     
     #endregion
 }
