@@ -55,10 +55,46 @@ namespace PokerGame.Core.Microservices
             _serviceType = serviceType;
             _heartbeatIntervalMs = heartbeatIntervalMs;
             
-            // Set up the publisher socket (for sending messages)
-            _publisherSocket = new PublisherSocket();
-            _publisherSocket.Options.SendHighWatermark = 1000;
-            _publisherSocket.Bind($"tcp://127.0.0.1:{publisherPort}");
+            // Set up the publisher socket with retry logic
+            int maxRetries = 3;
+            int currentRetry = 0;
+            bool publisherBound = false;
+            
+            while (!publisherBound && currentRetry < maxRetries)
+            {
+                try
+                {
+                    // Try to create and bind the publisher socket
+                    _publisherSocket = new PublisherSocket();
+                    _publisherSocket.Options.SendHighWatermark = 1000;
+                    _publisherSocket.Bind($"tcp://127.0.0.1:{publisherPort}");
+                    publisherBound = true;
+                    Console.WriteLine($"Successfully bound publisher socket on port {publisherPort}");
+                }
+                catch (NetMQ.AddressAlreadyInUseException)
+                {
+                    currentRetry++;
+                    
+                    // Dispose of failed socket attempt
+                    if (_publisherSocket != null)
+                    {
+                        _publisherSocket.Dispose();
+                        _publisherSocket = null;
+                    }
+                    
+                    if (currentRetry < maxRetries)
+                    {
+                        Console.WriteLine($"Port {publisherPort} already in use, retrying with port {publisherPort + currentRetry}");
+                        publisherPort += currentRetry;
+                        Thread.Sleep(500); // Give time for potential cleanup
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Failed to bind publisher after {maxRetries} attempts");
+                        throw; // Rethrow after max retries
+                    }
+                }
+            }
             
             // Set up the subscriber socket (for receiving messages)
             _subscriberSocket = new SubscriberSocket();
@@ -117,9 +153,27 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         public void Dispose()
         {
-            _publisherSocket?.Dispose();
-            _subscriberSocket?.Dispose();
-            _cancellationTokenSource?.Dispose();
+            try 
+            {
+                // Close sockets properly before disposing
+                _publisherSocket?.Close();
+                _subscriberSocket?.Close();
+                
+                // Give sockets time to close
+                Thread.Sleep(100);
+                
+                // Now dispose resources
+                _publisherSocket?.Dispose();
+                _subscriberSocket?.Dispose();
+                _cancellationTokenSource?.Dispose();
+                
+                // Force a cleanup to release ports
+                NetMQConfig.Cleanup(false);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during microservice disposal: {ex.Message}");
+            }
         }
         
         /// <summary>

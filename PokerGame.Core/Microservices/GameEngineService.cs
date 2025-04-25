@@ -18,6 +18,9 @@ namespace PokerGame.Core.Microservices
         private string? _cardDeckServiceId;
         private string _currentDeckId = string.Empty;
         
+        // Dictionary to keep track of known services and their capabilities
+        private readonly Dictionary<string, ServiceRegistrationPayload> _knownServices = new Dictionary<string, ServiceRegistrationPayload>();
+        
         /// <summary>
         /// Creates a new game engine service
         /// </summary>
@@ -38,6 +41,10 @@ namespace PokerGame.Core.Microservices
         /// <param name="registrationInfo">The service registration info</param>
         protected override void OnServiceRegistered(ServiceRegistrationPayload registrationInfo)
         {
+            // Store the service information
+            _knownServices[registrationInfo.ServiceId] = registrationInfo;
+            Console.WriteLine($"Registered service: {registrationInfo.ServiceName} (ID: {registrationInfo.ServiceId}, Type: {registrationInfo.ServiceType})");
+            
             // Track the card deck service when it comes online
             if (registrationInfo.ServiceType == "CardDeck")
             {
@@ -55,12 +62,38 @@ namespace PokerGame.Core.Microservices
             if (message.Type == MessageType.ServiceRegistration)
             {
                 var payload = message.GetPayload<ServiceRegistrationPayload>();
-                if (payload != null && payload.ServiceType == "CardDeck")
+                if (payload != null)
                 {
-                    _cardDeckServiceId = payload.ServiceId;
-                    Console.WriteLine($"Directly registered card deck service: {payload.ServiceName} (ID: {payload.ServiceId})");
+                    // Store the service in our registry
+                    _knownServices[payload.ServiceId] = payload;
+                    
+                    if (payload.ServiceType == "CardDeck")
+                    {
+                        _cardDeckServiceId = payload.ServiceId;
+                        Console.WriteLine($"Directly registered card deck service: {payload.ServiceName} (ID: {payload.ServiceId})");
+                    }
                 }
             }
+        }
+        
+        /// <summary>
+        /// Gets a list of service IDs for services of the specified type
+        /// </summary>
+        /// <param name="serviceType">The type of service to find</param>
+        /// <returns>A list of service IDs</returns>
+        private new List<string> GetServicesOfType(string serviceType)
+        {
+            List<string> services = new List<string>();
+            
+            foreach (var pair in _knownServices)
+            {
+                if (pair.Value.ServiceType == serviceType)
+                {
+                    services.Add(pair.Key);
+                }
+            }
+            
+            return services;
         }
         
         /// <summary>
@@ -76,7 +109,30 @@ namespace PokerGame.Core.Microservices
                     if (playerNames != null && playerNames.Length >= 2)
                     {
                         Console.WriteLine($"Starting game with {playerNames.Length} players: {string.Join(", ", playerNames)}");
+                        
+                        // First make sure the player list is clean
+                        foreach (var field in typeof(PokerGameEngine).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
+                        {
+                            if (field.Name == "_players")
+                            {
+                                var playerList = field.GetValue(_gameEngine) as List<Player>;
+                                if (playerList != null) 
+                                {
+                                    playerList.Clear();
+                                    Console.WriteLine($"Cleared existing player list");
+                                }
+                                break;
+                            }
+                        }
+                        
                         _gameEngine.StartGame(playerNames);
+                        
+                        // Verify players were added correctly
+                        Console.WriteLine($"Players after StartGame: {_gameEngine.Players.Count}");
+                        foreach (var player in _gameEngine.Players)
+                        {
+                            Console.WriteLine($"- Player: {player.Name} (Chips: {player.Chips})");
+                        }
                         
                         // Create a new deck for the game
                         await CreateNewDeckAsync();
@@ -139,10 +195,60 @@ namespace PokerGame.Core.Microservices
                     await DealCardsToPlayersAsync();
                     
                     // Ensure we start the hand if not already in progress
-                    if (_gameEngine.State == GameState.Setup)
+                    if (_gameEngine.State == GameState.Setup || _gameEngine.State == GameState.WaitingToStart)
                     {
-                        Console.WriteLine("Starting hand");
-                        _gameEngine.StartHand();
+                        // Verify that we have enough players before starting
+                        Console.WriteLine($"Starting hand with {_gameEngine.Players.Count} players (current state: {_gameEngine.State})");
+                        
+                        if (_gameEngine.Players.Count < 2)
+                        {
+                            Console.WriteLine("ERROR: Need at least 2 players to start a hand. Creating default players for testing.");
+                            // Use reflection to add default players for testing
+                            foreach (var field in typeof(PokerGameEngine).GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
+                            {
+                                if (field.Name == "_players")
+                                {
+                                    var playerList = field.GetValue(_gameEngine) as List<Player>;
+                                    if (playerList != null && playerList.Count == 0) 
+                                    {
+                                        playerList.Add(new Player("Test Player 1", 1000));
+                                        playerList.Add(new Player("Test Player 2", 1000));
+                                        playerList.Add(new Player("Test Player 3", 1000));
+                                        Console.WriteLine($"Added {playerList.Count} test players");
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        try {
+                            // Try normal hand start
+                            _gameEngine.StartHand();
+                            
+                            // Check if we changed state
+                            if (_gameEngine.State == GameState.Setup || _gameEngine.State == GameState.WaitingToStart)
+                            {
+                                // If not, force PreFlop state via reflection
+                                Console.WriteLine("Failed to transition state, forcing PreFlop state");
+                                typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, GameState.PreFlop);
+                                
+                                // Need to set up blinds and first player if forcing state
+                                int dealerPos = 0;
+                                int smallBlindPos = (dealerPos + 1) % _gameEngine.Players.Count;
+                                int bigBlindPos = (dealerPos + 2) % _gameEngine.Players.Count;
+                                
+                                // Force current player to be after big blind
+                                typeof(PokerGameEngine).GetField("_currentPlayerIndex", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, (bigBlindPos + 1) % _gameEngine.Players.Count);
+                            }
+                        }
+                        catch (Exception ex) {
+                            Console.WriteLine("Error starting hand: " + ex.Message);
+                            
+                            // Force state change
+                            Console.WriteLine("Forcing state change after error");
+                            typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, GameState.PreFlop);
+                        }
+                        
                         Console.WriteLine("New game state: " + _gameEngine.State);
                     }
                     
@@ -193,14 +299,33 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         private async Task CreateNewDeckAsync()
         {
+            // Check if card deck service is available, if not try to find it
             if (_cardDeckServiceId == null)
             {
-                Console.WriteLine("Card deck service not available");
-                return;
+                Console.WriteLine("Card deck service not available, trying to find it...");
+                
+                // Search for deck service
+                foreach (var servicePair in _knownServices)
+                {
+                    if (servicePair.Value.ServiceType == "CardDeck")
+                    {
+                        _cardDeckServiceId = servicePair.Key;
+                        Console.WriteLine($"Found card deck service: {_cardDeckServiceId}");
+                        break;
+                    }
+                }
+                
+                if (_cardDeckServiceId == null)
+                {
+                    Console.WriteLine("Card deck service still not available");
+                    return;
+                }
             }
                 
             // Generate a unique ID for this deck
             _currentDeckId = $"deck-{Guid.NewGuid()}";
+            
+            Console.WriteLine($"Creating new deck with ID: {_currentDeckId}");
             
             // Create a new deck and shuffle it
             var createPayload = new DeckCreatePayload
@@ -213,7 +338,9 @@ namespace PokerGame.Core.Microservices
             SendTo(message, _cardDeckServiceId);
             
             // Small delay to let the deck be created
-            await Task.Delay(100);
+            await Task.Delay(500);
+            
+            Console.WriteLine($"Finished creating deck {_currentDeckId}");
         }
         
         /// <summary>

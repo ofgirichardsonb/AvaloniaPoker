@@ -11,19 +11,38 @@ namespace PokerGame.Core.Microservices
     {
         private readonly List<MicroserviceBase> _services = new List<MicroserviceBase>();
         
-        // Default port allocations
-        private const int GameEnginePublisherPort = 5556;
-        private const int GameEngineSubscriberPort = 5557;
-        private const int ConsoleUIPublisherPort = 5558;
-        private const int ConsoleUISubscriberPort = 5557; // Same as GameEngine's publisher for subscription
-        private const int CardDeckPublisherPort = 5559;
-        private const int CardDeckSubscriberPort = 5557; // Same as GameEngine's publisher for subscription
+        // Base port allocations - will be offset with a random value to avoid conflicts
+        private int GameEnginePublisherPort;
+        private int GameEngineSubscriberPort;
+        private int ConsoleUIPublisherPort;
+        private int ConsoleUISubscriberPort; // Same as GameEngine's publisher for subscription
+        private int CardDeckPublisherPort;
+        private int CardDeckSubscriberPort; // Same as GameEngine's publisher for subscription
+        
+        // Initialize with random port offset to avoid conflicts when restarting
+        private void InitializePorts()
+        {
+            // Generate a random offset between 0-100 to avoid port conflicts on restart
+            Random random = new Random();
+            int offset = random.Next(0, 100);
+            
+            Console.WriteLine($"Using port offset: {offset}");
+            
+            GameEnginePublisherPort = 25556 + offset;
+            GameEngineSubscriberPort = 25557 + offset;
+            ConsoleUIPublisherPort = 25558 + offset;
+            ConsoleUISubscriberPort = GameEnginePublisherPort; // Connect to Game Engine's publisher port
+            CardDeckPublisherPort = 25559 + offset;
+            CardDeckSubscriberPort = GameEnginePublisherPort; // Connect to Game Engine's publisher port
+        }
         
         /// <summary>
         /// Creates a new microservice manager
         /// </summary>
         public MicroserviceManager()
         {
+            // Initialize ports with random offset to avoid conflicts
+            InitializePorts();
         }
         
         /// <summary>
@@ -63,7 +82,7 @@ namespace PokerGame.Core.Microservices
                 // Create the console UI service with enhanced UI preference
                 var consoleUIService = new ConsoleUIService(
                     ConsoleUIPublisherPort,
-                    GameEnginePublisherPort, // Connect to the game engine's publisher port
+                    ConsoleUISubscriberPort, // Use subscriber port
                     useCursesUi); // Pass the UI preference
                 _services.Add(consoleUIService);
                 
@@ -89,7 +108,10 @@ namespace PokerGame.Core.Microservices
                     Console.WriteLine("Notifying game engine about card deck service...");
                     // Registration should happen automatically, but let's make sure
                     deckService.PublishServiceRegistration();
-                    Thread.Sleep(1000);
+                    
+                    // Give time for registration to be processed
+                    Console.WriteLine("Waiting for card deck service registration to be processed...");
+                    Thread.Sleep(2000);
                     
                     // Send a direct message to ensure CardDeck service is properly registered
                     var registerMessage = Message.Create(MessageType.ServiceRegistration, 
@@ -102,7 +124,16 @@ namespace PokerGame.Core.Microservices
                         });
                     engineService.HandleServiceRegistration(registerMessage);
                     
-                    // Also trigger a game state broadcast
+                    // Make sure players are properly registered with the game engine
+                    Console.WriteLine("Ensuring players are properly registered with the game engine...");
+                    Thread.Sleep(1000);
+                    
+                    // Give the engine service a direct command to start a hand after initializing
+                    Console.WriteLine("Sending forced StartHand command to engine service");
+                    var startHandMsg = Message.Create(MessageType.StartHand);
+                    engineService.HandleMessageAsync(startHandMsg).Wait();
+                    
+                    // Then trigger a game state broadcast
                     engineService.BroadcastGameState();
                     
                     // Give the console UI service time to process the game start message
@@ -124,12 +155,39 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         public void StopMicroservices()
         {
-            foreach (var service in _services)
+            try
             {
-                service.Stop();
+                // Stop each service (which cancels tasks but doesn't release ports)
+                foreach (var service in _services)
+                {
+                    service.Stop();
+                }
+                
+                // Small delay to ensure tasks have stopped
+                Thread.Sleep(200);
+                
+                // Now dispose them properly (which releases ports)
+                foreach (var service in _services)
+                {
+                    service.Dispose();
+                }
+                
+                // Explicitly clean up NetMQ to ensure ports are released
+                try
+                {
+                    NetMQ.NetMQConfig.Cleanup(false);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"NetMQ cleanup error: {ex.Message}");
+                }
+                
+                Console.WriteLine("All microservices stopped");
             }
-            
-            Console.WriteLine("All microservices stopped");
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error stopping microservices: {ex.Message}");
+            }
         }
         
         /// <summary>
@@ -137,12 +195,15 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         public void Dispose()
         {
-            foreach (var service in _services)
+            try
             {
-                service.Dispose();
+                StopMicroservices();
+                _services.Clear();
             }
-            
-            _services.Clear();
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error disposing microservice manager: {ex.Message}");
+            }
         }
     }
 }

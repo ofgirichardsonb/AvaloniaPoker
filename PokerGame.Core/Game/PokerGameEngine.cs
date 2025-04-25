@@ -120,8 +120,16 @@ namespace PokerGame.Core.Game
                 player.ResetForNewHand();
             }
             
-            // Move dealer button to next player
-            _dealerPosition = (_dealerPosition + 1) % _players.Count;
+            // Move dealer button to next player (make sure we have players)
+            if (_players.Count > 0)
+            {
+                _dealerPosition = (_dealerPosition + 1) % _players.Count;
+            }
+            else
+            {
+                Console.WriteLine("ERROR: No players registered yet. Cannot start hand.");
+                return;
+            }
             
             // In microservice mode, we might already have cards dealt externally
             // So only use the internal deck if needed
@@ -148,7 +156,13 @@ namespace PokerGame.Core.Game
             _ui.ShowMessage("New hand started. Hole cards dealt.");
             _ui.UpdateGameState(this);
             
-            // Post blinds
+            // Post blinds (need at least 2 players)
+            if (_players.Count < 2)
+            {
+                Console.WriteLine("ERROR: Need at least 2 players to play poker.");
+                return;
+            }
+            
             int smallBlindPos = (_dealerPosition + 1) % _players.Count;
             int bigBlindPos = (_dealerPosition + 2) % _players.Count;
             

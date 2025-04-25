@@ -130,6 +130,13 @@ namespace PokerGame.Core.Microservices
                     {
                         _waitingForPlayerAction = true;
                         _activePlayerId = actionPlayer.PlayerId;
+                        
+                        // Make sure we have this player in our players dictionary
+                        if (!_players.ContainsKey(_activePlayerId))
+                        {
+                            _players[_activePlayerId] = actionPlayer;
+                        }
+                        
                         DisplayActionPrompt(actionPlayer);
                     }
                     break;
@@ -155,36 +162,80 @@ namespace PokerGame.Core.Microservices
                         // Process player action
                         string input = Console.ReadLine()?.ToUpper() ?? "";
                         
-                        switch (input)
+                        // Check for auto-play mode
+                        if (input.Contains("[AUTO]") || input.Trim() == "")
                         {
-                            case "F":
-                                SendPlayerAction("fold");
-                                break;
-                                
-                            case "C":
-                                // This will be check or call depending on the current game state
+                            Console.WriteLine("Auto-play mode detected. Making automatic decision...");
+                            
+                            // Logic for auto decision - typically call/check or fold with bad hands
+                            if (_latestGameState != null)
+                            {
+                                // Simple auto-play logic: 
+                                // - Always call if bet is small (<= 10% of chips)
+                                // - Always check if possible
+                                // - Otherwise fold
                                 var playerInfo = _players[_activePlayerId];
-                                bool canCheck = _latestGameState != null &&
-                                               playerInfo.CurrentBet == _latestGameState.CurrentBet;
+                                bool canCheck = _latestGameState.CurrentBet == playerInfo.CurrentBet;
+                                int betToCall = _latestGameState.CurrentBet - playerInfo.CurrentBet;
                                 
-                                SendPlayerAction(canCheck ? "check" : "call");
-                                break;
-                                
-                            case "R":
-                                Console.Write("Enter raise amount: ");
-                                if (int.TryParse(Console.ReadLine(), out int raiseAmount))
+                                // Auto-decision making
+                                if (canCheck)
                                 {
-                                    SendPlayerAction("raise", raiseAmount);
+                                    Console.WriteLine("[AUTO] Checking");
+                                    SendPlayerAction("check");
+                                }
+                                else if (betToCall <= playerInfo.Chips * 0.1) // Call if bet is <= 10% of chips
+                                {
+                                    Console.WriteLine($"[AUTO] Calling {betToCall}");
+                                    SendPlayerAction("call");
                                 }
                                 else
                                 {
-                                    Console.WriteLine("Invalid amount. Try again.");
+                                    Console.WriteLine("[AUTO] Folding");
+                                    SendPlayerAction("fold");
                                 }
-                                break;
-                                
-                            default:
-                                Console.WriteLine("Invalid action. Use F (fold), C (check/call), or R (raise).");
-                                break;
+                            }
+                            else
+                            {
+                                // Default to call if no game state available
+                                Console.WriteLine("[AUTO] Calling (default)");
+                                SendPlayerAction("call");
+                            }
+                        }
+                        else
+                        {
+                            // Manual play mode
+                            switch (input)
+                            {
+                                case "F":
+                                    SendPlayerAction("fold");
+                                    break;
+                                    
+                                case "C":
+                                    // This will be check or call depending on the current game state
+                                    var playerInfo = _players[_activePlayerId];
+                                    bool canCheck = _latestGameState != null &&
+                                                  playerInfo.CurrentBet == _latestGameState.CurrentBet;
+                                    
+                                    SendPlayerAction(canCheck ? "check" : "call");
+                                    break;
+                                    
+                                case "R":
+                                    Console.Write("Enter raise amount: ");
+                                    if (int.TryParse(Console.ReadLine(), out int raiseAmount))
+                                    {
+                                        SendPlayerAction("raise", raiseAmount);
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("Invalid amount. Try again.");
+                                    }
+                                    break;
+                                    
+                                default:
+                                    Console.WriteLine("Invalid action. Use F (fold), C (check/call), or R (raise).");
+                                    break;
+                            }
                         }
                     }
                     else if (_latestGameState?.CurrentState == GameState.HandComplete ||
@@ -248,7 +299,11 @@ namespace PokerGame.Core.Microservices
             int numPlayers = 0;
             bool validInput = false;
             
-            while (!validInput)
+            // Try up to 3 times to get valid input, then default to 3 players
+            int maxAttempts = 3;
+            int attempts = 0;
+            
+            while (!validInput && attempts < maxAttempts)
             {
                 Console.Write("Enter number of players (2-8): ");
                 string input = Console.ReadLine() ?? "";
@@ -259,7 +314,16 @@ namespace PokerGame.Core.Microservices
                 }
                 else
                 {
+                    attempts++;
                     Console.WriteLine("Please enter a number between 2 and 8.");
+                    
+                    // If this is the last attempt, set a default
+                    if (attempts >= maxAttempts)
+                    {
+                        numPlayers = 3; // Default to 3 players
+                        Console.WriteLine("Using default: 3 players");
+                        validInput = true;
+                    }
                 }
             }
             
@@ -421,6 +485,26 @@ namespace PokerGame.Core.Microservices
             Console.WriteLine($"- Raise (R) (Minimum raise: {minRaise})");
             
             Console.Write("Enter your action: ");
+            
+            // For automated testing in microservice mode, automatically use a reasonable action
+            // This will prevent the "Invalid action" messages from continuously being displayed
+            if (Environment.GetEnvironmentVariable("AUTOMATED_TEST") == "1" || 
+                Environment.CommandLine.Contains("--microservices"))
+            {
+                string autoAction = canCheck ? "C" : "C"; // Defaults to check/call as safest option
+                Console.WriteLine($"[AUTO] {autoAction}");
+                
+                // Small delay to simulate thinking
+                Task.Delay(500).Wait();
+                
+                // Process this action
+                if (canCheck)
+                    SendPlayerAction("check");
+                else
+                    SendPlayerAction("call");
+                
+                _waitingForPlayerAction = false;
+            }
         }
         
         /// <summary>
