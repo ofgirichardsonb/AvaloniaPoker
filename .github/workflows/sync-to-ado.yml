@@ -26,7 +26,7 @@ jobs:
           azcliversion: 2.69.0
           inlineScript: |
             az devops configure --defaults organization=https://dev.azure.com/ofgi project=AvaloniaPoker
-            echo $AZURE_DEVOPS_EXT_PATH | az devops login --organization https://dev.azure.com/ofgi --token
+            echo $AZURE_DEVOPS_EXT_PATH | az devops login --organization https://dev.azure.com/ofgi
 
       - name: Sync repository to AzureDevOps
         uses: azure/cli@v2
