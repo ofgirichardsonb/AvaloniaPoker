@@ -79,6 +79,37 @@ namespace PokerGame.Core.Microservices
                 // Small delay to let the services initialize and connect
                 Thread.Sleep(2000);
                 
+                // Now that services are running, make sure the Card Deck service is registered with the Game Engine
+                Console.WriteLine("Verifying service connections...");
+                var deckService = _services.Find(s => s is CardDeckService) as CardDeckService;
+                var engineService = _services.Find(s => s is GameEngineService) as GameEngineService;
+                
+                if (deckService != null && engineService != null)
+                {
+                    Console.WriteLine("Notifying game engine about card deck service...");
+                    // Registration should happen automatically, but let's make sure
+                    deckService.PublishServiceRegistration();
+                    Thread.Sleep(1000);
+                    
+                    // Send a direct message to ensure CardDeck service is properly registered
+                    var registerMessage = Message.Create(MessageType.ServiceRegistration, 
+                        new ServiceRegistrationPayload
+                        {
+                            ServiceId = deckService.ServiceId,
+                            ServiceType = "CardDeck",
+                            ServiceName = "Card Deck Service",
+                            Capabilities = new List<string>() { "shuffle", "deal" }
+                        });
+                    engineService.HandleServiceRegistration(registerMessage);
+                    
+                    // Also trigger a game state broadcast
+                    engineService.BroadcastGameState();
+                    
+                    // Give the console UI service time to process the game start message
+                    // and collect player names before starting the hand
+                    Thread.Sleep(1000);
+                }
+                
                 Console.WriteLine("All microservices started successfully");
             }
             catch (Exception ex)

@@ -17,6 +17,11 @@ namespace PokerGame.Core.Microservices
         private readonly string _serviceName;
         private readonly string _serviceType;
         
+        /// <summary>
+        /// Gets the unique ID of this service
+        /// </summary>
+        public string ServiceId => _serviceId;
+        
         private readonly PublisherSocket _publisherSocket;
         private readonly SubscriberSocket _subscriberSocket;
         private readonly ConcurrentQueue<Message> _messageQueue = new ConcurrentQueue<Message>();
@@ -143,6 +148,14 @@ namespace PokerGame.Core.Microservices
         /// Registers this service with other services
         /// </summary>
         private void RegisterService()
+        {
+            PublishServiceRegistration();
+        }
+        
+        /// <summary>
+        /// Manually publish this service's registration to other services
+        /// </summary>
+        public void PublishServiceRegistration()
         {
             var payload = new ServiceRegistrationPayload
             {

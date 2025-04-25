@@ -108,6 +108,8 @@ namespace PokerGame.Core.Game
         /// </summary>
         public void StartHand()
         {
+            Console.WriteLine($"PokerGameEngine.StartHand() called with current state: {_gameState}");
+            
             // Reset game state
             _communityCards.Clear();
             _pot = 0;
@@ -121,18 +123,25 @@ namespace PokerGame.Core.Game
             // Move dealer button to next player
             _dealerPosition = (_dealerPosition + 1) % _players.Count;
             
-            // Shuffle the deck
-            _deck.Reset();
-            _deck.Shuffle();
+            // In microservice mode, we might already have cards dealt externally
+            // So only use the internal deck if needed
+            bool needToUseInternalDeck = _players.All(p => p.HoleCards.Count == 0);
             
-            // Deal hole cards to each player
-            for (int i = 0; i < 2; i++) // Two cards per player
+            if (needToUseInternalDeck)
             {
-                foreach (var player in _players)
+                // Shuffle the deck
+                _deck.Reset();
+                _deck.Shuffle();
+                
+                // Deal hole cards to each player
+                for (int i = 0; i < 2; i++) // Two cards per player
                 {
-                    Card? card = _deck.DealCard();
-                    if (card != null)
-                        player.HoleCards.Add(card);
+                    foreach (var player in _players)
+                    {
+                        Card? card = _deck.DealCard();
+                        if (card != null)
+                            player.HoleCards.Add(card);
+                    }
                 }
             }
             
@@ -158,6 +167,7 @@ namespace PokerGame.Core.Game
             _currentPlayerIndex = (bigBlindPos + 1) % _players.Count;
             
             _gameState = GameState.PreFlop;
+            Console.WriteLine($"Game state changed to: {_gameState}");
             _ui.UpdateGameState(this);
             
             // Start the first betting round

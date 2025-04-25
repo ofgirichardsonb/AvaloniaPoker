@@ -274,8 +274,21 @@ namespace PokerGame.Core.Microservices
             }
             
             // Start the game
-            var message = Message.Create(MessageType.GameStart, playerNames);
-            SendTo(message, _gameEngineServiceId);
+            Console.WriteLine($"Sending GameStart message to {_gameEngineServiceId} with {playerNames.Length} players");
+            var gameStartMessage = Message.Create(MessageType.GameStart, playerNames);
+            SendTo(gameStartMessage, _gameEngineServiceId);
+            
+            // Small delay to let the game engine process the start message
+            await Task.Delay(1000);
+            
+            // Now send a message to start the hand
+            Console.WriteLine($"Sending StartHand message to {_gameEngineServiceId}");
+            var startHandMessage = Message.Create(MessageType.StartHand);
+            SendTo(startHandMessage, _gameEngineServiceId);
+            
+            Console.WriteLine("StartHand message sent, waiting for response");
+            // Give some time for processing
+            await Task.Delay(1000);
         }
         
         /// <summary>
