@@ -10,14 +10,6 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Login to DevOps
         uses: azure/cli@v2
         env:
@@ -26,7 +18,7 @@ jobs:
           azcliversion: 2.69.0
           inlineScript: |
             az devops configure --defaults organization=https://dev.azure.com/ofgi project=AvaloniaPoker
-            echo $AZURE_DEVOPS_EXT_PATH | az devops login --organization https://dev.azure.com/ofgi
+            az devops login --organization https://dev.azure.com/ofgi
 
       - name: Sync repository to AzureDevOps
         uses: azure/cli@v2
