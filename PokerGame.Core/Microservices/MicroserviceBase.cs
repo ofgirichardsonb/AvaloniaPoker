@@ -113,10 +113,10 @@ namespace PokerGame.Core.Microservices
         public virtual void Start()
         {
             // Start the message processing task
-            _processingTask = Task.Run(ProcessMessagesAsync, _cancellationTokenSource.Token);
+            _processingTask = Task.Run(ProcessMessagesAsync, _cancellationTokenSource?.Token ?? CancellationToken.None);
             
             // Start the heartbeat task
-            _heartbeatTask = Task.Run(SendHeartbeatAsync, _cancellationTokenSource.Token);
+            _heartbeatTask = Task.Run(SendHeartbeatAsync, _cancellationTokenSource?.Token ?? CancellationToken.None);
             
             // Register this service with others
             RegisterService();
@@ -127,7 +127,7 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         public virtual void Stop()
         {
-            _cancellationTokenSource.Cancel();
+            _cancellationTokenSource?.Cancel();
             
             try
             {
@@ -232,7 +232,8 @@ namespace PokerGame.Core.Microservices
             // Give services time to initialize
             await Task.Delay(1000);
             
-            while (!_cancellationTokenSource.Token.IsCancellationRequested)
+            CancellationToken token = _cancellationTokenSource?.Token ?? CancellationToken.None;
+            while (!token.IsCancellationRequested)
             {
                 try
                 {
@@ -240,7 +241,7 @@ namespace PokerGame.Core.Microservices
                     Broadcast(heartbeatMessage);
                     
                     // Use a larger delay to reduce error messages during development
-                    await Task.Delay(10000, _cancellationTokenSource.Token);
+                    await Task.Delay(10000, _cancellationTokenSource?.Token ?? CancellationToken.None);
                 }
                 catch (TaskCanceledException)
                 {
@@ -261,7 +262,8 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         private async Task ProcessMessagesAsync()
         {
-            while (!_cancellationTokenSource.Token.IsCancellationRequested)
+            CancellationToken token = _cancellationTokenSource?.Token ?? CancellationToken.None;
+            while (!token.IsCancellationRequested)
             {
                 try
                 {
@@ -312,7 +314,7 @@ namespace PokerGame.Core.Microservices
                     await DoWorkAsync();
                     
                     // Small delay to prevent CPU overuse
-                    await Task.Delay(10, _cancellationTokenSource.Token);
+                    await Task.Delay(10, _cancellationTokenSource?.Token ?? CancellationToken.None);
                 }
                 catch (TaskCanceledException)
                 {
