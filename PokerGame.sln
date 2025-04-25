@@ -1,0 +1,38 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PokerGame.Core", "PokerGame.Core\PokerGame.Core.csproj", "{4DFF1D6F-08B8-4D2D-B72E-2883F25B4BC0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PokerGame.Console", "PokerGame.Console\PokerGame.Console.csproj", "{B1857A81-8BEF-4E1C-97D0-8C2D98B34F8A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "UI", "UI", "{78DE7A7A-3572-4FDD-AF79-B5C4C1E69950}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PokerGame.Avalonia", "PokerGame.Avalonia\PokerGame.Avalonia.csproj", "{77E7A354-3B80-4A9A-93E8-D5B9C8DD9C16}"
+EndProject
+Global
+        GlobalSection(SolutionConfigurationPlatforms) = preSolution
+                Debug|Any CPU = Debug|Any CPU
+                Release|Any CPU = Release|Any CPU
+        EndGlobalSection
+        GlobalSection(SolutionProperties) = preSolution
+                HideSolutionNode = FALSE
+        EndGlobalSection
+        GlobalSection(ProjectConfigurationPlatforms) = postSolution
+                {4DFF1D6F-08B8-4D2D-B72E-2883F25B4BC0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+                {4DFF1D6F-08B8-4D2D-B72E-2883F25B4BC0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+                {4DFF1D6F-08B8-4D2D-B72E-2883F25B4BC0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+                {4DFF1D6F-08B8-4D2D-B72E-2883F25B4BC0}.Release|Any CPU.Build.0 = Release|Any CPU
+                {B1857A81-8BEF-4E1C-97D0-8C2D98B34F8A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+                {B1857A81-8BEF-4E1C-97D0-8C2D98B34F8A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+                {B1857A81-8BEF-4E1C-97D0-8C2D98B34F8A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+                {B1857A81-8BEF-4E1C-97D0-8C2D98B34F8A}.Release|Any CPU.Build.0 = Release|Any CPU
+                {77E7A354-3B80-4A9A-93E8-D5B9C8DD9C16}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+                {77E7A354-3B80-4A9A-93E8-D5B9C8DD9C16}.Debug|Any CPU.Build.0 = Debug|Any CPU
+                {77E7A354-3B80-4A9A-93E8-D5B9C8DD9C16}.Release|Any CPU.ActiveCfg = Release|Any CPU
+                {77E7A354-3B80-4A9A-93E8-D5B9C8DD9C16}.Release|Any CPU.Build.0 = Release|Any CPU
+        EndGlobalSection
+        GlobalSection(NestedProjects) = preSolution
+                {77E7A354-3B80-4A9A-93E8-D5B9C8DD9C16} = {78DE7A7A-3572-4FDD-AF79-B5C4C1E69950}
+        EndGlobalSection
+EndGlobal

@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PokerGame.Avalonia.ViewModels"
+        xmlns:views="using:PokerGame.Avalonia.Views"
+        x:Class="PokerGame.Avalonia.Views.MainWindow"
+        Icon="/Assets/card-spade.svg"
+        Title="Poker Game"
+        Width="1000"
+        Height="700"
+        WindowStartupLocation="CenterScreen">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <ContentControl Content="{Binding ContentViewModel}">
+        <ContentControl.DataTemplates>
+            <DataTemplate DataType="{x:Type vm:GameViewModel}">
+                <views:GameView />
+            </DataTemplate>
+        </ContentControl.DataTemplates>
+    </ContentControl>
+
+</Window>

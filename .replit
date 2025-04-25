@@ -1,0 +1,41 @@
+modules = ["dotnet"]
+
+[nix]
+channel = "stable-24_05"
+packages = ["dotnet-sdk_8"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "PokerGame"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "poker_console_workflow"
+
+[[workflows.workflow]]
+name = "PokerGame"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "poker_console_workflow"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj"
+
+[deployment]
+run = ["sh", "-c", "dotnet run --project PokerGame.Console/PokerGame.Console.csproj"]

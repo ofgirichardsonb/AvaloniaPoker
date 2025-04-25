@@ -1,0 +1,42 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="PokerGame.Avalonia.App"
+             RequestedThemeVariant="Default">
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+
+        <Style Selector="Button.action">
+            <Setter Property="Margin" Value="5" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="MinWidth" Value="80" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="TextBlock.card">
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="Black" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="Width" Value="60" />
+            <Setter Property="Height" Value="80" />
+            <Setter Property="Margin" Value="3" />
+        </Style>
+
+        <Style Selector="Border.card-red TextBlock">
+            <Setter Property="Foreground" Value="#B91C1C" />
+        </Style>
+
+        <Style Selector="Border.card-black TextBlock">
+            <Setter Property="Foreground" Value="#111827" />
+        </Style>
+    </Application.Styles>
+</Application>
