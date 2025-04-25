@@ -549,21 +549,37 @@ namespace PokerGame.Core.Microservices
             if (gameEngine == null)
                 throw new InvalidOperationException("Failed to create game engine instance");
             
-            // Set its properties via reflection
-            SetProperty(gameEngine, "Pot", _latestGameState.Pot);
-            SetProperty(gameEngine, "CurrentBet", _latestGameState.CurrentBet);
-            SetProperty(gameEngine, "State", _latestGameState.CurrentState);
+            // We need to set the private fields directly via reflection since the properties are read-only
+            SetField(gameEngine, "_pot", _latestGameState.Pot);
+            SetField(gameEngine, "_currentBet", _latestGameState.CurrentBet);
+            SetField(gameEngine, "_gameState", _latestGameState.CurrentState);
             
-            // Set community cards
-            var communityCardsProperty = engineType.GetProperty("CommunityCards");
-            if (communityCardsProperty != null)
+            // Set community cards - need to access the private field
+            var communityCardsField = engineType.GetField("_communityCards", 
+                System.Reflection.BindingFlags.Instance | 
+                System.Reflection.BindingFlags.NonPublic);
+                
+            if (communityCardsField != null)
             {
-                communityCardsProperty.SetValue(gameEngine, _latestGameState.CommunityCards);
+                // Get the existing list from the field
+                var communityCardsList = communityCardsField.GetValue(gameEngine) as List<Card>;
+                if (communityCardsList != null)
+                {
+                    // Clear it and add the new cards
+                    communityCardsList.Clear();
+                    foreach (var card in _latestGameState.CommunityCards)
+                    {
+                        communityCardsList.Add(card);
+                    }
+                }
             }
             
-            // Set players
-            var playersProperty = engineType.GetProperty("Players");
-            if (playersProperty != null)
+            // Set players - need to access the private field
+            var playersField = engineType.GetField("_players", 
+                System.Reflection.BindingFlags.Instance | 
+                System.Reflection.BindingFlags.NonPublic);
+                
+            if (playersField != null)
             {
                 // Convert PlayerInfo to Player
                 var players = new List<Player>();
@@ -614,7 +630,16 @@ namespace PokerGame.Core.Microservices
                     players.Add(player);
                 }
                 
-                playersProperty.SetValue(gameEngine, players);
+                // Set the players list to the field
+                var playersList = playersField.GetValue(gameEngine) as List<Player>;
+                if (playersList != null)
+                {
+                    playersList.Clear();
+                    foreach (var p in players)
+                    {
+                        playersList.Add(p);
+                    }
+                }
             }
             
             return gameEngine;
@@ -629,6 +654,25 @@ namespace PokerGame.Core.Microservices
             if (prop != null && prop.CanWrite)
             {
                 prop.SetValue(obj, value);
+            }
+        }
+        
+        /// <summary>
+        /// Helper to set a private field via reflection
+        /// </summary>
+        private void SetField(object obj, string fieldName, object value)
+        {
+            var field = obj.GetType().GetField(fieldName, 
+                System.Reflection.BindingFlags.Instance | 
+                System.Reflection.BindingFlags.NonPublic);
+                
+            if (field != null)
+            {
+                field.SetValue(obj, value);
+            }
+            else
+            {
+                Console.WriteLine($"Warning: Could not find field '{fieldName}' on {obj.GetType().Name}");
             }
         }
         
