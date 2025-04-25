@@ -19,7 +19,7 @@ jobs:
             branchName="${{ github.ref_name }}"
             branchExists=$(az repos ref list -r AvaloniaPoker --filter heads/$branchName | grep -q $branchName)
             if ([ -z $branchExists ]); then
-              $commitId = git rev-parse HEAD
+              commitId=$(git rev-parse HEAD)
               az repos ref create -r AvaloniaPoker --name "refs/heads/$branchName" --object-id $commitId
             fi
             az repos update -r AvaloniaPoker --default-branch $branchName
