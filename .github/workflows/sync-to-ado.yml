@@ -1,0 +1,24 @@
+name: Sync to Azure DevOps
+
+on:
+  push:
+    branches:
+      - main
+
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install Azure CLI
+        uses: azure/setup-azure-cli@v1
+
+      - name: Authenticate with Azure
+        env:
+          AZURE_DEVOPS_EXT_PATH: ${{ secrets.AZURE_DEVOPS_EXT_PATH }}
+        run: |
+          az devops configure --defaults organization=https://dev.azure.com/ofgi project=AvaloniaPoker
+          echo $AZURE_DEVOPS_EXT_PATH | az devops login --organization https://dev.azure.com/ofgi --token
