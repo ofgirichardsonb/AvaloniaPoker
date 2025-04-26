@@ -26,7 +26,7 @@ namespace PokerGame.Core.Microservices
         protected SubscriberSocket? _subscriberSocket;
         protected readonly ConcurrentQueue<Message> _messageQueue = new ConcurrentQueue<Message>();
         
-        private CancellationTokenSource? _cancellationTokenSource = new CancellationTokenSource();
+        protected CancellationTokenSource? _cancellationTokenSource = new CancellationTokenSource();
         private Task? _processingTask;
         private Task? _heartbeatTask;
         

@@ -123,7 +123,10 @@ namespace PokerGame.Core.Microservices
             {
                 Console.WriteLine("===> CardDeckService: OVERRIDE message handler started");
                 
-                while (true)
+                // Use a cancellation token to properly terminate the task
+                CancellationToken token = _cancellationTokenSource?.Token ?? CancellationToken.None;
+                
+                while (!token.IsCancellationRequested)
                 {
                     try
                     {
@@ -132,6 +135,13 @@ namespace PokerGame.Core.Microservices
                         {
                             try
                             {
+                                // Make sure the socket is still valid
+                                if (_subscriberSocket.IsDisposed)
+                                {
+                                    Console.WriteLine("Subscriber socket is disposed, stopping critical message handler");
+                                    break;
+                                }
+                                
                                 // Try to receive a message with a short timeout
                                 if (_subscriberSocket.TryReceiveFrameString(TimeSpan.FromMilliseconds(50), out string? messageJson) && 
                                     !string.IsNullOrEmpty(messageJson))
@@ -153,13 +163,20 @@ namespace PokerGame.Core.Microservices
                                             ackMessage.SenderId = _serviceId;
                                             ackMessage.ReceiverId = message.SenderId;
                                             
+                                            // Check if publisher socket is still valid 
+                                            if (_publisherSocket == null || _publisherSocket.IsDisposed)
+                                            {
+                                                Console.WriteLine("Publisher socket is disposed, unable to send acknowledgment");
+                                                continue;
+                                            }
+                                            
                                             // Send acknowledgment with multiple approaches for redundancy
                                             string serializedAck = ackMessage.ToJson();
                                             
                                             try
                                             {
                                                 Console.WriteLine($"!!!! CRITICAL OVERRIDE: Sending raw socket ACK for {message.MessageId}");
-                                                _publisherSocket?.SendFrame(serializedAck);
+                                                _publisherSocket.SendFrame(serializedAck);
                                             }
                                             catch (Exception ex)
                                             {
@@ -195,21 +212,57 @@ namespace PokerGame.Core.Microservices
                                     }
                                 }
                             }
+                            catch (ObjectDisposedException)
+                            {
+                                Console.WriteLine("Subscriber socket was disposed during operation, stopping critical message handler");
+                                break;
+                            }
                             catch (Exception ex)
                             {
                                 Console.WriteLine($"!!!! CRITICAL OVERRIDE: Error receiving message: {ex.Message}");
                             }
                         }
+                        else
+                        {
+                            // If socket is null, exit the loop
+                            Console.WriteLine("Subscriber socket is null, stopping critical message handler");
+                            break;
+                        }
+                        
+                        // Check for cancellation
+                        if (token.IsCancellationRequested)
+                        {
+                            Console.WriteLine("Critical message handler cancellation requested");
+                            break;
+                        }
                         
                         // Small delay to prevent CPU overuse
-                        await Task.Delay(5);
+                        await Task.Delay(5, token);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        // Normal cancellation, exit loop
+                        Console.WriteLine("Critical message handler cancelled");
+                        break;
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine($"!!!! CRITICAL OVERRIDE: Unhandled error: {ex.Message}");
-                        await Task.Delay(100);  // Longer delay on error
+                        
+                        try
+                        {
+                            // Longer delay on error, but respect cancellation
+                            await Task.Delay(100, token);
+                        }
+                        catch (TaskCanceledException)
+                        {
+                            // If cancelled during delay, exit loop
+                            break;
+                        }
                     }
                 }
+                
+                Console.WriteLine("Critical message handler terminated");
             });
         }
         

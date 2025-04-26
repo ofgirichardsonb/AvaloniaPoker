@@ -44,6 +44,14 @@ args = "poker_curses"
 task = "workflow.run"
 args = "poker_standard"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "poker_verbose_test"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "poker_standard_test"
+
 [[workflows.workflow]]
 name = "PokerGame"
 author = "agent"
@@ -102,6 +110,22 @@ args = "./launch-services.sh curses"
 
 [[workflows.workflow]]
 name = "poker_standard"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "./launch-services.sh start"
+
+[[workflows.workflow]]
+name = "poker_verbose_test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "./launch-services.sh verbose"
+
+[[workflows.workflow]]
+name = "poker_standard_test"
 author = "agent"
 
 [[workflows.workflow.tasks]]
