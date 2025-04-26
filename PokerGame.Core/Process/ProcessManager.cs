@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -546,51 +547,62 @@ namespace PokerGame.Core.Process
         }
         
         /// <summary>
-        /// Starts the services host process
+        /// Starts the services host process using the updated command format
         /// </summary>
         /// <param name="portOffset">Port offset for the services</param>
         /// <param name="verbose">Enable verbose logging</param>
         /// <returns>The process ID if successful, -1 otherwise</returns>
         public int StartServicesHost(int portOffset, bool verbose = false)
         {
-            string arguments = $"--all-services --port-offset={portOffset}";
+            // Using the new command format for the ServiceLauncher
+            StringBuilder args = new StringBuilder("start-services");
+            
+            if (portOffset >= 0)
+                args.Append($" --port-offset {portOffset}");
+                
             if (verbose)
-                arguments += " --verbose";
+                args.Append(" --verbose");
                 
             string projectPath = GetFullServicesProjectPath();
             Console.WriteLine($"Starting services host with project path: {projectPath}");
+            Console.WriteLine($"Using arguments: {args}");
                 
             return StartProcess(
                 _dotnetPath, 
-                $"run --project {projectPath} -- {arguments}",
+                $"run --project {projectPath} -- {args}",
                 "ServicesHost");
         }
 
         /// <summary>
-        /// Starts the console UI client process
+        /// Starts the console UI client process using the updated command format
         /// </summary>
-        /// <param name="useCurses">Whether to use the curses UI</param>
         /// <param name="portOffset">Port offset matching the services</param>
+        /// <param name="useCurses">Whether to use the curses UI</param>
         /// <param name="verbose">Enable verbose logging</param>
         /// <returns>The process ID if successful, -1 otherwise</returns>
-        public int StartConsoleClient(bool useCurses, int portOffset, bool verbose = false)
+        public int StartConsoleClient(int portOffset, bool useCurses, bool verbose = false)
         {
-            string arguments = $"--port-offset={portOffset}";
+            // Using the new command format for the ServiceLauncher
+            StringBuilder args = new StringBuilder("start-client");
+            
+            if (portOffset >= 0)
+                args.Append($" --port-offset {portOffset}");
             
             if (useCurses)
-                arguments += " --curses";
+                args.Append(" --curses");
             else
-                arguments += " --enhanced-ui";
+                args.Append(" --enhanced-ui");
                 
             if (verbose)
-                arguments += " --verbose";
+                args.Append(" --verbose");
                 
             string projectPath = GetFullConsoleProjectPath();
             Console.WriteLine($"Starting console client with project path: {projectPath}");
+            Console.WriteLine($"Using arguments: {args}");
                 
             return StartProcess(
                 _dotnetPath, 
-                $"run --project {projectPath} -- {arguments}",
+                $"run --project {projectPath} -- {args}",
                 useCurses ? "CursesUI" : "ConsoleUI");
         }
 

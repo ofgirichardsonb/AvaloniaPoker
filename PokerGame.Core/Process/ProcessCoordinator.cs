@@ -195,8 +195,8 @@ namespace PokerGame.Core.Process
                     _consoleClientPid = -1;
                 }
                 
-                // Start the console client
-                _consoleClientPid = _processManager.StartConsoleClient(useCurses, portOffset, verbose);
+                // Start the console client with updated parameter order (portOffset, useCurses, verbose)
+                _consoleClientPid = _processManager.StartConsoleClient(portOffset, useCurses, verbose);
                 if (_consoleClientPid == -1)
                 {
                     Console.WriteLine("Failed to start console client");
