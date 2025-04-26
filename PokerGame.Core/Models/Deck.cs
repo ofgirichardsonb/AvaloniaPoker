@@ -1,105 +1,161 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace PokerGame.Core.Models
 {
     /// <summary>
-    /// Represents a standard 52-card deck
+    /// A deck of cards
     /// </summary>
     public class Deck
     {
-        private readonly List<Card> _cards;
-        private readonly Random _random;
-
+        private List<Card> _cards = new List<Card>();
+        private Random _random = new Random();
+        
         /// <summary>
-        /// Creates a new deck with all 52 cards in order
+        /// Gets the number of remaining cards in the deck
+        /// </summary>
+        public int RemainingCards => _cards.Count;
+        
+        /// <summary>
+        /// Creates a new deck
         /// </summary>
         public Deck()
         {
-            _cards = new List<Card>(52);
-            _random = new Random();
+        }
+        
+        /// <summary>
+        /// Initializes the deck with a standard 52-card deck
+        /// </summary>
+        public void Initialize()
+        {
+            _cards.Clear();
             
-            // Create a standard deck of 52 cards
-            foreach (Suit suit in Enum.GetValues<Suit>())
+            // Create all 52 cards
+            foreach (Suit suit in Enum.GetValues(typeof(Suit)))
             {
-                foreach (Rank rank in Enum.GetValues<Rank>())
+                foreach (Rank rank in Enum.GetValues(typeof(Rank)))
                 {
                     _cards.Add(new Card(rank, suit));
                 }
             }
         }
-
+        
         /// <summary>
-        /// Gets the number of cards remaining in the deck
-        /// </summary>
-        public int CardsRemaining => _cards.Count;
-
-        /// <summary>
-        /// Shuffles the deck using the Fisher-Yates algorithm
+        /// Shuffles the deck
         /// </summary>
         public void Shuffle()
         {
+            // Fisher-Yates shuffle algorithm
             int n = _cards.Count;
-            
             while (n > 1)
             {
                 n--;
                 int k = _random.Next(n + 1);
-                Card temp = _cards[k];
+                Card value = _cards[k];
                 _cards[k] = _cards[n];
-                _cards[n] = temp;
+                _cards[n] = value;
             }
         }
-
+        
         /// <summary>
-        /// Deals a card from the top of the deck
+        /// Deals the specified number of cards from the top of the deck
         /// </summary>
-        /// <returns>The top card or null if the deck is empty</returns>
-        public Card? DealCard()
-        {
-            if (_cards.Count == 0)
-                return null;
-                
-            Card card = _cards[0];
-            _cards.RemoveAt(0);
-            return card;
-        }
-
-        /// <summary>
-        /// Deals multiple cards from the top of the deck
-        /// </summary>
-        /// <param name="count">Number of cards to deal</param>
-        /// <returns>A list of cards or an empty list if not enough cards</returns>
+        /// <param name="count">The number of cards to deal</param>
+        /// <returns>A list of dealt cards</returns>
         public List<Card> DealCards(int count)
         {
-            List<Card> dealtCards = new List<Card>(count);
+            if (count <= 0)
+            {
+                return new List<Card>();
+            }
+            
+            if (count > _cards.Count)
+            {
+                throw new InvalidOperationException($"Cannot deal {count} cards. Only {_cards.Count} cards remaining.");
+            }
+            
+            List<Card> dealtCards = new List<Card>();
             
             for (int i = 0; i < count; i++)
             {
-                Card? card = DealCard();
-                if (card != null)
-                    dealtCards.Add(card);
-                else
-                    break;
+                Card card = _cards[0];
+                _cards.RemoveAt(0);
+                dealtCards.Add(card);
             }
             
             return dealtCards;
         }
-
+        
         /// <summary>
-        /// Resets the deck to a complete set of 52 cards in order
+        /// Deals a single card from the top of the deck
+        /// </summary>
+        /// <returns>The dealt card</returns>
+        public Card DealCard()
+        {
+            if (_cards.Count == 0)
+            {
+                throw new InvalidOperationException("Cannot deal a card. The deck is empty.");
+            }
+            
+            Card card = _cards[0];
+            _cards.RemoveAt(0);
+            return card;
+        }
+        
+        /// <summary>
+        /// Adds a card to the bottom of the deck
+        /// </summary>
+        /// <param name="card">The card to add</param>
+        public void AddCard(Card card)
+        {
+            if (card == null)
+            {
+                throw new ArgumentNullException(nameof(card));
+            }
+            
+            _cards.Add(card);
+        }
+        
+        /// <summary>
+        /// Adds a list of cards to the bottom of the deck
+        /// </summary>
+        /// <param name="cards">The cards to add</param>
+        public void AddCards(IEnumerable<Card> cards)
+        {
+            if (cards == null)
+            {
+                throw new ArgumentNullException(nameof(cards));
+            }
+            
+            _cards.AddRange(cards);
+        }
+        
+        /// <summary>
+        /// Resets the deck by adding all 52 cards and shuffling
         /// </summary>
         public void Reset()
         {
-            _cards.Clear();
-            
-            foreach (Suit suit in Enum.GetValues<Suit>())
-            {
-                foreach (Rank rank in Enum.GetValues<Rank>())
-                {
-                    _cards.Add(new Card(rank, suit));
-                }
-            }
+            Initialize();
+            Shuffle();
+        }
+        
+        /// <summary>
+        /// Gets all cards from the deck without removing them
+        /// </summary>
+        /// <returns>All cards in the deck</returns>
+        public List<Card> GetAllCards()
+        {
+            return _cards.ToList();
+        }
+        
+        /// <summary>
+        /// Returns a string representation of the deck
+        /// </summary>
+        /// <returns>A string representation of the deck</returns>
+        public override string ToString()
+        {
+            return $"Deck with {_cards.Count} cards";
         }
     }
 }

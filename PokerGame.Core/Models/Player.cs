@@ -1,88 +1,167 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace PokerGame.Core.Models
 {
     /// <summary>
-    /// Represents a poker player
+    /// Represents a player in a poker game
     /// </summary>
     public class Player
     {
         /// <summary>
-        /// The player's unique identifier
+        /// Gets or sets the unique identifier for the player
         /// </summary>
-        public string Id { get; } = Guid.NewGuid().ToString();
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = Guid.NewGuid().ToString();
         
         /// <summary>
-        /// The player's name
+        /// Gets or sets the name of the player
         /// </summary>
-        public string Name { get; set; }
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
         
         /// <summary>
-        /// The player's current chip balance
+        /// Gets or sets the player's current chip count
         /// </summary>
-        public int Chips { get; private set; }
+        [JsonPropertyName("chips")]
+        public int Chips { get; set; }
         
         /// <summary>
-        /// The player's hole (private) cards
+        /// Gets or sets the player's current hand of cards
         /// </summary>
-        public List<Card> HoleCards { get; } = new List<Card>();
+        [JsonPropertyName("hand")]
+        public List<Card> Hand { get; set; } = new List<Card>();
         
         /// <summary>
-        /// The amount the player has bet in the current betting round
+        /// Gets or sets whether the player has folded their hand
         /// </summary>
-        public int CurrentBet { get; private set; } = 0;
+        [JsonPropertyName("hasFolded")]
+        public bool HasFolded { get; set; }
         
         /// <summary>
-        /// Whether the player has folded in the current hand
+        /// Gets or sets whether the player is the dealer for the current hand
         /// </summary>
-        public bool HasFolded { get; private set; } = false;
+        [JsonPropertyName("isDealer")]
+        public bool IsDealer { get; set; }
         
         /// <summary>
-        /// Whether the player is all-in for the current hand
+        /// Gets or sets whether the player is currently active in the game
         /// </summary>
-        public bool IsAllIn { get; private set; } = false;
+        [JsonPropertyName("isActive")]
+        public bool IsActive { get; set; } = true;
         
         /// <summary>
-        /// Whether the player is currently active in the game
+        /// Gets or sets the player's current bet amount in the current betting round
         /// </summary>
-        public bool IsActive => Chips > 0 && !HasFolded;
+        [JsonPropertyName("currentBet")]
+        public int CurrentBet { get; set; }
         
         /// <summary>
-        /// The player's current best hand (if evaluated)
+        /// Gets or sets the player's total bet amount in the current hand
         /// </summary>
-        public Hand? CurrentHand { get; set; }
-
+        [JsonPropertyName("totalBet")]
+        public int TotalBet { get; set; }
+        
         /// <summary>
-        /// Creates a new player with the specified name and starting chips
+        /// Creates a new player with the specified name and initial chip count
         /// </summary>
         /// <param name="name">The player's name</param>
-        /// <param name="startingChips">The player's starting chip amount</param>
-        public Player(string name, int startingChips)
+        /// <param name="chips">The player's initial chip count</param>
+        public Player(string name, int chips = 1000)
         {
             Name = name;
-            Chips = startingChips;
+            Chips = chips;
         }
-
+        
+        /// <summary>
+        /// Creates a default player
+        /// </summary>
+        public Player()
+        {
+            Name = "Player";
+            Chips = 1000;
+        }
+        
+        /// <summary>
+        /// Adds a card to the player's hand
+        /// </summary>
+        /// <param name="card">The card to add</param>
+        public void AddCard(Card card)
+        {
+            if (card == null)
+            {
+                throw new ArgumentNullException(nameof(card));
+            }
+            
+            Hand.Add(card);
+        }
+        
+        /// <summary>
+        /// Clears the player's hand
+        /// </summary>
+        public void ClearHand()
+        {
+            Hand.Clear();
+            HasFolded = false;
+        }
+        
         /// <summary>
         /// Places a bet of the specified amount
         /// </summary>
         /// <param name="amount">The amount to bet</param>
-        /// <returns>The actual amount bet (may be less if player doesn't have enough chips)</returns>
+        /// <returns>The actual amount bet (may be less than the requested amount if the player has insufficient chips)</returns>
         public int PlaceBet(int amount)
         {
-            // Can't bet more than the player has
+            if (amount <= 0)
+            {
+                throw new ArgumentException("Bet amount must be positive", nameof(amount));
+            }
+            
+            // Limit bet to available chips
             int actualBet = Math.Min(amount, Chips);
             
+            // Deduct chips
             Chips -= actualBet;
-            CurrentBet += actualBet;
             
-            if (Chips == 0)
-                IsAllIn = true;
-                
+            // Update bet amounts
+            CurrentBet += actualBet;
+            TotalBet += actualBet;
+            
             return actualBet;
         }
-
+        
+        /// <summary>
+        /// Resets the player's current bet amount (e.g., at the end of a betting round)
+        /// </summary>
+        public void ResetCurrentBet()
+        {
+            CurrentBet = 0;
+        }
+        
+        /// <summary>
+        /// Resets the player's total bet amount (e.g., at the end of a hand)
+        /// </summary>
+        public void ResetTotalBet()
+        {
+            TotalBet = 0;
+            CurrentBet = 0;
+        }
+        
+        /// <summary>
+        /// Awards chips to the player (e.g., for winning a pot)
+        /// </summary>
+        /// <param name="amount">The amount of chips to award</param>
+        public void AwardChips(int amount)
+        {
+            if (amount <= 0)
+            {
+                throw new ArgumentException("Award amount must be positive", nameof(amount));
+            }
+            
+            Chips += amount;
+        }
+        
         /// <summary>
         /// Folds the player's hand
         /// </summary>
@@ -90,35 +169,14 @@ namespace PokerGame.Core.Models
         {
             HasFolded = true;
         }
-
+        
         /// <summary>
-        /// Adds chips to the player's stack (e.g., when winning a pot)
+        /// Returns a string representation of the player
         /// </summary>
-        /// <param name="amount">The amount to add</param>
-        public void AddChips(int amount)
+        /// <returns>A string representation of the player</returns>
+        public override string ToString()
         {
-            if (amount > 0)
-                Chips += amount;
-        }
-
-        /// <summary>
-        /// Clears the player's state for a new hand
-        /// </summary>
-        public void ResetForNewHand()
-        {
-            HoleCards.Clear();
-            CurrentBet = 0;
-            HasFolded = false;
-            IsAllIn = false;
-            CurrentHand = null;
-        }
-
-        /// <summary>
-        /// Resets the player's current bet for a new betting round
-        /// </summary>
-        public void ResetBetForNewRound()
-        {
-            CurrentBet = 0;
+            return $"{Name}: ${Chips} chips" + (HasFolded ? " (folded)" : "");
         }
     }
 }

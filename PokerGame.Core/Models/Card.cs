@@ -1,9 +1,10 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace PokerGame.Core.Models
 {
     /// <summary>
-    /// Represents a playing card suit
+    /// Suit of a playing card
     /// </summary>
     public enum Suit
     {
@@ -12,9 +13,9 @@ namespace PokerGame.Core.Models
         Hearts,
         Spades
     }
-
+    
     /// <summary>
-    /// Represents a playing card rank
+    /// Rank of a playing card
     /// </summary>
     public enum Rank
     {
@@ -32,112 +33,139 @@ namespace PokerGame.Core.Models
         King = 13,
         Ace = 14
     }
-
+    
     /// <summary>
-    /// Represents a playing card with a rank and suit
+    /// A playing card with a rank and suit
     /// </summary>
     public class Card : IEquatable<Card>, IComparable<Card>
     {
-        public Rank Rank { get; }
-        public Suit Suit { get; }
-
-        public Card(Rank rank, Suit suit)
+        /// <summary>
+        /// Gets or sets the rank of the card
+        /// </summary>
+        [JsonPropertyName("rank")]
+        public Rank Rank { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the suit of the card
+        /// </summary>
+        [JsonPropertyName("suit")]
+        public Suit Suit { get; set; }
+        
+        /// <summary>
+        /// Gets or sets a flag indicating whether the card is face up
+        /// </summary>
+        [JsonPropertyName("isFaceUp")]
+        public bool IsFaceUp { get; set; }
+        
+        /// <summary>
+        /// Creates a new Card
+        /// </summary>
+        public Card()
+        {
+            Rank = Rank.Ace;
+            Suit = Suit.Spades;
+            IsFaceUp = false;
+        }
+        
+        /// <summary>
+        /// Creates a new Card with the specified rank and suit
+        /// </summary>
+        /// <param name="rank">The rank of the card</param>
+        /// <param name="suit">The suit of the card</param>
+        /// <param name="isFaceUp">Whether the card is face up</param>
+        public Card(Rank rank, Suit suit, bool isFaceUp = false)
         {
             Rank = rank;
             Suit = suit;
+            IsFaceUp = isFaceUp;
         }
-
+        
         /// <summary>
-        /// Returns a short string representation of the card (e.g., "AS" for Ace of Spades)
+        /// Flips the card over
         /// </summary>
-        public string ShortName
+        public void Flip()
         {
-            get
-            {
-                string rankChar;
-                
-                switch (Rank)
-                {
-                    case Rank.Ten:
-                        rankChar = "T";
-                        break;
-                    case Rank.Jack:
-                        rankChar = "J";
-                        break;
-                    case Rank.Queen:
-                        rankChar = "Q";
-                        break;
-                    case Rank.King:
-                        rankChar = "K";
-                        break;
-                    case Rank.Ace:
-                        rankChar = "A";
-                        break;
-                    default:
-                        rankChar = ((int)Rank).ToString();
-                        break;
-                }
-                
-                string suitChar = Suit.ToString()[0].ToString();
-                return rankChar + suitChar;
-            }
+            IsFaceUp = !IsFaceUp;
         }
-
+        
         /// <summary>
-        /// Returns a string representation of the card (e.g., "Ace of Spades")
+        /// Returns a string representation of the card
         /// </summary>
+        /// <returns>A string representation of the card</returns>
         public override string ToString()
         {
+            if (!IsFaceUp)
+            {
+                return "[Card face down]";
+            }
+            
             return $"{Rank} of {Suit}";
         }
-
-        public bool Equals(Card? other)
+        
+        /// <summary>
+        /// Determines whether this card is equal to another card
+        /// </summary>
+        /// <param name="other">The other card</param>
+        /// <returns>True if the cards are equal, false otherwise</returns>
+        public bool Equals(Card other)
         {
             if (other == null)
+            {
                 return false;
-                
+            }
+            
             return Rank == other.Rank && Suit == other.Suit;
         }
-
-        public override bool Equals(object? obj)
+        
+        /// <summary>
+        /// Determines whether this card is equal to another object
+        /// </summary>
+        /// <param name="obj">The other object</param>
+        /// <returns>True if the objects are equal, false otherwise</returns>
+        public override bool Equals(object obj)
         {
             return Equals(obj as Card);
         }
-
+        
+        /// <summary>
+        /// Returns a hash code for this card
+        /// </summary>
+        /// <returns>A hash code for this card</returns>
         public override int GetHashCode()
         {
             return HashCode.Combine(Rank, Suit);
         }
-
-        public int CompareTo(Card? other)
+        
+        /// <summary>
+        /// Compares this card to another card
+        /// </summary>
+        /// <param name="other">The other card</param>
+        /// <returns>A negative value if this card is less than the other card, 0 if equal, and a positive value if greater</returns>
+        public int CompareTo(Card other)
         {
             if (other == null)
+            {
                 return 1;
-                
-            return ((int)Rank).CompareTo((int)other.Rank);
+            }
+            
+            // First compare by rank
+            int rankComparison = ((int)Rank).CompareTo((int)other.Rank);
+            if (rankComparison != 0)
+            {
+                return rankComparison;
+            }
+            
+            // If ranks are equal, compare by suit
+            return ((int)Suit).CompareTo((int)other.Suit);
         }
-
-        public static bool operator ==(Card? left, Card? right)
+        
+        /// <summary>
+        /// Creates a deep copy of this card
+        /// </summary>
+        /// <returns>A deep copy of this card</returns>
+        public Card Clone()
         {
-            if (left is null)
-                return right is null;
-                
-            return left.Equals(right);
-        }
-
-        public static bool operator !=(Card? left, Card? right)
-        {
-            return !(left == right);
-        }
-
-        public static bool operator <(Card left, Card right)
-        {
-            return left.CompareTo(right) < 0;
-        }
-
-        public static bool operator >(Card left, Card right)
-        {
-            return left.CompareTo(right) > 0;
+            return new Card(Rank, Suit, IsFaceUp);
         }
     }
 }
