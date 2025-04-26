@@ -81,9 +81,13 @@ namespace PokerGame.Console
                 if (useMicroservices)
                 {
                     // Run in microservice mode with optional service type for single-service mode
-                    // Use the enhanced MicroserviceConsoleProgram from the Services project
-                    PokerGame.Services.MicroserviceConsoleProgram.StartMicroservices(
-                        args, useEnhancedUi, serviceType, portOffset, useEmergencyDeck);
+                    // Use the MicroserviceManager from the Core project since the Services version doesn't implement StartMicroservices
+                    var microserviceManager = new PokerGame.Core.Microservices.MicroserviceManager(portOffset);
+                    microserviceManager.StartMicroservices(args);
+                    
+                    // Initialize the broker manager
+                    var brokerManager = MessageBroker.BrokerManager.Instance;
+                    brokerManager.Start();
                 }
                 else
                 {

@@ -1,5 +1,5 @@
 using System.Threading.Tasks;
-using PokerGame.Core.Messages;
+using PokerGame.Core.Microservices;
 using PokerGame.Core.Models;
 
 namespace PokerGame.Services

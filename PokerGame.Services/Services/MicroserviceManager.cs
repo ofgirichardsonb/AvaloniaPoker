@@ -25,8 +25,9 @@ namespace PokerGame.Services
         public MicroserviceManager(int brokerPort = 5555)
         {
             // Initialize the broker manager
-            _brokerManager = new BrokerManager();
-            _brokerManager.Start(brokerPort);
+            _brokerManager = BrokerManager.Instance;
+            // Start with port configuration
+            _brokerManager.Start();
             
             // Initialize telemetry
             _telemetryService = TelemetryService.Instance;

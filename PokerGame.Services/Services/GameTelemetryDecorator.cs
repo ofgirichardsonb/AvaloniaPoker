@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using PokerGame.Abstractions;
+using PokerGame.Core.Microservices;
+using PokerGame.Core.Models;
 
 namespace PokerGame.Services
 {
@@ -49,7 +51,7 @@ namespace PokerGame.Services
         /// Adds a player to the game, with telemetry tracking
         /// </summary>
         /// <param name="player">The player to add</param>
-        public void AddPlayer(object player)
+        public void AddPlayer(Player player)
         {
             try
             {
@@ -65,7 +67,8 @@ namespace PokerGame.Services
                     true,
                     new Dictionary<string, string>
                     {
-                        ["PlayerType"] = player?.GetType().Name ?? "Unknown"
+                        ["PlayerType"] = player?.GetType().Name ?? "Unknown",
+                        ["PlayerId"] = player?.Id ?? "Unknown"
                     });
             }
             catch (Exception ex)
@@ -73,7 +76,8 @@ namespace PokerGame.Services
                 _telemetryService.TrackException(ex, new Dictionary<string, string>
                 {
                     ["Operation"] = "AddPlayer",
-                    ["PlayerType"] = player?.GetType().Name ?? "Unknown"
+                    ["PlayerType"] = player?.GetType().Name ?? "Unknown",
+                    ["PlayerId"] = player?.Id ?? "Unknown"
                 });
                 throw;
             }
@@ -188,14 +192,12 @@ namespace PokerGame.Services
         /// Handles a message, with telemetry tracking
         /// </summary>
         /// <param name="message">The message to handle</param>
-        public async Task HandleMessageAsync(object message)
+        public async Task HandleMessageAsync(Message message)
         {
             try
             {
-                string messageType = "Unknown";
-                string messageId = "Unknown";
-                
-                // Detailed message handling will be implemented in Core.Messaging
+                string messageType = message?.Type.ToString() ?? "Unknown";
+                string messageId = message?.MessageId ?? "Unknown";
                 
                 var stopwatch = Stopwatch.StartNew();
                 await _decoratedService.HandleMessageAsync(message);
@@ -210,19 +212,21 @@ namespace PokerGame.Services
                     new Dictionary<string, string>
                     {
                         ["MessageType"] = messageType,
-                        ["MessageId"] = messageId
+                        ["MessageId"] = messageId,
+                        ["MessageSender"] = message?.SenderId ?? "Unknown"
                     });
             }
             catch (Exception ex)
             {
-                string messageType = "Unknown";
-                string messageId = "Unknown";
+                string messageType = message?.Type.ToString() ?? "Unknown";
+                string messageId = message?.MessageId ?? "Unknown";
                 
                 _telemetryService.TrackException(ex, new Dictionary<string, string>
                 {
                     ["Operation"] = "HandleMessage",
                     ["MessageType"] = messageType,
-                    ["MessageId"] = messageId
+                    ["MessageId"] = messageId,
+                    ["MessageSender"] = message?.SenderId ?? "Unknown"
                 });
                 throw;
             }

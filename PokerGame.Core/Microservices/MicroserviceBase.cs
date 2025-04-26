@@ -133,6 +133,18 @@ namespace PokerGame.Core.Microservices
         }
         
         /// <summary>
+        /// Starts the microservice asynchronously
+        /// </summary>
+        public virtual async Task StartAsync()
+        {
+            // Start using the synchronous method
+            Start();
+            
+            // Give a small delay to allow initialization
+            await Task.Delay(100);
+        }
+        
+        /// <summary>
         /// Stops the microservice
         /// </summary>
         public virtual void Stop()
@@ -153,6 +165,36 @@ namespace PokerGame.Core.Microservices
             catch (AggregateException)
             {
                 // Tasks may throw exceptions when canceled
+            }
+            
+            Dispose();
+        }
+        
+        /// <summary>
+        /// Stops the microservice asynchronously
+        /// </summary>
+        public virtual async Task StopAsync()
+        {
+            _cancellationTokenSource?.Cancel();
+            
+            try
+            {
+                var tasks = new List<Task>();
+                if (_processingTask != null) tasks.Add(_processingTask);
+                if (_heartbeatTask != null) tasks.Add(_heartbeatTask);
+                
+                if (tasks.Count > 0)
+                {
+                    await Task.WhenAll(tasks.ToArray()).WaitAsync(TimeSpan.FromSeconds(5));
+                }
+            }
+            catch (AggregateException)
+            {
+                // Tasks may throw exceptions when canceled
+            }
+            catch (TimeoutException)
+            {
+                Console.WriteLine("Warning: StopAsync timed out waiting for tasks to complete");
             }
             
             Dispose();

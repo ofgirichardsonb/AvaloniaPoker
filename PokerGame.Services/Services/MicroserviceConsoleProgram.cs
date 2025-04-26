@@ -27,9 +27,10 @@ namespace PokerGame.Services
             // Initialize telemetry
             _telemetryService = TelemetryService.Instance;
             
-            // Create and start the broker manager
-            _brokerManager = new BrokerManager();
-            _brokerManager.Start(brokerPort);
+            // Get the broker manager instance
+            _brokerManager = BrokerManager.Instance;
+            // Start the broker manager
+            _brokerManager.Start();
             
             // Create the service manager
             _serviceManager = new MicroserviceManager(brokerPort);
