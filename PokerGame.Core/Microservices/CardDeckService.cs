@@ -573,20 +573,41 @@ namespace PokerGame.Core.Microservices
         }
         
         /// <summary>
-        /// Creates a new deck with the specified ID
+        /// Creates a new deck with the specified ID and optionally shuffles it
         /// </summary>
         /// <param name="deckId">The unique ID for the deck</param>
         /// <param name="shuffle">Whether to shuffle the deck after creation</param>
         private void CreateDeck(string deckId, bool shuffle)
         {
-            var deck = new Deck();
-            if (shuffle)
-                deck.Shuffle();
+            try
+            {
+                Console.WriteLine($"===> CardDeckService: Creating new deck with ID {deckId}");
                 
-            _decks[deckId] = deck;
-            _burnPiles[deckId] = new List<Card>();
-            
-            Console.WriteLine($"Created deck: {deckId} (Shuffled: {shuffle})");
+                // Validate deck ID
+                if (string.IsNullOrEmpty(deckId))
+                {
+                    throw new ArgumentException("Deck ID cannot be null or empty", nameof(deckId));
+                }
+                
+                // Create new deck
+                var deck = new Deck();
+                if (shuffle)
+                {
+                    Console.WriteLine($"===> CardDeckService: Shuffling deck {deckId}");
+                    deck.Shuffle();
+                }
+                
+                // Store the deck and create its burn pile
+                _decks[deckId] = deck;
+                _burnPiles[deckId] = new List<Card>();
+                
+                Console.WriteLine($"===> CardDeckService: Created deck: {deckId} (Shuffled: {shuffle})");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"===> CardDeckService: ERROR creating deck {deckId}: {ex.Message}");
+                throw; // Rethrow to allow higher-level error handling
+            }
         }
         
         /// <summary>
@@ -676,9 +697,31 @@ namespace PokerGame.Core.Microservices
         /// <param name="deckId">The ID of the deck</param>
         private void BroadcastDeckStatus(string deckId)
         {
-            if (_decks.TryGetValue(deckId, out var deck))
+            try 
             {
-                var burnPile = _burnPiles[deckId];
+                Console.WriteLine($"===> CardDeckService: Broadcasting deck status for deck {deckId}");
+                
+                // Check if _publisherSocket is valid
+                if (_publisherSocket == null)
+                {
+                    Console.WriteLine($"===> CardDeckService: ERROR in BroadcastDeckStatus - publisher socket is null");
+                    return;
+                }
+                
+                // Check if deck exists
+                if (!_decks.TryGetValue(deckId, out var deck))
+                {
+                    Console.WriteLine($"===> CardDeckService: ERROR in BroadcastDeckStatus - deck {deckId} not found");
+                    return;
+                }
+                
+                // Check if burn pile exists, create it if it doesn't
+                if (!_burnPiles.TryGetValue(deckId, out var burnPile))
+                {
+                    Console.WriteLine($"===> CardDeckService: Creating missing burn pile for deck {deckId}");
+                    burnPile = new List<Card>();
+                    _burnPiles[deckId] = burnPile;
+                }
                 
                 var payload = new DeckStatusPayload
                 {
@@ -688,11 +731,17 @@ namespace PokerGame.Core.Microservices
                 };
                 
                 var message = Message.Create(MessageType.DeckStatus, payload);
+                message.SenderId = _serviceId;  // Ensure sender ID is set
+                
+                Console.WriteLine($"===> CardDeckService: Sending deck status message for deck {deckId}");
                 Broadcast(message);
+                Console.WriteLine($"===> CardDeckService: Deck status message sent successfully");
             }
-            else
+            catch (Exception ex)
             {
-                throw new Exception($"Deck not found: {deckId}");
+                // Log error but don't throw - allows operation to continue when possible
+                Console.WriteLine($"===> CardDeckService: ERROR in BroadcastDeckStatus: {ex.Message}");
+                Console.WriteLine($"===> CardDeckService: {ex.StackTrace}");
             }
         }
         
@@ -704,14 +753,40 @@ namespace PokerGame.Core.Microservices
         /// <param name="cards">The dealt cards</param>
         private void SendDealResponse(string requesterId, string deckId, List<Card> cards)
         {
-            var payload = new DeckDealResponsePayload
+            try
             {
-                DeckId = deckId,
-                Cards = cards
-            };
-            
-            var message = Message.Create(MessageType.DeckDealResponse, payload);
-            SendTo(message, requesterId);
+                if (_publisherSocket == null)
+                {
+                    Console.WriteLine($"===> CardDeckService: ERROR in SendDealResponse - publisher socket is null");
+                    return;
+                }
+                
+                if (string.IsNullOrEmpty(requesterId))
+                {
+                    Console.WriteLine($"===> CardDeckService: ERROR in SendDealResponse - requester ID is null or empty");
+                    return;
+                }
+                
+                var payload = new DeckDealResponsePayload
+                {
+                    DeckId = deckId,
+                    Cards = cards ?? new List<Card>()
+                };
+                
+                var message = Message.Create(MessageType.DeckDealResponse, payload);
+                message.SenderId = _serviceId;  // Ensure sender ID is set
+                message.ReceiverId = requesterId;
+                
+                Console.WriteLine($"===> CardDeckService: Sending deal response to {requesterId} for deck {deckId}");
+                SendTo(message, requesterId);
+                Console.WriteLine($"===> CardDeckService: Deal response sent successfully");
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't throw
+                Console.WriteLine($"===> CardDeckService: ERROR in SendDealResponse: {ex.Message}");
+                Console.WriteLine($"===> CardDeckService: {ex.StackTrace}");
+            }
         }
         
         /// <summary>
@@ -723,15 +798,41 @@ namespace PokerGame.Core.Microservices
         /// <param name="faceUp">Whether the card was burned face up</param>
         private void SendBurnResponse(string requesterId, string deckId, Card? card, bool faceUp)
         {
-            var payload = new DeckBurnResponsePayload
+            try
             {
-                DeckId = deckId,
-                Card = card,
-                FaceUp = faceUp
-            };
-            
-            var message = Message.Create(MessageType.DeckBurnResponse, payload);
-            SendTo(message, requesterId);
+                if (_publisherSocket == null)
+                {
+                    Console.WriteLine($"===> CardDeckService: ERROR in SendBurnResponse - publisher socket is null");
+                    return;
+                }
+                
+                if (string.IsNullOrEmpty(requesterId))
+                {
+                    Console.WriteLine($"===> CardDeckService: ERROR in SendBurnResponse - requester ID is null or empty");
+                    return;
+                }
+                
+                var payload = new DeckBurnResponsePayload
+                {
+                    DeckId = deckId,
+                    Card = card,
+                    FaceUp = faceUp
+                };
+                
+                var message = Message.Create(MessageType.DeckBurnResponse, payload);
+                message.SenderId = _serviceId;  // Ensure sender ID is set
+                message.ReceiverId = requesterId;
+                
+                Console.WriteLine($"===> CardDeckService: Sending burn response to {requesterId} for deck {deckId}");
+                SendTo(message, requesterId);
+                Console.WriteLine($"===> CardDeckService: Burn response sent successfully");
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't throw
+                Console.WriteLine($"===> CardDeckService: ERROR in SendBurnResponse: {ex.Message}");
+                Console.WriteLine($"===> CardDeckService: {ex.StackTrace}");
+            }
         }
     }
     
