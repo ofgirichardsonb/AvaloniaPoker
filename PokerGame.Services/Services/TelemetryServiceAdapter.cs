@@ -60,7 +60,7 @@ namespace PokerGame.Services
         /// </summary>
         public void TrackDependency(string dependencyName, string target, DateTimeOffset startTime, TimeSpan duration, bool success, IDictionary<string, string>? properties = null)
         {
-            _telemetryService.TrackDependency(dependencyName, target, dependencyName, string.Empty, startTime, duration, success ? "200" : "500", success);
+            _telemetryService.TrackDependency(dependencyName, target, dependencyName, string.Empty, startTime, duration, success);
         }
         
         /// <summary>

@@ -657,6 +657,13 @@ namespace PokerGame.Core.Microservices
         {
             if (_decks.TryGetValue(deckId, out var deck))
             {
+                // Ensure a burn pile exists for this deck
+                if (!_burnPiles.ContainsKey(deckId))
+                {
+                    _burnPiles[deckId] = new List<Card>();
+                    Console.WriteLine($"Created new burn pile for deck: {deckId}");
+                }
+                
                 var burnPile = _burnPiles[deckId];
                 
                 var card = deck.DealCard();
@@ -682,7 +689,17 @@ namespace PokerGame.Core.Microservices
             if (_decks.TryGetValue(deckId, out var deck))
             {
                 deck.Reset();
-                _burnPiles[deckId].Clear();
+                
+                // Ensure burn pile exists before trying to clear it
+                if (!_burnPiles.ContainsKey(deckId))
+                {
+                    _burnPiles[deckId] = new List<Card>();
+                }
+                else
+                {
+                    _burnPiles[deckId].Clear();
+                }
+                
                 Console.WriteLine($"Reset deck: {deckId}");
             }
             else

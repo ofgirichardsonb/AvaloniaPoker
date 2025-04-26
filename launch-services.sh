@@ -1,19 +1,45 @@
 #!/bin/bash
 
 # Advanced script to launch the poker game services in separate processes
-# This is more reliable than managing everything in a single .NET async process
+# This script follows the new services-first architecture where:
+# 1. Services are launched separately in PokerGame.Services
+# 2. The console UI is a client that connects to those services
 
 CONSOLE_PORT_OFFSET=10 # Make sure each instance gets separate ports
 
-# Function to launch a service
-launch_service() {
+# Function to launch a service host
+launch_service_host() {
+    local port_offset=$1
+    local args=$2
+    
+    echo "Launching service host with port offset $port_offset..."
+    
+    # Launch the service host in the background
+    dotnet run --project PokerGame.Services/PokerGame.Services.csproj -- \
+        --all-services \
+        --port-offset=$port_offset \
+        $args &
+    
+    # Store the PID
+    local pid=$!
+    echo "Service host launched with PID $pid"
+    echo $pid > ".services.pid"
+    
+    # Give it a moment to start up
+    sleep 3
+    
+    echo "Services host should now be running. Check logs for details."
+}
+
+# Function to launch a UI client
+launch_ui_client() {
     local service_type=$1
     local port_offset=$2
     local extra_args=$3
     
-    echo "Launching $service_type service with port offset $port_offset..."
+    echo "Launching $service_type client with port offset $port_offset..."
     
-    # Launch the service in the background
+    # Launch the UI client in the background
     dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- \
         --microservices \
         --service-type=$service_type \
@@ -22,7 +48,7 @@ launch_service() {
     
     # Store the PID
     local pid=$!
-    echo "$service_type service launched with PID $pid"
+    echo "$service_type client launched with PID $pid"
     echo $pid > ".$service_type.pid"
     
     # Give it a moment to start up
@@ -43,12 +69,23 @@ stop_service() {
     fi
 }
 
-# Stop any running services
+# Stop the services host
+stop_services_host() {
+    if [ -f ".services.pid" ]; then
+        local pid=$(cat ".services.pid")
+        echo "Stopping services host (PID $pid)..."
+        kill $pid 2>/dev/null
+        rm ".services.pid"
+    else
+        echo "Services host not running"
+    fi
+}
+
+# Stop any running services and clients
 stop_all_services() {
-    echo "Stopping all services..."
-    stop_service "gameengine"
-    stop_service "carddeck" 
+    echo "Stopping all services and clients..."
     stop_service "consoleui"
+    stop_services_host
 }
 
 # Start the services in the correct order with proper delays
@@ -190,42 +227,61 @@ case "$1" in
     emergency)
         start_emergency
         ;;
-    start-engine)
-        # Clear any existing PID file
-        rm -f .gameengine.pid
-        # Use port offset 200 for individual engine service
-        launch_service "gameengine" 200 ""
-        ;;
-    start-deck)
-        # Clear any existing PID file
-        rm -f .carddeck.pid
-        # Use port offset 200 for individual card deck service
-        launch_service "carddeck" 200 ""
+    start-services)
+        # Clear any existing services PID file
+        rm -f .services.pid
+        # Use port offset 200 for services
+        launch_service_host 200 "--verbose"
         ;;
     start-ui)
         # Clear any existing PID file
         rm -f .consoleui.pid
         # Use port offset 200 for individual UI service
-        launch_service "consoleui" 200 "--enhanced-ui"
+        launch_ui_client "consoleui" 200 "--enhanced-ui"
         ;;
     curses)
         # Clear any existing PID file
         rm -f .consoleui.pid
         # Start the Console UI service with curses interface
-        launch_service "consoleui" 200 "--curses"
+        launch_ui_client "consoleui" 200 "--curses"
+        ;;
+    services-and-ui)
+        # Start both services and UI in sequence
+        rm -f .services.pid .consoleui.pid
+        # Start services first
+        launch_service_host 200 "--verbose"
+        # Then start the UI
+        launch_ui_client "consoleui" 200 "--enhanced-ui"
+        ;;
+    services-and-curses)
+        # Start both services and curses UI in sequence
+        rm -f .services.pid .consoleui.pid
+        # Start services first
+        launch_service_host 200 "--verbose"
+        # Then start the curses UI
+        launch_ui_client "consoleui" 200 "--curses"
+        ;;
+    stop-services)
+        stop_services_host
+        ;;
+    stop-ui)
+        stop_service "consoleui"
         ;;
     *)
-        echo "Usage: $0 {start|stop|restart|verbose|emergency|start-engine|start-deck|start-ui|curses}"
+        echo "Usage: $0 {start|stop|restart|verbose|emergency|start-services|start-ui|curses|services-and-ui|services-and-curses|stop-services|stop-ui}"
         echo ""
-        echo "  start       - Start all services normally"
-        echo "  stop        - Stop all running services"
-        echo "  restart     - Restart all services"
-        echo "  verbose     - Start with verbose logging"
-        echo "  emergency   - Start with emergency deck mode (more reliable)"
-        echo "  start-engine - Start only the game engine service"
-        echo "  start-deck  - Start only the card deck service"
-        echo "  start-ui    - Start only the console UI service"
-        echo "  curses      - Start only the UI with NCurses interface"
+        echo "  start              - Start all services normally (legacy mode)"
+        echo "  stop               - Stop all running services and clients"
+        echo "  restart            - Restart all services (legacy mode)"
+        echo "  verbose            - Start with verbose logging (legacy mode)"
+        echo "  emergency          - Start with emergency deck mode (legacy mode)"
+        echo "  start-services     - Start the services host (new architecture)"
+        echo "  start-ui           - Start only the console UI client"
+        echo "  curses             - Start only the UI with NCurses interface"
+        echo "  services-and-ui    - Start both services and console UI"
+        echo "  services-and-curses - Start both services and curses UI"
+        echo "  stop-services      - Stop only the services host"
+        echo "  stop-ui            - Stop only the UI client"
         exit 1
         ;;
 esac

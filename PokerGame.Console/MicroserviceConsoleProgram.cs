@@ -54,66 +54,38 @@ namespace PokerGame.Console
                 System.Console.WriteLine("Using enhanced UI...");
             }
             
-            // Create the microservice manager
-            MicroserviceManager? manager = null;
+            // Create a cleanup event
             var exitEvent = new System.Threading.ManualResetEvent(false);
             
             // Handle Ctrl+C to ensure proper cleanup
             System.Console.CancelKeyPress += (sender, e) => {
-                System.Console.WriteLine("Shutting down microservices...");
+                System.Console.WriteLine("Shutting down console UI...");
                 e.Cancel = true; // Prevent the process from terminating immediately
                 exitEvent.Set(); // Signal the main thread to exit gracefully
             };
             
             try
             {
-                manager = new MicroserviceManager(portOffset);
+                // Initialize the broker manager for client-side communications only
+                // We don't create or manage services anymore - we assume they're already running
+                var brokerManager = PokerGame.Core.Messaging.BrokerManager.Instance;
+                brokerManager.Start();
+                System.Console.WriteLine("Connected to broker for client communications");
                 
-                // Check if running a specific service or all services
-                if (serviceType != null)
+                // Create a microservice manager just for the UI service
+                MicroserviceManager? manager = new MicroserviceManager(portOffset);
+                
+                // Check if running in console UI mode
+                if (serviceType != null && serviceType.ToLowerInvariant() == "consoleui")
                 {
-                    // Single service mode - start only the specified service
-                    System.Console.WriteLine($"Running in single-service mode: {serviceType}");
-                    
-                    switch (serviceType.ToLowerInvariant())
-                    {
-                        case "gameengine":
-                            System.Console.WriteLine("Starting Game Engine Service only...");
-                            manager.StartGameEngineService(args);
-                            break;
-                            
-                        case "carddeck":
-                            System.Console.WriteLine("Starting Card Deck Service only...");
-                            if (useEmergencyDeck)
-                            {
-                                System.Console.WriteLine("Using emergency deck mode");
-                                // Add emergency deck flag to args if needed
-                                if (!Array.Exists(args, arg => arg.Equals("--emergency-deck", StringComparison.OrdinalIgnoreCase)))
-                                {
-                                    var newArgs = new string[args.Length + 1];
-                                    Array.Copy(args, newArgs, args.Length);
-                                    newArgs[args.Length] = "--emergency-deck";
-                                    args = newArgs;
-                                }
-                            }
-                            manager.StartCardDeckService(args);
-                            break;
-                            
-                        case "consoleui":
-                            System.Console.WriteLine("Starting Console UI Service only...");
-                            manager.StartConsoleUIService(args, useEnhancedUi);
-                            break;
-                            
-                        default:
-                            System.Console.WriteLine($"Unknown service type: {serviceType}. Valid types are: GameEngine, CardDeck, ConsoleUI");
-                            return;
-                    }
+                    System.Console.WriteLine("Starting Console UI client only...");
+                    manager.StartConsoleUIService(args, useEnhancedUi);
                 }
                 else
                 {
-                    // Start all required microservices
-                    System.Console.WriteLine("Starting all microservices...");
-                    manager.StartMicroservices(args);
+                    System.Console.WriteLine("Starting console client in client-only mode...");
+                    System.Console.WriteLine("Assuming services are already running with port offset: " + portOffset);
+                    manager.StartConsoleUIService(args, useEnhancedUi);
                 }
                 
                 // Keep the main thread alive until user wants to exit
@@ -133,23 +105,20 @@ namespace PokerGame.Console
             }
             finally
             {
-                // Ensure all services are stopped
-                if (manager != null)
+                // Force NetMQ cleanup as a final safety measure
+                try
                 {
-                    System.Console.WriteLine("Stopping all microservices...");
-                    manager.StopMicroservices();
-                    manager.Dispose();
-                    
-                    // Force NetMQ cleanup as a final safety measure
-                    try
-                    {
-                        NetMQ.NetMQConfig.Cleanup(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Console.WriteLine($"Final cleanup error: {ex.Message}");
-                    }
+                    System.Console.WriteLine("Cleaning up NetMQ resources...");
+                    NetMQ.NetMQConfig.Cleanup(false);
                 }
+                catch (Exception ex)
+                {
+                    System.Console.WriteLine($"Final cleanup error: {ex.Message}");
+                }
+                
+                // We don't need to stop services here anymore, since they are
+                // running in separate processes managed by PokerGame.Services
+                System.Console.WriteLine("Console UI client stopped. Services are still running.");
             }
         }
     }
