@@ -18,6 +18,11 @@ namespace PokerGame.Core.Models
         public int RemainingCards => _cards.Count;
         
         /// <summary>
+        /// Gets the number of remaining cards in the deck (alias for RemainingCards for compatibility)
+        /// </summary>
+        public int CardsRemaining => RemainingCards;
+        
+        /// <summary>
         /// Creates a new deck
         /// </summary>
         public Deck()

@@ -52,6 +52,12 @@ namespace PokerGame.Core.Models
         public bool IsActive { get; set; } = true;
         
         /// <summary>
+        /// Gets or sets whether the player is all-in (has bet all their chips)
+        /// </summary>
+        [JsonPropertyName("isAllIn")]
+        public bool IsAllIn { get; set; }
+        
+        /// <summary>
         /// Gets or sets the player's current bet amount in the current betting round
         /// </summary>
         [JsonPropertyName("currentBet")]
@@ -121,6 +127,12 @@ namespace PokerGame.Core.Models
             // Limit bet to available chips
             int actualBet = Math.Min(amount, Chips);
             
+            // Check if player is going all-in
+            if (actualBet == Chips)
+            {
+                IsAllIn = true;
+            }
+            
             // Deduct chips
             Chips -= actualBet;
             
@@ -145,6 +157,25 @@ namespace PokerGame.Core.Models
         public void ResetTotalBet()
         {
             TotalBet = 0;
+            CurrentBet = 0;
+        }
+        
+        /// <summary>
+        /// Resets the player for a new hand
+        /// </summary>
+        public void ResetForNewHand()
+        {
+            ClearHand();
+            ResetTotalBet();
+            HasFolded = false;
+            IsAllIn = false;
+        }
+        
+        /// <summary>
+        /// Resets the player's bet for a new betting round
+        /// </summary>
+        public void ResetBetForNewRound()
+        {
             CurrentBet = 0;
         }
         

@@ -46,6 +46,12 @@ namespace PokerGame.Core.Models
         public Rank Rank { get; set; }
         
         /// <summary>
+        /// Gets the numeric value of the card rank
+        /// </summary>
+        [JsonIgnore]
+        public int RankValue => (int)Rank;
+        
+        /// <summary>
         /// Gets or sets the suit of the card
         /// </summary>
         [JsonPropertyName("suit")]
