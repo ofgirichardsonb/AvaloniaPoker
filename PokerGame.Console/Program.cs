@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using PokerGame.Core.Game;
 using PokerGame.Core.Interfaces;
+using PokerGame.Core.Messaging;
 using PokerGame.Services;
 using PokerGame.Core.Messaging;
 

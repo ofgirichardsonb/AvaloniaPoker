@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PokerGame.Core\PokerGame.Core.csproj" />
-    <ProjectReference Include="..\MessageBroker\MessageBroker.csproj" />
     <ProjectReference Include="..\PokerGame.Abstractions\PokerGame.Abstractions.csproj" />
   </ItemGroup>
 
