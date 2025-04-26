@@ -91,7 +91,7 @@ namespace PokerGame.Core.Process
                 Thread.Sleep(3000);
                 
                 // 2. Then start the console client with the same port offset
-                _consoleClientPid = _processManager.StartConsoleClient(useCurses, portOffset, verbose);
+                _consoleClientPid = _processManager.StartConsoleClient(portOffset, useCurses, verbose);
                 if (_consoleClientPid == -1)
                 {
                     Console.WriteLine("Failed to start console client");

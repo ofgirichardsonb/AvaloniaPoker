@@ -31,7 +31,7 @@ namespace PokerGame.Core.Microservices
         private string? _gameEngineServiceId;
         private bool _waitingForPlayerAction = false;
         private string _activePlayerId = string.Empty;
-        private bool _useEnhancedUI;
+        private bool _useEnhancedUI; // When true, use the enhanced UI (formerly known as curses UI)
         private object? _enhancedUiInstance; // Will hold a dynamic reference to CursesUI when needed
         private bool _autoPlayMode = false; // Auto-play flag for automated testing
         
@@ -40,12 +40,12 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         /// <param name="publisherPort">The port to use for publishing messages</param>
         /// <param name="subscriberPort">The port to use for subscribing to messages</param>
-        /// <param name="useEnhancedUI">Whether to use the enhanced curses UI</param>
+        /// <param name="useCurses">Whether to use the enhanced UI (curses)</param>
         /// <param name="autoPlay">Whether to auto-play for non-interactive testing</param>
-        public ConsoleUIService(int publisherPort, int subscriberPort, bool useEnhancedUI = false, bool autoPlay = false) 
+        public ConsoleUIService(int publisherPort, int subscriberPort, bool useCurses = false, bool autoPlay = false) 
             : base("PlayerUI", "Console UI", publisherPort, subscriberPort)
         {
-            _useEnhancedUI = useEnhancedUI;
+            _useEnhancedUI = useCurses; // Enhanced UI is the same as curses UI
             _autoPlayMode = autoPlay;
             Console.WriteLine($"ConsoleUIService created with enhanced UI: {_useEnhancedUI}, Auto-play: {_autoPlayMode}");
             

@@ -588,10 +588,10 @@ namespace PokerGame.Core.Process
             if (portOffset >= 0)
                 args.Append($" --port-offset {portOffset}");
             
+            // Standardizing on a single UI flag: --curses (when true) or no flag (when false)
+            // This removes the confusion between --curses and --enhanced-ui
             if (useCurses)
                 args.Append(" --curses");
-            else
-                args.Append(" --enhanced-ui");
                 
             if (verbose)
                 args.Append(" --verbose");

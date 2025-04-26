@@ -20,14 +20,11 @@ namespace PokerGame.Console
             
             try
             {
-                // Check if we should use the enhanced NCurses UI
-                bool useCursesUi = Array.Exists(args, arg => 
+                // Check if we should use the enhanced UI (via curses flag)
+                // Note: Enhanced UI and Curses UI are the same thing, just different terminology
+                bool useEnhancedUi = Array.Exists(args, arg => 
                     arg.Equals("--curses", StringComparison.OrdinalIgnoreCase) || 
                     arg.Equals("-c", StringComparison.OrdinalIgnoreCase));
-                
-                // Check for enhanced UI flag
-                bool useEnhancedUi = useCursesUi || Array.Exists(args, arg => 
-                    arg.Equals("--enhanced-ui", StringComparison.OrdinalIgnoreCase));
                 
                 // Check for emergency deck flag - kept for compatibility but ignored
                 bool useEmergencyDeck = Array.Exists(args, arg => 
@@ -58,7 +55,6 @@ namespace PokerGame.Console
                 // Track program configuration
                 telemetry.TrackEvent("ProgramConfiguration", new Dictionary<string, string>
                 {
-                    ["UseCursesUI"] = useCursesUi.ToString(),
                     ["UseEnhancedUI"] = useEnhancedUi.ToString(),
                     ["PortOffset"] = portOffset.ToString(),
                     ["ServiceType"] = serviceType,

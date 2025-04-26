@@ -20,76 +20,75 @@ build_launcher() {
 run_launcher() {
     local command="$1"
     shift  # Remove command from arguments
-    local args=""
-    local port_offset=""
-    local verbose=""
-    local curses=""
-    local enhanced_ui=""
-    
-    # Process additional arguments
-    for arg in "$@"; do
-        case "$arg" in
-            --port-offset=*)
-                # Extract the port offset value for the format --port-offset=1234
-                port_offset="--port-offset ${arg#*=}"
-                ;;
-            --port-offset)
-                # Skip this argument, but capture the next one as --port-offset VALUE
-                port_offset="--port-offset"
-                ;;
-            -p=*)
-                # Extract the port offset value for the format -p=1234
-                port_offset="--port-offset ${arg#*=}"
-                ;;
-            -p)
-                # Skip this argument, but next one will be the value
-                port_offset="--port-offset"
-                ;;
-            [0-9]*)
-                # If the previous argument was -p or --port-offset and this is a number
-                if [[ "$port_offset" == "--port-offset" ]]; then
-                    port_offset="--port-offset $arg"
-                elif [[ -z "$port_offset" ]]; then
-                    # If no port_offset flag yet, assume this is the port offset value after the -p flag
-                    port_offset="--port-offset $arg"
-                fi
-                ;;
-            --verbose)
-                verbose="--verbose"
-                ;;
-            -v)
-                verbose="--verbose"
-                ;;
-            --curses)
-                curses="--curses"
-                ;;
-            -c)
-                curses="--curses"
-                ;;
-            --enhanced-ui)
-                enhanced_ui="--enhanced-ui"
-                ;;
-            -e)
-                enhanced_ui="--enhanced-ui"
-                ;;
-            *)
-                # Any other arguments are passed as-is
-                args="$args $arg"
-                ;;
-        esac
-    done
     
     # Build the launcher first
     build_launcher
     
-    # Combine all the arguments
-    final_args="$command $port_offset $verbose $curses $enhanced_ui $args"
+    # Prepare arguments array
+    local cmdArgs=("$command")
+    
+    # Process additional arguments
+    # For System.CommandLine beta4, we need to use a different strategy
+    # Try using explicit flag=value syntax for each argument
+    
+    # Check for common command-line flags
+    local portValue=""
+    local useVerbose=false
+    local useCurses=false
+    local nextIsPort=false
+    
+    for arg in "$@"; do
+        case "$arg" in
+            --port-offset=*|-p=*)
+                # Extract the port offset value
+                portValue="${arg#*=}"
+                ;;
+            --port-offset|-p)
+                # The next argument is the port value
+                nextIsPort=true
+                ;;
+            [0-9]*)
+                # If this is just a number, assume it's a port value
+                if [ "$nextIsPort" = true ]; then
+                    portValue="$arg"
+                    nextIsPort=false
+                elif [ -z "$portValue" ]; then
+                    # If no port value yet, assume it's a port offset
+                    portValue="$arg"
+                fi
+                ;;
+            --verbose|-v)
+                useVerbose=true
+                ;;
+            --curses|-c)
+                useCurses=true
+                ;;
+        esac
+    done
+    
+    # Set up the command arguments
+    cmdArgs=("$command")
+    
+    # Add the port offset if provided
+    if [ -n "$portValue" ]; then
+        # Use separate arguments for flag and value with System.CommandLine
+        cmdArgs+=("--port-offset" "$portValue")
+    fi
+    
+    # Add other flags
+    if [ "$useVerbose" = true ]; then
+        cmdArgs+=("--verbose")
+    fi
+    
+    if [ "$useCurses" = true ]; then
+        cmdArgs+=("--curses")
+    fi
     
     # Print the command to be executed
-    echo "Executing: dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --no-build -- $final_args"
+    echo "Executing: dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --no-build -- ${cmdArgs[*]}"
     
     # Run the launcher with the specified command and processed arguments
-    dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --no-build -- $final_args
+    dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --no-build -- "${cmdArgs[@]}"
     
     return $?
 }
@@ -154,8 +153,7 @@ case "$1" in
         echo "Options:"
         echo "  --port-offset=N, -p N - Use port offset N for the services"
         echo "  --verbose, -v         - Enable verbose logging"
-        echo "  --curses, -c          - Use curses UI for console client"
-        echo "  --enhanced-ui, -e     - Use enhanced UI for console client (alternative to curses)"
+        echo "  --curses, -c          - Use enhanced UI (curses) for console client"
         exit 1
         ;;
 esac

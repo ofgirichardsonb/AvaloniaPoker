@@ -14,7 +14,7 @@ namespace PokerGame.Console
         /// Starts the microservice-based application
         /// </summary>
         /// <param name="args">Command line arguments</param>
-        /// <param name="useEnhancedUi">Whether to use the enhanced UI</param>
+        /// <param name="useEnhancedUi">Whether to use the enhanced UI (invoked with --curses flag)</param>
         /// <param name="serviceType">Type of service to run, if null runs all services</param>
         /// <param name="portOffset">Port offset for services</param>
         /// <param name="useEmergencyDeck">Whether to use emergency deck</param>
@@ -42,13 +42,13 @@ namespace PokerGame.Console
                 
                 if (!hasEnhancedUiFlag)
                 {
-                    // Add the enhanced UI flag to the args array
+                    // Add the curses flag to the args array (as this is now the only way to activate enhanced UI)
                     var newArgs = new string[args.Length + 1];
                     Array.Copy(args, newArgs, args.Length);
-                    newArgs[args.Length] = "--enhanced-ui";
+                    newArgs[args.Length] = "--curses";
                     args = newArgs;
                     
-                    System.Console.WriteLine("Added --enhanced-ui flag to arguments");
+                    System.Console.WriteLine("Added --curses flag to arguments");
                 }
                 
                 System.Console.WriteLine("Using enhanced UI...");
