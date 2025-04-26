@@ -46,15 +46,24 @@ namespace PokerGame.Core.Messaging
             {
                 MessageId = envelope.MessageId,
                 Type = messageType,
-                SenderId = envelope.SenderServiceId,
-                ReceiverId = envelope.TargetServiceId,
-                Timestamp = envelope.Timestamp
+                SenderId = envelope.GetMetadata("SenderId"),
+                ReceiverId = envelope.GetMetadata("TargetId"),
+                Timestamp = envelope.Timestamp,
+                InResponseTo = envelope.GetMetadata("InResponseTo")
             };
             
-            // Need to set payload as string because Message.Payload is string
+            // Get payload
             if (envelope.Payload != null)
             {
-                message.Payload = envelope.Payload.ToString() ?? string.Empty;
+                // For legacy Message compatibility, convert payload to string if needed
+                if (envelope.Payload is string stringPayload)
+                {
+                    message.Payload = stringPayload;
+                }
+                else
+                {
+                    message.Payload = envelope.Payload.ToString() ?? string.Empty;
+                }
             }
             
             return message;

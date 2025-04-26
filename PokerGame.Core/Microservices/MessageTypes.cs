@@ -15,12 +15,19 @@ namespace PokerGame.Core.Microservices
         Heartbeat,
         ServiceRegistration,
         ServiceDiscovery,
-        Notification,  // General notification/info message
+        Notification,     // General notification/info message
+        Acknowledgment,   // Generic acknowledgment for any message
         
         // Game engine messages
-        GameStart,
-        GameState,
-        StartHand,
+        StartGame,        // Request to start a new game
+        GameStarted,      // Confirmation that game was started
+        GameState,        // Current state of the game
+        EndGame,          // Request to end a game
+        GameEnded,        // Confirmation that game ended
+        StartHand,        // Request to start a new hand
+        HandStarted,      // Confirmation that hand was started
+        EndHand,          // Request to end current hand
+        HandEnded,        // Confirmation that hand ended
         DealCards,
         PlayerAction,
         ActionResponse,
@@ -38,14 +45,17 @@ namespace PokerGame.Core.Microservices
         
         // Card deck messages
         DeckCreate,
-        DeckCreated,   // Confirmation of deck creation
+        DeckCreated,      // Confirmation of deck creation
         DeckShuffle,
+        DeckShuffled,     // Confirmation that deck was shuffled
         DeckDeal,
-        DeckDealResponse,
+        DeckDealt,        // Confirmation that cards were dealt
+        DeckDealResponse, // Response with dealt cards
         DeckBurn,
         DeckBurnResponse,
         DeckReset,
         DeckStatus,
+        DeckStatusResponse, // Response to status request
         
         // Error messages
         Error
@@ -80,6 +90,12 @@ namespace PokerGame.Core.Microservices
         /// Gets or sets the timestamp when the message was created
         /// </summary>
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+        
+        /// <summary>
+        /// Gets or sets the message ID that this message is responding to
+        /// Used for acknowledgments and responses to link back to original requests
+        /// </summary>
+        public string InResponseTo { get; set; } = string.Empty;
         
         /// <summary>
         /// Gets or sets the payload of the message as a JSON string

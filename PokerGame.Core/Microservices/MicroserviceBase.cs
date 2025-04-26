@@ -211,9 +211,9 @@ namespace PokerGame.Core.Microservices
                 _messageQueue.Clear();
                 _serviceRegistry.Clear();
                 
-                // Finally, force a NetMQ cleanup
-                Console.WriteLine("Performing NetMQ cleanup...");
-                NetMQConfig.Cleanup(false);
+                // Schedule NetMQ cleanup instead of doing it directly
+                Console.WriteLine("Scheduling NetMQ cleanup...");
+                NetMQContextHelper.ScheduleCleanup(200);
                 
                 Console.WriteLine("Microservice disposed successfully");
             }
@@ -224,7 +224,8 @@ namespace PokerGame.Core.Microservices
                 
                 // Last resort cleanup
                 try {
-                    NetMQConfig.Cleanup(false);
+                    // Schedule cleanup rather than doing it directly
+                    NetMQContextHelper.ScheduleCleanup(100);
                 } catch {}
             }
         }

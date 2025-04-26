@@ -104,7 +104,7 @@ namespace PokerGame.Core.Microservices
         {
             switch (message.Type)
             {
-                case MessageType.GameStart:
+                case MessageType.StartGame:
                     var playerNames = message.GetPayload<string[]>();
                     if (playerNames != null && playerNames.Length >= 2)
                     {
@@ -482,7 +482,7 @@ namespace PokerGame.Core.Microservices
                 // Generate a unique ID for this deck
                 _currentDeckId = $"deck-{Guid.NewGuid().ToString().Substring(0, 8)}";
                 
-                Console.WriteLine($"Creating new deck with ID: {_currentDeckId}");
+                Console.WriteLine($"Creating new deck with ID: {_currentDeckId} using reliable messaging");
                 
                 // Create a new deck and shuffle it
                 var createPayload = new DeckCreatePayload
@@ -494,40 +494,20 @@ namespace PokerGame.Core.Microservices
                 var message = Message.Create(MessageType.DeckCreate, createPayload);
                 message.MessageId = Guid.NewGuid().ToString(); // Ensure unique message ID
                 
-                // Log message sending details
-                Console.WriteLine($"Sending DeckCreate message to {_cardDeckServiceId}");
-                bool messageSent = SendTo(message, _cardDeckServiceId);
+                // Use our new extension method to send with acknowledgment
+                Console.WriteLine($"Sending DeckCreate message to {_cardDeckServiceId} with reliable delivery");
+                bool ackReceived = await this.SendWithAcknowledgmentAsync(message, _cardDeckServiceId, 5000);
                 
-                if (!messageSent)
+                if (!ackReceived)
                 {
-                    Console.WriteLine("Failed to send deck creation message. Will retry...");
+                    Console.WriteLine("Failed to receive acknowledgment for deck creation. Will retry...");
                     await Task.Delay(500);
                     continue;
                 }
                 
-                // Wait for deck creation - increasing delay with each retry
-                int waitTime = 500 * currentRetry; 
-                Console.WriteLine($"Waiting {waitTime}ms for deck creation...");
-                await Task.Delay(waitTime);
-                
-                // Verification step: Send a status request and wait for response 
-                Console.WriteLine($"Verifying deck creation for {_currentDeckId}...");
-                
-                // Create a unique message ID for tracking this specific request
-                string verificationRequestId = Guid.NewGuid().ToString();
-                
-                var statusMessage = Message.Create(MessageType.DeckStatus, new DeckStatusPayload { DeckId = _currentDeckId });
-                statusMessage.MessageId = verificationRequestId;
-                
-                SendTo(statusMessage, _cardDeckServiceId);
-                
-                // Wait for verification response
-                await Task.Delay(500);
-                
-                // Mark success - we'll assume the deck is created successfully after sending the messages
-                // The actual verification would need a direct response handling mechanism
+                // If we got here, deck creation was successful
                 deckCreationSuccessful = true;
-                Console.WriteLine($"Deck {_currentDeckId} successfully created");
+                Console.WriteLine($"Deck {_currentDeckId} successfully created and confirmed");
                 
                 // Broadcast a notification that we have a new deck
                 var notificationMessage = Message.Create(MessageType.Notification, 
@@ -547,7 +527,7 @@ namespace PokerGame.Core.Microservices
         }
         
         /// <summary>
-        /// Shuffles the current deck
+        /// Shuffles the current deck with reliable messaging
         /// </summary>
         private async Task ShuffleDeckAsync()
         {
@@ -563,10 +543,21 @@ namespace PokerGame.Core.Microservices
             };
             
             var message = Message.Create(MessageType.DeckShuffle, shufflePayload);
-            SendTo(message, _cardDeckServiceId);
+            message.MessageId = Guid.NewGuid().ToString();
             
-            // Small delay to let the shuffle complete
-            await Task.Delay(100);
+            Console.WriteLine($"Shuffling deck {_currentDeckId} with reliable messaging");
+            
+            // Use our reliable messaging system
+            bool ackReceived = await this.SendWithAcknowledgmentAsync(message, _cardDeckServiceId, 3000);
+            
+            if (!ackReceived)
+            {
+                Console.WriteLine("Warning: Did not receive shuffle confirmation, but continuing anyway");
+            }
+            else
+            {
+                Console.WriteLine($"Deck {_currentDeckId} successfully shuffled and confirmed");
+            }
         }
         
         /// <summary>

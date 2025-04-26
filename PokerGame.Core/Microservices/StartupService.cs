@@ -69,10 +69,10 @@ namespace PokerGame.Core.Microservices
                 return;
             }
             
-            Console.WriteLine("Sending GameStart message to Game Engine");
+            Console.WriteLine("Sending StartGame message to Game Engine");
             
             // Initiate the game start process
-            var startMessage = Message.Create(MessageType.GameStart);
+            var startMessage = Message.Create(MessageType.StartGame);
             SendTo(startMessage, _gameEngineServiceId);
             
             // Wait for the game engine to process the start

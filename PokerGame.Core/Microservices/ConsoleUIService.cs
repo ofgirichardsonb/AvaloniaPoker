@@ -469,7 +469,7 @@ namespace PokerGame.Core.Microservices
             
             // Start the game
             Console.WriteLine($"Sending GameStart message to {_gameEngineServiceId} with {playerNames.Length} players");
-            var gameStartMessage = Message.Create(MessageType.GameStart, playerNames);
+            var gameStartMessage = Message.Create(MessageType.StartGame, playerNames);
             SendTo(gameStartMessage, _gameEngineServiceId);
             
             // Small delay to let the game engine process the start message

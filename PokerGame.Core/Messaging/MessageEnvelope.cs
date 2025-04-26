@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 
 namespace PokerGame.Core.Messaging
@@ -34,9 +35,28 @@ namespace PokerGame.Core.Messaging
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
         
         /// <summary>
+        /// Metadata dictionary for additional message information
+        /// </summary>
+        public Dictionary<string, string> Metadata { get; set; } = new Dictionary<string, string>();
+        
+        /// <summary>
         /// The message payload (can be any serializable object)
         /// </summary>
         public object? Payload { get; set; }
+        
+        /// <summary>
+        /// Gets a metadata value by key
+        /// </summary>
+        /// <param name="key">The metadata key</param>
+        /// <returns>The metadata value or empty string if not found</returns>
+        public string GetMetadata(string key)
+        {
+            if (Metadata.TryGetValue(key, out string? value))
+            {
+                return value;
+            }
+            return string.Empty;
+        }
         
         /// <summary>
         /// Serializes a message envelope to JSON
@@ -125,14 +145,26 @@ namespace PokerGame.Core.Messaging
         /// </summary>
         /// <param name="type">The message type</param>
         /// <param name="payload">Optional payload</param>
+        /// <param name="metadata">Optional metadata dictionary</param>
         /// <returns>New message envelope</returns>
-        public static MessageEnvelope Create(string type, object? payload = null)
+        public static MessageEnvelope Create(string type, object? payload = null, Dictionary<string, string>? metadata = null)
         {
-            return new MessageEnvelope
+            var envelope = new MessageEnvelope
             {
                 Type = type,
                 Payload = payload
             };
+            
+            // Add metadata if provided
+            if (metadata != null)
+            {
+                foreach (var pair in metadata)
+                {
+                    envelope.Metadata[pair.Key] = pair.Value;
+                }
+            }
+            
+            return envelope;
         }
     }
 }

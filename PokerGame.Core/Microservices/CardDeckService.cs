@@ -91,7 +91,26 @@ namespace PokerGame.Core.Microservices
                         var shufflePayload = message.GetPayload<DeckIdPayload>();
                         if (shufflePayload != null)
                         {
+                            Console.WriteLine($"CardDeckService: Shuffling deck {shufflePayload.DeckId}");
                             ShuffleDeck(shufflePayload.DeckId);
+                            
+                            // Send direct acknowledgment to the sender
+                            var ackPayload = new DeckStatusPayload
+                            {
+                                DeckId = shufflePayload.DeckId,
+                                Success = true,
+                                Message = "Deck shuffled successfully"
+                            };
+                            
+                            var ackMessage = Message.Create(MessageType.DeckShuffled, ackPayload);
+                            // Set InResponseTo field to link this response to the original message
+                            ackMessage.InResponseTo = message.MessageId;
+                            
+                            // Send the acknowledgment
+                            Console.WriteLine($"CardDeckService: Sending shuffle acknowledgment to {message.SenderId}");
+                            SendTo(ackMessage, message.SenderId);
+                            
+                            // Also broadcast the deck status
                             BroadcastDeckStatus(shufflePayload.DeckId);
                         }
                         break;
