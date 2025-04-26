@@ -15,7 +15,7 @@ namespace PokerGame.Core.Microservices
         private readonly string _serviceName;
         private readonly string _serviceType;
         private readonly bool _verbose;
-        private readonly ExecutionContext _executionContext;
+        private readonly PokerGame.Core.Messaging.ExecutionContext _executionContext;
         private readonly CancellationTokenSource _cancellationTokenSource;
         private SimpleMessageBroker _messageBroker;
         private readonly Logger _logger;
@@ -66,7 +66,7 @@ namespace PokerGame.Core.Microservices
         /// <param name="subscriberPort">The port on which this service will subscribe to messages</param>
         /// <param name="executionContext">The execution context for this service</param>
         /// <param name="verbose">Whether to enable verbose logging</param>
-        protected SimpleServiceBase(string serviceName, string serviceType, int publisherPort, int subscriberPort, ExecutionContext? executionContext = null, bool verbose = false)
+        protected SimpleServiceBase(string serviceName, string serviceType, int publisherPort, int subscriberPort, PokerGame.Core.Messaging.ExecutionContext? executionContext = null, bool verbose = false)
         {
             _serviceId = Guid.NewGuid().ToString();
             _serviceName = serviceName;
@@ -74,7 +74,7 @@ namespace PokerGame.Core.Microservices
             _publisherPort = publisherPort;
             _subscriberPort = subscriberPort;
             _verbose = verbose;
-            _executionContext = executionContext ?? new ExecutionContext();
+            _executionContext = executionContext ?? new PokerGame.Core.Messaging.ExecutionContext();
             _cancellationTokenSource = _executionContext.CancellationTokenSource ?? new CancellationTokenSource();
             _logger = new Logger($"{serviceType}_{_serviceId.Substring(0, 8)}", verbose);
             

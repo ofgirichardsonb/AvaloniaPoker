@@ -26,7 +26,7 @@ namespace PokerGame.Core.Messaging
         private SubscriberSocket _subscriberSocket;
         private bool _disposed = false;
         private readonly Logger _logger;
-        private readonly ExecutionContext _executionContext;
+        private readonly PokerGame.Core.Messaging.ExecutionContext _executionContext;
 
         // Event raised when a new message is received
         public event EventHandler<MessageReceivedEventArgs> MessageReceived;
@@ -39,7 +39,7 @@ namespace PokerGame.Core.Messaging
         /// <param name="subscriberPort">The port on which this broker will subscribe to messages</param>
         /// <param name="verbose">Whether to log verbose messages</param>
         public SimpleMessageBroker(string serviceId, int publisherPort, int subscriberPort, bool verbose = false)
-            : this(serviceId, publisherPort, subscriberPort, new ExecutionContext(), verbose)
+            : this(serviceId, publisherPort, subscriberPort, new PokerGame.Core.Messaging.ExecutionContext(), verbose)
         {
         }
         
@@ -51,13 +51,13 @@ namespace PokerGame.Core.Messaging
         /// <param name="subscriberPort">The port on which this broker will subscribe to messages</param>
         /// <param name="executionContext">The execution context for this broker</param>
         /// <param name="verbose">Whether to log verbose messages</param>
-        public SimpleMessageBroker(string serviceId, int publisherPort, int subscriberPort, ExecutionContext executionContext, bool verbose = false)
+        public SimpleMessageBroker(string serviceId, int publisherPort, int subscriberPort, PokerGame.Core.Messaging.ExecutionContext executionContext, bool verbose = false)
         {
             _serviceId = serviceId;
             _publisherPort = publisherPort;
             _subscriberPort = subscriberPort;
             _verbose = verbose;
-            _executionContext = executionContext ?? new ExecutionContext();
+            _executionContext = executionContext ?? new PokerGame.Core.Messaging.ExecutionContext();
             _cancellationTokenSource = _executionContext.CancellationTokenSource ?? new CancellationTokenSource();
             _logger = new Logger($"{serviceId}_MessageBroker", verbose);
             

@@ -16,11 +16,23 @@ namespace PokerGame.Core.Messaging
         private PokerGame.Core.Telemetry.TelemetryService _telemetryService;
         private bool _isStarted = false;
         private object _startLock = new object();
+        private ExecutionContext? _executionContext;
+        private CentralMessageBroker? _centralBroker;
         
         /// <summary>
         /// Gets the singleton instance of the BrokerManager
         /// </summary>
         public static BrokerManager Instance => _instance.Value;
+        
+        /// <summary>
+        /// Gets the central message broker
+        /// </summary>
+        public CentralMessageBroker? CentralBroker => _centralBroker;
+        
+        /// <summary>
+        /// Gets the execution context
+        /// </summary>
+        public ExecutionContext? ExecutionContext => _executionContext;
         
         /// <summary>
         /// Creates a new instance of the BrokerManager
@@ -39,6 +51,15 @@ namespace PokerGame.Core.Messaging
         /// </summary>
         public void Start()
         {
+            Start(null);
+        }
+        
+        /// <summary>
+        /// Starts the broker manager with the specified execution context
+        /// </summary>
+        /// <param name="executionContext">The execution context to use</param>
+        public void Start(ExecutionContext? executionContext)
+        {
             lock (_startLock)
             {
                 if (_isStarted)
@@ -46,6 +67,18 @@ namespace PokerGame.Core.Messaging
                 
                 // Log start
                 _telemetryService.TrackEvent("BrokerManagerStarting");
+                
+                // Store the execution context
+                _executionContext = executionContext ?? new ExecutionContext();
+                
+                // Create the central broker if it doesn't exist
+                if (_centralBroker == null)
+                {
+                    _centralBroker = new CentralMessageBroker(_executionContext);
+                }
+                
+                // Start the central broker
+                _centralBroker.Start();
                 
                 // Set started flag
                 _isStarted = true;
@@ -67,6 +100,9 @@ namespace PokerGame.Core.Messaging
                 
                 // Log stop
                 _telemetryService.TrackEvent("BrokerManagerStopping");
+                
+                // Stop the central broker
+                _centralBroker?.Stop();
                 
                 // Clear started flag
                 _isStarted = false;
@@ -96,6 +132,32 @@ namespace PokerGame.Core.Messaging
         public void SetTelemetryHandler(object telemetryHandler)
         {
             _telemetryHandler = telemetryHandler;
+            
+            // If we have a central broker, set its telemetry handler
+            if (_centralBroker != null && _telemetryHandler != null)
+            {
+                _centralBroker.SetTelemetryHandler(_telemetryHandler);
+            }
+        }
+        
+        /// <summary>
+        /// Creates a new service-specific execution context that shares the central broker's 
+        /// cancellation token source but has its own task scheduler
+        /// </summary>
+        /// <returns>A new execution context for a service</returns>
+        public ExecutionContext CreateServiceExecutionContext()
+        {
+            if (_executionContext == null)
+            {
+                _executionContext = new ExecutionContext();
+            }
+            
+            return new ExecutionContext(
+                _executionContext.CancellationTokenSource,
+                null,
+                null,
+                TaskScheduler.Default,
+                false);
         }
     }
 }

@@ -23,11 +23,21 @@ namespace PokerGame.Services
         /// </summary>
         /// <param name="brokerPort">The port for the message broker</param>
         public MicroserviceManager(int brokerPort = 5555)
+            : this(brokerPort, null)
+        {
+        }
+        
+        /// <summary>
+        /// Creates a new instance of the MicroserviceManager with a custom execution context
+        /// </summary>
+        /// <param name="brokerPort">The port for the message broker</param>
+        /// <param name="executionContext">The execution context to use</param>
+        public MicroserviceManager(int brokerPort = 5555, PokerGame.Core.Messaging.ExecutionContext? executionContext = null)
         {
             // Initialize the broker manager
             _brokerManager = BrokerManager.Instance;
-            // Start with port configuration
-            _brokerManager.Start();
+            // Start with port configuration and execution context
+            _brokerManager.Start(executionContext);
             
             // Initialize telemetry
             _telemetryService = TelemetryService.Instance;
@@ -38,7 +48,8 @@ namespace PokerGame.Services
             // Log the initialization
             _telemetryService.TrackEvent("MicroserviceManagerInitialized", new Dictionary<string, string>
             {
-                ["BrokerPort"] = brokerPort.ToString()
+                ["BrokerPort"] = brokerPort.ToString(),
+                ["HasExecutionContext"] = (executionContext != null).ToString()
             });
         }
         
@@ -65,15 +76,62 @@ namespace PokerGame.Services
                 _gameEngineServices[service.ServiceId] = decoratedGameEngine;
             }
             
+            // Register the service with the central broker if it exists
+            if (_brokerManager.CentralBroker != null)
+            {
+                _brokerManager.CentralBroker.RegisterService(
+                    service.ServiceId,
+                    service.ServiceName,
+                    service.ServiceType);
+            }
+            
             // Log the registration
             _telemetryService.TrackEvent("ServiceRegistered", new Dictionary<string, string>
             {
                 ["ServiceId"] = service.ServiceId,
                 ["ServiceName"] = service.ServiceName,
-                ["ServiceType"] = service.ServiceType
+                ["ServiceType"] = service.ServiceType,
+                ["CentralBrokerRegistered"] = (_brokerManager.CentralBroker != null).ToString()
             });
             
             return decoratedService;
+        }
+        
+        /// <summary>
+        /// Creates and registers a SimpleServiceBase service with a dedicated execution context
+        /// </summary>
+        /// <typeparam name="T">Type of service to create, must extend SimpleServiceBase</typeparam>
+        /// <param name="serviceName">Name of the service</param>
+        /// <param name="serviceType">Type of the service</param>
+        /// <param name="publisherPort">Publisher port for the service</param>
+        /// <param name="subscriberPort">Subscriber port for the service</param>
+        /// <param name="verbose">Whether to enable verbose logging</param>
+        /// <param name="constructorArgs">Additional constructor arguments if needed</param>
+        /// <returns>The registered service instance</returns>
+        public T CreateServiceWithExecutionContext<T>(
+            string serviceName,
+            string serviceType,
+            int publisherPort,
+            int subscriberPort,
+            bool verbose = false,
+            params object[] constructorArgs) where T : SimpleServiceBase
+        {
+            // Create a service-specific execution context from the broker manager's context
+            var executionContext = _brokerManager.CreateServiceExecutionContext();
+            
+            // Prepare the constructor parameters
+            var parameters = new List<object>(constructorArgs);
+            parameters.InsertRange(0, new object[] { serviceName, serviceType, publisherPort, subscriberPort });
+            parameters.Add(executionContext);
+            parameters.Add(verbose);
+            
+            // Create the service instance using reflection
+            var instance = (T)Activator.CreateInstance(typeof(T), parameters.ToArray());
+            
+            // Register the service
+            RegisterService(instance);
+            
+            return instance;
         }
         
         /// <summary>
