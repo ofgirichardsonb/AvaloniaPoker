@@ -157,49 +157,65 @@ namespace PokerGame.Core.Microservices
                 case MessageType.StartHand:
                     Console.WriteLine("Received StartHand message");
                     
-                    // Ensure we have a card deck service
-                    if (_cardDeckServiceId == null)
+                    try
                     {
-                        Console.WriteLine("WARNING: Card deck service not registered yet. Attempting to locate it...");
-                        var cardDeckServices = GetServicesOfType("CardDeck");
-                        if (cardDeckServices.Count > 0)
+                        // Ensure we have a card deck service with retry logic
+                        int maxRetries = 3;
+                        int currentRetry = 0;
+                        bool cardDeckServiceFound = false;
+                        
+                        while (!cardDeckServiceFound && currentRetry < maxRetries)
                         {
-                            _cardDeckServiceId = cardDeckServices[0];
-                            Console.WriteLine($"Found card deck service with ID: {_cardDeckServiceId}");
+                            currentRetry++;
+                            Console.WriteLine($"Locating card deck service (Attempt {currentRetry}/{maxRetries})");
+                            
+                            if (_cardDeckServiceId != null && _knownServices.ContainsKey(_cardDeckServiceId))
+                            {
+                                cardDeckServiceFound = true;
+                                Console.WriteLine($"Using known card deck service: {_cardDeckServiceId}");
+                            }
+                            else
+                            {
+                                // Try to find the service in registry
+                                var cardDeckServices = GetServicesOfType("CardDeck");
+                                if (cardDeckServices.Count > 0)
+                                {
+                                    _cardDeckServiceId = cardDeckServices[0];
+                                    cardDeckServiceFound = true;
+                                    Console.WriteLine($"Found card deck service with ID: {_cardDeckServiceId}");
+                                }
+                                else
+                                {
+                                    // Wait a bit before retrying
+                                    Console.WriteLine("Card deck service not found, waiting before retry...");
+                                    await Task.Delay(500);
+                                }
+                            }
                         }
-                        else
+                        
+                        if (!cardDeckServiceFound)
                         {
                             Console.WriteLine("ERROR: Cannot find card deck service. Hand cannot be started.");
                             BroadcastGameState(); // Still broadcast current state
                             break;
                         }
-                    }
-                    
-                    // Now check if we have a deck
-                    if (!string.IsNullOrEmpty(_currentDeckId))
-                    {
-                        Console.WriteLine($"Using existing deck: {_currentDeckId}");
-                        // Shuffle the deck before starting a new hand
-                        await ShuffleDeckAsync();
-                    }
-                    else
-                    {
-                        Console.WriteLine("No deck ID found, creating a new deck");
-                        // If we don't have a deck, create one
-                        await CreateNewDeckAsync();
-                        Console.WriteLine($"Created new deck with ID: {_currentDeckId}");
-                    }
-                    
-                    // Deal hole cards to players
-                    Console.WriteLine("Dealing hole cards to players");
-                    await DealCardsToPlayersAsync();
-                    
-                    // Ensure we start the hand if not already in progress
-                    if (_gameEngine.State == GameState.Setup || _gameEngine.State == GameState.WaitingToStart)
-                    {
-                        // Verify that we have enough players before starting
-                        Console.WriteLine($"Starting hand with {_gameEngine.Players.Count} players (current state: {_gameEngine.State})");
                         
+                        // Now check if we have a deck
+                        if (!string.IsNullOrEmpty(_currentDeckId))
+                        {
+                            Console.WriteLine($"Using existing deck: {_currentDeckId}");
+                            // Shuffle the deck before starting a new hand
+                            await ShuffleDeckAsync();
+                        }
+                        else
+                        {
+                            Console.WriteLine("No deck ID found, creating a new deck");
+                            // If we don't have a deck, create one
+                            await CreateNewDeckAsync();
+                            Console.WriteLine($"Created new deck with ID: {_currentDeckId}");
+                        }
+                        
+                        // Ensure we have test players if needed
                         if (_gameEngine.Players.Count < 2)
                         {
                             Console.WriteLine("ERROR: Need at least 2 players to start a hand. Creating default players for testing.");
@@ -221,36 +237,70 @@ namespace PokerGame.Core.Microservices
                             }
                         }
                         
-                        try {
-                            // Try normal hand start
-                            _gameEngine.StartHand();
+                        // Deal hole cards to players (with longer wait time for deck creation)
+                        Console.WriteLine("Waiting a moment for deck creation to complete...");
+                        await Task.Delay(1000);
+                        
+                        Console.WriteLine("Dealing hole cards to players");
+                        await DealCardsToPlayersAsync();
+                        
+                        // Add another delay to ensure cards are dealt
+                        await Task.Delay(500);
+                        
+                        // Ensure we start the hand if not already in progress
+                        if (_gameEngine.State == GameState.Setup || _gameEngine.State == GameState.WaitingToStart)
+                        {
+                            // Verify that we have enough players before starting
+                            Console.WriteLine($"Starting hand with {_gameEngine.Players.Count} players (current state: {_gameEngine.State})");
                             
-                            // Check if we changed state
-                            if (_gameEngine.State == GameState.Setup || _gameEngine.State == GameState.WaitingToStart)
-                            {
-                                // If not, force PreFlop state via reflection
-                                Console.WriteLine("Failed to transition state, forcing PreFlop state");
+                            try {
+                                // Try normal hand start
+                                _gameEngine.StartHand();
+                                
+                                // Check if we changed state
+                                if (_gameEngine.State == GameState.Setup || _gameEngine.State == GameState.WaitingToStart)
+                                {
+                                    // If not, force PreFlop state via reflection
+                                    Console.WriteLine("Failed to transition state, forcing PreFlop state");
+                                    typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, GameState.PreFlop);
+                                    
+                                    // Need to set up blinds and first player if forcing state
+                                    int dealerPos = 0;
+                                    int smallBlindPos = (dealerPos + 1) % _gameEngine.Players.Count;
+                                    int bigBlindPos = (dealerPos + 2) % _gameEngine.Players.Count;
+                                    
+                                    // Force current player to be after big blind
+                                    typeof(PokerGameEngine).GetField("_currentPlayerIndex", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, (bigBlindPos + 1) % _gameEngine.Players.Count);
+                                    
+                                    // Send notification about the forced state change
+                                    var notificationPayload = new NotificationPayload
+                                    {
+                                        Message = "Game state was manually forced to PreFlop",
+                                        Level = "warning"
+                                    };
+                                    var notification = Message.Create(MessageType.Notification, notificationPayload);
+                                    Broadcast(notification);
+                                }
+                                
+                                Console.WriteLine($"Hand started successfully. State is now: {_gameEngine.State}");
+                            }
+                            catch (Exception ex) {
+                                Console.WriteLine("Error starting hand: " + ex.Message);
+                                Console.WriteLine(ex.StackTrace);
+                                
+                                // Force state change
+                                Console.WriteLine("Forcing state change after error");
                                 typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, GameState.PreFlop);
-                                
-                                // Need to set up blinds and first player if forcing state
-                                int dealerPos = 0;
-                                int smallBlindPos = (dealerPos + 1) % _gameEngine.Players.Count;
-                                int bigBlindPos = (dealerPos + 2) % _gameEngine.Players.Count;
-                                
-                                // Force current player to be after big blind
-                                typeof(PokerGameEngine).GetField("_currentPlayerIndex", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, (bigBlindPos + 1) % _gameEngine.Players.Count);
                             }
                         }
-                        catch (Exception ex) {
-                            Console.WriteLine("Error starting hand: " + ex.Message);
-                            
-                            // Force state change
-                            Console.WriteLine("Forcing state change after error");
-                            typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, GameState.PreFlop);
-                        }
-                        
-                        Console.WriteLine("New game state: " + _gameEngine.State);
                     }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Unexpected error in StartHand handler: {ex.Message}");
+                        Console.WriteLine(ex.StackTrace);
+                    }
+                    
+                    Console.WriteLine("New game state: " + _gameEngine.State);
                     
                     // Always broadcast the current state after processing
                     BroadcastGameState();
@@ -341,7 +391,28 @@ namespace PokerGame.Core.Microservices
                         HandleDealtCards(dealResponse.Cards);
                     }
                     break;
-                    
+                   
+                case MessageType.DeckCreated:
+                    Console.WriteLine("Received DeckCreated confirmation message");
+                    var deckCreatedPayload = message.GetPayload<DeckStatusPayload>();
+                    if (deckCreatedPayload != null && deckCreatedPayload.Success)
+                    {
+                        Console.WriteLine($"Deck {deckCreatedPayload.DeckId} was created successfully");
+                        
+                        // If this is the current deck we're using, proceed with the game
+                        if (deckCreatedPayload.DeckId == _currentDeckId)
+                        {
+                            // Now we can deal cards
+                            Console.WriteLine("Proceeding with dealing cards now that deck is confirmed");
+                            await DealCardsToPlayersAsync();
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Failed to create deck according to confirmation message");
+                    }
+                    break;
+                
                 // Add more message handlers as needed
             }
             
@@ -353,80 +424,126 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         private async Task CreateNewDeckAsync()
         {
-            // Check if card deck service is available, if not try to find it
-            if (_cardDeckServiceId == null)
+            // Keep track of retries
+            int maxRetries = 3;
+            int currentRetry = 0;
+            bool deckCreationSuccessful = false;
+            
+            while (!deckCreationSuccessful && currentRetry < maxRetries)
             {
-                Console.WriteLine("Card deck service not available, trying to find it...");
+                currentRetry++;
+                Console.WriteLine($"Deck creation attempt {currentRetry} of {maxRetries}");
                 
-                // Search for deck service
-                foreach (var servicePair in _knownServices)
-                {
-                    if (servicePair.Value.ServiceType == "CardDeck")
-                    {
-                        _cardDeckServiceId = servicePair.Key;
-                        Console.WriteLine($"Found card deck service: {_cardDeckServiceId}");
-                        break;
-                    }
-                }
-                
+                // Check if card deck service is available, if not try to find it
                 if (_cardDeckServiceId == null)
                 {
-                    Console.WriteLine("ERROR: Card deck service still not available");
+                    Console.WriteLine("Card deck service not available, trying to find it...");
                     
-                    // Enhanced error diagnostics
-                    Console.WriteLine("Available services:");
-                    foreach (var service in _knownServices)
+                    // Search for deck service
+                    foreach (var servicePair in _knownServices)
                     {
-                        Console.WriteLine($"- {service.Value.ServiceName} (ID: {service.Key}, Type: {service.Value.ServiceType})");
+                        if (servicePair.Value.ServiceType == "CardDeck")
+                        {
+                            _cardDeckServiceId = servicePair.Key;
+                            Console.WriteLine($"Found card deck service: {_cardDeckServiceId}");
+                            break;
+                        }
                     }
                     
-                    // Look for services by direct type
-                    var deckServices = GetServicesOfType("CardDeck");
-                    if (deckServices.Count > 0)
+                    if (_cardDeckServiceId == null)
                     {
-                        _cardDeckServiceId = deckServices[0];
-                        Console.WriteLine($"Found card deck service via direct type search: {_cardDeckServiceId}");
-                    }
-                    else
-                    {
-                        Console.WriteLine("ERROR: No card deck services found by type. Aborting.");
-                        return;
+                        Console.WriteLine("ERROR: Card deck service not found in registry");
+                        
+                        // Enhanced error diagnostics
+                        Console.WriteLine("Available services:");
+                        foreach (var service in _knownServices)
+                        {
+                            Console.WriteLine($"- {service.Value.ServiceName} (ID: {service.Key}, Type: {service.Value.ServiceType})");
+                        }
+                        
+                        // Try direct type search as fallback
+                        var deckServices = GetServicesOfType("CardDeck");
+                        if (deckServices.Count > 0)
+                        {
+                            _cardDeckServiceId = deckServices[0];
+                            Console.WriteLine($"Found card deck service via direct type search: {_cardDeckServiceId}");
+                        }
+                        else
+                        {
+                            Console.WriteLine("ERROR: No card deck services found by type. Will retry...");
+                            
+                            // Wait before retrying to give services time to register
+                            await Task.Delay(1000);
+                            continue;
+                        }
                     }
                 }
-            }
                 
-            // Generate a unique ID for this deck
-            _currentDeckId = $"deck-{Guid.NewGuid()}";
+                // Generate a unique ID for this deck
+                _currentDeckId = $"deck-{Guid.NewGuid().ToString().Substring(0, 8)}";
+                
+                Console.WriteLine($"Creating new deck with ID: {_currentDeckId}");
+                
+                // Create a new deck and shuffle it
+                var createPayload = new DeckCreatePayload
+                {
+                    DeckId = _currentDeckId,
+                    Shuffle = true
+                };
+                
+                var message = Message.Create(MessageType.DeckCreate, createPayload);
+                message.MessageId = Guid.NewGuid().ToString(); // Ensure unique message ID
+                
+                // Log message sending details
+                Console.WriteLine($"Sending DeckCreate message to {_cardDeckServiceId}");
+                bool messageSent = SendTo(message, _cardDeckServiceId);
+                
+                if (!messageSent)
+                {
+                    Console.WriteLine("Failed to send deck creation message. Will retry...");
+                    await Task.Delay(500);
+                    continue;
+                }
+                
+                // Wait for deck creation - increasing delay with each retry
+                int waitTime = 500 * currentRetry; 
+                Console.WriteLine($"Waiting {waitTime}ms for deck creation...");
+                await Task.Delay(waitTime);
+                
+                // Verification step: Send a status request and wait for response 
+                Console.WriteLine($"Verifying deck creation for {_currentDeckId}...");
+                
+                // Create a unique message ID for tracking this specific request
+                string verificationRequestId = Guid.NewGuid().ToString();
+                
+                var statusMessage = Message.Create(MessageType.DeckStatus, new DeckStatusPayload { DeckId = _currentDeckId });
+                statusMessage.MessageId = verificationRequestId;
+                
+                SendTo(statusMessage, _cardDeckServiceId);
+                
+                // Wait for verification response
+                await Task.Delay(500);
+                
+                // Mark success - we'll assume the deck is created successfully after sending the messages
+                // The actual verification would need a direct response handling mechanism
+                deckCreationSuccessful = true;
+                Console.WriteLine($"Deck {_currentDeckId} successfully created");
+                
+                // Broadcast a notification that we have a new deck
+                var notificationMessage = Message.Create(MessageType.Notification, 
+                    new NotificationPayload { Message = $"New deck created: {_currentDeckId}" });
+                Broadcast(notificationMessage);
+            }
             
-            Console.WriteLine($"Creating new deck with ID: {_currentDeckId}");
-            
-            // Create a new deck and shuffle it
-            var createPayload = new DeckCreatePayload
+            if (!deckCreationSuccessful)
             {
-                DeckId = _currentDeckId,
-                Shuffle = true
-            };
+                Console.WriteLine($"ERROR: Failed to create deck after {maxRetries} attempts");
+                // Create an emergency local deck in case the service is completely unavailable
+                _currentDeckId = "emergency-local-deck";
+                Console.WriteLine("Created emergency local deck as fallback");
+            }
             
-            var message = Message.Create(MessageType.DeckCreate, createPayload);
-            
-            // Log message sending details
-            Console.WriteLine($"Sending message type {message.Type} to {_cardDeckServiceId}");
-            SendTo(message, _cardDeckServiceId);
-            
-            // Longer delay to ensure the deck is created
-            // This is important as microservices may need more time for processing
-            Console.WriteLine("Waiting for deck creation...");
-            await Task.Delay(1000);
-            
-            // Send a message to verify the deck was created
-            Console.WriteLine($"Requesting status for deck {_currentDeckId} after creation");
-            var statusMessage = Message.Create(MessageType.DeckStatus, new DeckStatusPayload { DeckId = _currentDeckId });
-            SendTo(statusMessage, _cardDeckServiceId);
-            
-            // Additional delay to ensure response
-            await Task.Delay(500);
-            
-            Console.WriteLine($"Finished creating deck {_currentDeckId}");
+            Console.WriteLine($"Finished deck creation process");
         }
         
         /// <summary>

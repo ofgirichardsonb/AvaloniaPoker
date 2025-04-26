@@ -155,24 +155,77 @@ namespace PokerGame.Core.Microservices
         {
             try 
             {
-                // Close sockets properly before disposing
-                _publisherSocket?.Close();
-                _subscriberSocket?.Close();
+                // Cancel all operations first
+                if (_cancellationTokenSource != null && !_cancellationTokenSource.IsCancellationRequested)
+                {
+                    _cancellationTokenSource.Cancel();
+                }
                 
-                // Give sockets time to close
+                // Wait for tasks to complete before disposing sockets
+                try
+                {
+                    var tasks = new List<Task>();
+                    if (_processingTask != null && !_processingTask.IsCompleted) tasks.Add(_processingTask);
+                    if (_heartbeatTask != null && !_heartbeatTask.IsCompleted) tasks.Add(_heartbeatTask);
+                    
+                    if (tasks.Count > 0)
+                    {
+                        Console.WriteLine($"Waiting for {tasks.Count} tasks to complete...");
+                        Task.WaitAll(tasks.ToArray(), 1000); // Shorter timeout to avoid hanging
+                    }
+                }
+                catch (AggregateException)
+                {
+                    // Tasks may throw exceptions when canceled - ignore
+                    Console.WriteLine("Some tasks threw exceptions during cancellation (expected)");
+                }
+
+                // Close sockets properly before disposing
+                if (_publisherSocket != null)
+                {
+                    Console.WriteLine("Closing publisher socket...");
+                    _publisherSocket.Close();
+                }
+                
+                if (_subscriberSocket != null)
+                {
+                    Console.WriteLine("Closing subscriber socket...");
+                    _subscriberSocket.Close();
+                }
+                
+                // Short pause to let sockets close cleanly
                 Thread.Sleep(100);
                 
                 // Now dispose resources
                 _publisherSocket?.Dispose();
                 _subscriberSocket?.Dispose();
-                _cancellationTokenSource?.Dispose();
                 
-                // Force a cleanup to release ports
+                // Reset to null after disposal to prevent further use
+                _publisherSocket = null;
+                _subscriberSocket = null;
+                
+                _cancellationTokenSource?.Dispose();
+                _cancellationTokenSource = null;
+                
+                // Clear collections
+                _messageQueue.Clear();
+                _serviceRegistry.Clear();
+                
+                // Finally, force a NetMQ cleanup
+                Console.WriteLine("Performing NetMQ cleanup...");
                 NetMQConfig.Cleanup(false);
+                
+                Console.WriteLine("Microservice disposed successfully");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error during microservice disposal: {ex.Message}");
+                Console.WriteLine(ex.StackTrace);
+                
+                // Last resort cleanup
+                try {
+                    NetMQConfig.Cleanup(false);
+                } catch {}
             }
         }
         
@@ -300,13 +353,31 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         private async Task ProcessMessagesAsync()
         {
+            Console.WriteLine("Message processing started");
+            
             CancellationToken token = _cancellationTokenSource?.Token ?? CancellationToken.None;
-            while (!token.IsCancellationRequested)
+            bool isShuttingDown = false;
+            
+            while (!token.IsCancellationRequested && !isShuttingDown)
             {
                 try
                 {
-                    // Check for incoming messages
-                    if (_subscriberSocket != null && _subscriberSocket.TryReceiveFrameString(TimeSpan.FromMilliseconds(100), out string? messageJson) && messageJson != null)
+                    // Check for cancellation at the beginning of each loop
+                    if (token.IsCancellationRequested)
+                    {
+                        Console.WriteLine("Message processing cancellation detected");
+                        break;
+                    }
+                    
+                    // Make sure we still have valid sockets before trying to use them
+                    if (_subscriberSocket == null || _publisherSocket == null)
+                    {
+                        Console.WriteLine("Socket(s) no longer available, terminating message loop");
+                        break;
+                    }
+                    
+                    // Check for incoming messages with a very short timeout to avoid blocking
+                    if (_subscriberSocket.TryReceiveFrameString(TimeSpan.FromMilliseconds(50), out string? messageJson) && !string.IsNullOrEmpty(messageJson))
                     {
                         try 
                         {
@@ -322,48 +393,111 @@ namespace PokerGame.Core.Microservices
                                 _messageQueue.Enqueue(message);
                             }
                         }
+                        catch (ObjectDisposedException)
+                        {
+                            // Socket was disposed during receive - break out of the loop
+                            Console.WriteLine("Socket was disposed during message processing");
+                            isShuttingDown = true;
+                            break;
+                        }
                         catch (Exception ex)
                         {
+                            // Continue after message parsing errors
                             Console.WriteLine($"Error processing message: {ex.Message}");
                         }
                     }
                     
-                    // Process any queued messages
-                    while (_messageQueue.TryDequeue(out Message? message) && message != null)
+                    // Process a limited number of queued messages per iteration
+                    int processedCount = 0;
+                    const int maxMessagesPerIteration = 10;
+                    
+                    while (!token.IsCancellationRequested && 
+                           processedCount < maxMessagesPerIteration && 
+                           _messageQueue.TryDequeue(out Message? message) && 
+                           message != null)
                     {
-                        switch (message.Type)
+                        try
                         {
-                            case MessageType.ServiceRegistration:
-                                ProcessServiceRegistration(message);
-                                break;
-                                
-                            case MessageType.Heartbeat:
-                                // Process heartbeat if needed
-                                break;
-                                
-                            default:
-                                // Let the derived class handle other message types
-                                await HandleMessageAsync(message);
-                                break;
+                            processedCount++;
+                            
+                            switch (message.Type)
+                            {
+                                case MessageType.ServiceRegistration:
+                                    ProcessServiceRegistration(message);
+                                    break;
+                                    
+                                case MessageType.Heartbeat:
+                                    // Process heartbeat if needed
+                                    break;
+                                    
+                                default:
+                                    // Let the derived class handle other message types
+                                    await HandleMessageAsync(message);
+                                    break;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log the error but continue processing other messages
+                            Console.WriteLine($"Error handling message type {message.Type}: {ex.Message}");
                         }
                     }
                     
-                    // Allow the service to do its own processing
-                    await DoWorkAsync();
+                    // Allow the service to do its own processing if there's still time
+                    if (!token.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            await DoWorkAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log service-specific errors
+                            Console.WriteLine($"Error in service-specific work: {ex.Message}");
+                        }
+                    }
                     
-                    // Small delay to prevent CPU overuse
-                    await Task.Delay(10, _cancellationTokenSource?.Token ?? CancellationToken.None);
+                    // Very small delay to prevent CPU overuse but still be responsive
+                    try
+                    {
+                        await Task.Delay(5, token);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        // Normal cancellation
+                        Console.WriteLine("Message processing loop canceled via Task.Delay");
+                        break;
+                    }
                 }
-                catch (TaskCanceledException)
+                catch (OperationCanceledException)
                 {
                     // Normal cancellation
+                    Console.WriteLine("Message processing loop canceled via OperationCanceledException");
+                    break;
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Socket was disposed - break out of the loop
+                    Console.WriteLine("Socket was disposed during processing");
                     break;
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error processing messages: {ex.Message}");
+                    if (token.IsCancellationRequested)
+                    {
+                        Console.WriteLine("Caught exception during shutdown, terminating loop");
+                        break;
+                    }
+                    
+                    // Log other errors - try to continue unless this is a fatal or repeating error
+                    Console.WriteLine($"Error in message processing loop: {ex.Message}");
+                    
+                    // Brief pause to avoid tight error loop
+                    await Task.Delay(100);
                 }
             }
+            
+            Console.WriteLine("Message processing loop terminated");
         }
         
         /// <summary>

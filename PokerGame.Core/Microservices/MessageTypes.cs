@@ -15,6 +15,7 @@ namespace PokerGame.Core.Microservices
         Heartbeat,
         ServiceRegistration,
         ServiceDiscovery,
+        Notification,  // General notification/info message
         
         // Game engine messages
         GameStart,
@@ -37,6 +38,7 @@ namespace PokerGame.Core.Microservices
         
         // Card deck messages
         DeckCreate,
+        DeckCreated,   // Confirmation of deck creation
         DeckShuffle,
         DeckDeal,
         DeckDealResponse,
@@ -369,6 +371,27 @@ namespace PokerGame.Core.Microservices
         /// Gets or sets the response message
         /// </summary>
         public string Message { get; set; } = string.Empty;
+    }
+    
+    /// <summary>
+    /// Payload for notification messages
+    /// </summary>
+    public class NotificationPayload
+    {
+        /// <summary>
+        /// Gets or sets the notification message
+        /// </summary>
+        public string Message { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the notification level (info, warning, error)
+        /// </summary>
+        public string Level { get; set; } = "info";
+        
+        /// <summary>
+        /// Gets or sets additional context data for the notification
+        /// </summary>
+        public string Context { get; set; } = string.Empty;
     }
     
     // Note: The DeckCreatePayload, DeckIdPayload, DeckDealPayload, DeckDealResponsePayload, 

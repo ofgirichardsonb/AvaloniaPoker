@@ -41,11 +41,49 @@ namespace PokerGame.Core.Microservices
                 switch (message.Type)
                 {
                     case MessageType.DeckCreate:
+                        Console.WriteLine($"CardDeckService: Received DeckCreate message from {message.SenderId}");
                         var createPayload = message.GetPayload<DeckCreatePayload>();
                         if (createPayload != null)
                         {
-                            CreateDeck(createPayload.DeckId, createPayload.Shuffle);
-                            BroadcastDeckStatus(createPayload.DeckId);
+                            try
+                            {
+                                Console.WriteLine($"CardDeckService: Creating deck with ID {createPayload.DeckId}");
+                                CreateDeck(createPayload.DeckId, createPayload.Shuffle);
+                                Console.WriteLine($"CardDeckService: Deck {createPayload.DeckId} created successfully");
+                                
+                                // Send confirmation directly back to the sender
+                                var confirmationPayload = new DeckStatusPayload 
+                                { 
+                                    DeckId = createPayload.DeckId,
+                                    Success = true,
+                                    Message = "Deck created successfully"
+                                };
+                                
+                                var confirmationMessage = Message.Create(MessageType.DeckCreated, confirmationPayload);
+                                SendTo(confirmationMessage, message.SenderId);
+                                
+                                // Also broadcast the deck status
+                                BroadcastDeckStatus(createPayload.DeckId);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"CardDeckService: Error creating deck: {ex.Message}");
+                                
+                                // Send error message back to sender
+                                var errorPayload = new DeckStatusPayload 
+                                { 
+                                    DeckId = createPayload.DeckId,
+                                    Success = false,
+                                    Message = $"Failed to create deck: {ex.Message}"
+                                };
+                                
+                                var errorMessage = Message.Create(MessageType.Error, errorPayload);
+                                SendTo(errorMessage, message.SenderId);
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("CardDeckService: Received null DeckCreatePayload");
                         }
                         break;
                         
@@ -355,6 +393,16 @@ namespace PokerGame.Core.Microservices
         /// Gets or sets the number of cards in the burn pile
         /// </summary>
         public int BurnedCardsCount { get; set; }
+        
+        /// <summary>
+        /// Gets or sets whether the operation was successful
+        /// </summary>
+        public bool Success { get; set; } = true;
+        
+        /// <summary>
+        /// Gets or sets an optional message about the status
+        /// </summary>
+        public string Message { get; set; } = string.Empty;
     }
     
     /// <summary>
