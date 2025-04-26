@@ -159,6 +159,16 @@ namespace PokerGame.Core.Messaging
                 message.MessageId = Guid.NewGuid().ToString();
             }
             
+            // Log before sending
+            Console.WriteLine($"[{_brokerId}] Sending message {message.Type} to {message.TargetServiceId ?? "broadcast"} with acknowledgment (timeout: {timeoutMs}ms)");
+            
+            // Check if message is already in pending messages (cleanup any old entries)
+            if (_pendingMessages.TryGetValue(message.MessageId, out _))
+            {
+                Console.WriteLine($"[{_brokerId}] WARNING: Message {message.MessageId} already exists in pending messages. Removing old entry.");
+                _pendingMessages.TryRemove(message.MessageId, out _);
+            }
+            
             // Add tracking for this message
             var pendingMessage = new PendingMessage
             {
@@ -299,16 +309,30 @@ namespace PokerGame.Core.Messaging
                 if (string.IsNullOrEmpty(frame)) return;
                 
                 var message = MessageEnvelope.Deserialize(frame);
-                if (message == null) return;
+                if (message == null) 
+                {
+                    Console.WriteLine("WARNING: Received null message after deserialization");
+                    return;
+                }
                 
                 // If this is an acknowledgment, process it
                 if (message.Type == "Ack")
                 {
+                    Console.WriteLine($"Received ACK message with ID {message.MessageId}, for original message: {message.Payload as string}");
                     ProcessAcknowledgment(message);
                     return;
                 }
                 
-                // Record that we've seen this message (to avoid duplicates)
+                // Check if we've already seen this message (to avoid duplicates)
+                if (_receivedAcks.ContainsKey(message.MessageId))
+                {
+                    // We've already seen this message, just acknowledge it again
+                    Console.WriteLine($"Received duplicate message {message.MessageId}, sending acknowledgment");
+                    SendAcknowledgment(message);
+                    return;
+                }
+                
+                // Record that we've seen this message
                 _receivedAcks.TryAdd(message.MessageId, DateTime.UtcNow);
                 
                 // Send acknowledgment
@@ -317,6 +341,7 @@ namespace PokerGame.Core.Messaging
                 // If the message is intended for someone else, ignore it
                 if (!string.IsNullOrEmpty(message.TargetServiceId) && message.TargetServiceId != _brokerId)
                 {
+                    Console.WriteLine($"Message {message.MessageId} is intended for {message.TargetServiceId}, ignoring");
                     return;
                 }
                 
@@ -326,6 +351,12 @@ namespace PokerGame.Core.Messaging
             catch (Exception ex)
             {
                 Console.WriteLine($"Error processing received message: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+                }
             }
         }
         
@@ -385,14 +416,31 @@ namespace PokerGame.Core.Messaging
         {
             // Extract the original message ID from the payload
             var originalMessageId = ackMessage.Payload as string;
-            if (string.IsNullOrEmpty(originalMessageId)) return;
+            if (string.IsNullOrEmpty(originalMessageId)) 
+            {
+                Console.WriteLine($"Warning: Received acknowledgment with empty or null originalMessageId");
+                return;
+            }
             
             // Check if we're waiting for this acknowledgment
             if (_pendingMessages.TryGetValue(originalMessageId, out var pendingMessage))
             {
                 // Complete the waiting task
                 pendingMessage.CompletionSource.TrySetResult(true);
-                Console.WriteLine($"Received acknowledgment for message {originalMessageId}");
+                
+                // Remove the message from the pending collection after it's been acknowledged
+                if (_pendingMessages.TryRemove(originalMessageId, out _))
+                {
+                    Console.WriteLine($"Received acknowledgment for message {originalMessageId}");
+                }
+                else
+                {
+                    Console.WriteLine($"Warning: Failed to remove acknowledged message {originalMessageId} from pending collection");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"Received acknowledgment for unknown message {originalMessageId}");
             }
         }
         

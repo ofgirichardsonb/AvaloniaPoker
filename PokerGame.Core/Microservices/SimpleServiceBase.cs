@@ -403,10 +403,17 @@ namespace PokerGame.Core.Microservices
         /// <param name="message">The acknowledgment message</param>
         protected virtual void HandleAcknowledgment(SimpleMessage message)
         {
-            if (_verbose)
+            if (string.IsNullOrEmpty(message.InResponseTo))
             {
-                _logger.Log($"Received acknowledgment for message {message.InResponseTo}");
+                _logger.LogWarning($"Received acknowledgment with empty InResponseTo field, messageId: {message.MessageId}");
+                return;
             }
+            
+            // Always acknowledge the acknowledgment message itself to prevent retries
+            var ackAck = SimpleMessage.CreateAcknowledgment(message);
+            PublishMessage(ackAck);
+            
+            _logger.Log($"Received acknowledgment for message {message.InResponseTo} and sent ack response");
         }
     }
     
