@@ -12,6 +12,7 @@ namespace MessageBroker
         private static BrokerManager? _instance;
         private static readonly object _lockObject = new object();
         private readonly BrokerLogger _logger = BrokerLogger.Instance;
+        private readonly TelemetryHelper _telemetry = TelemetryHelper.Instance;
         
         private CentralMessageBroker? _broker;
         private readonly string _brokerId;
@@ -19,6 +20,7 @@ namespace MessageBroker
         private int _backendPort;
         private int _monitorPort;
         private bool _isStarted;
+        private bool _telemetryEnabled = false;
         
         /// <summary>
         /// Gets the singleton instance of the BrokerManager
@@ -80,9 +82,56 @@ namespace MessageBroker
         }
         
         /// <summary>
+        /// Initializes telemetry with the provided instrumentation key
+        /// </summary>
+        /// <param name="instrumentationKey">The Application Insights instrumentation key</param>
+        public bool InitializeTelemetry(string? instrumentationKey = null)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(instrumentationKey))
+                {
+                    // Try to get from environment variable
+                    instrumentationKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
+                }
+                
+                if (!string.IsNullOrEmpty(instrumentationKey))
+                {
+                    _logger.Info("BrokerManager", "Initializing telemetry...");
+                    if (_telemetry.Initialize(instrumentationKey))
+                    {
+                        _telemetryEnabled = true;
+                        _logger.Info("BrokerManager", "Telemetry initialized successfully");
+                        
+                        // Track telemetry initialization
+                        _telemetry.TrackBrokerEvent(_brokerId, "TelemetryInitialized");
+                        return true;
+                    }
+                    else
+                    {
+                        _logger.Error("BrokerManager", "Failed to initialize telemetry");
+                    }
+                }
+                else
+                {
+                    _logger.Warning("BrokerManager", "Application Insights instrumentation key not provided, telemetry disabled");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("BrokerManager", "Error initializing telemetry", ex);
+            }
+            
+            _telemetryEnabled = false;
+            return false;
+        }
+        
+        /// <summary>
         /// Starts the broker in the current process
         /// </summary>
-        public void Start()
+        /// <param name="enableTelemetry">Whether to enable telemetry</param>
+        /// <param name="instrumentationKey">The Application Insights instrumentation key (or null to use environment variable)</param>
+        public void Start(bool enableTelemetry = false, string? instrumentationKey = null)
         {
             lock (_lockObject)
             {
@@ -97,6 +146,12 @@ namespace MessageBroker
                     _logger.Info("BrokerManager", $"Starting broker {_brokerId} in current process");
                     _logger.Info("BrokerManager", $"Frontend port: {_frontendPort}, Backend port: {_backendPort}, Monitor port: {_monitorPort}");
                     
+                    // Initialize telemetry if enabled
+                    if (enableTelemetry)
+                    {
+                        InitializeTelemetry(instrumentationKey);
+                    }
+                    
                     // Get the current thread
                     var currentThread = Thread.CurrentThread;
                     
@@ -105,13 +160,41 @@ namespace MessageBroker
                     
                     _isStarted = true;
                     _logger.Info("BrokerManager", "Broker started successfully");
+                    
+                    // Track broker start in telemetry
+                    if (_telemetryEnabled)
+                    {
+                        var properties = new Dictionary<string, string>
+                        {
+                            { "FrontendPort", _frontendPort.ToString() },
+                            { "BackendPort", _backendPort.ToString() },
+                            { "MonitorPort", _monitorPort.ToString() }
+                        };
+                        
+                        _telemetry.TrackBrokerEvent(_brokerId, "BrokerStarted", properties);
+                    }
                 }
                 catch (Exception ex)
                 {
                     _logger.Critical("BrokerManager", "Error starting broker", ex);
+                    
+                    // Track start failure in telemetry
+                    if (_telemetryEnabled)
+                    {
+                        _telemetry.TrackException(ex, "BrokerManager");
+                    }
+                    
                     throw;
                 }
             }
+        }
+        
+        /// <summary>
+        /// Starts the broker in the current process
+        /// </summary>
+        public void Start()
+        {
+            Start(false);
         }
         
         /// <summary>
@@ -143,14 +226,41 @@ namespace MessageBroker
                 {
                     _logger.Info("BrokerManager", "Stopping broker");
                     
+                    // Track broker stop in telemetry
+                    if (_telemetryEnabled)
+                    {
+                        var serviceCount = _broker?.ServiceCount ?? 0;
+                        var properties = new Dictionary<string, string>
+                        {
+                            { "ServiceCount", serviceCount.ToString() }
+                        };
+                        
+                        _telemetry.TrackBrokerEvent(_brokerId, "BrokerStopping", properties);
+                    }
+                    
                     _broker?.Stop();
                     
                     _isStarted = false;
                     _logger.Info("BrokerManager", "Broker stopped successfully");
+                    
+                    // Track broker stopped in telemetry
+                    if (_telemetryEnabled)
+                    {
+                        _telemetry.TrackBrokerEvent(_brokerId, "BrokerStopped");
+                        _telemetry.Flush();
+                    }
                 }
                 catch (Exception ex)
                 {
                     _logger.Error("BrokerManager", "Error stopping broker", ex);
+                    
+                    // Track stop failure in telemetry
+                    if (_telemetryEnabled)
+                    {
+                        _telemetry.TrackException(ex, "BrokerManager");
+                        _telemetry.Flush();
+                    }
+                    
                     throw;
                 }
             }
@@ -178,7 +288,27 @@ namespace MessageBroker
                 _logger.Warning("BrokerManager", "Creating client for non-started broker");
             }
             
-            return new BrokerClient(serviceName, serviceType, capabilities, "localhost", _frontendPort);
+            var client = new BrokerClient(serviceName, serviceType, capabilities, "localhost", _frontendPort);
+            
+            // Track client creation in telemetry
+            if (_telemetryEnabled)
+            {
+                var props = new Dictionary<string, string>
+                {
+                    { "ClientName", serviceName },
+                    { "ClientType", serviceType },
+                    { "ClientId", client.ClientId }
+                };
+                
+                if (capabilities != null && capabilities.Count > 0)
+                {
+                    props["Capabilities"] = string.Join(",", capabilities);
+                }
+                
+                _telemetry.TrackBrokerEvent(_brokerId, "ClientCreated", props);
+            }
+            
+            return client;
         }
         
         /// <summary>
@@ -206,13 +336,34 @@ namespace MessageBroker
         {
             lock (_lockObject)
             {
-                if (_isStarted)
+                try
                 {
-                    Stop();
+                    // Track disposal in telemetry
+                    if (_telemetryEnabled)
+                    {
+                        _telemetry.TrackBrokerEvent(_brokerId, "BrokerManagerDisposing");
+                    }
+                    
+                    if (_isStarted)
+                    {
+                        Stop();
+                    }
+                    
+                    _broker?.Dispose();
+                    _broker = null;
+                    
+                    // Final telemetry event and flush
+                    if (_telemetryEnabled)
+                    {
+                        _telemetry.TrackBrokerEvent(_brokerId, "BrokerManagerDisposed");
+                        _telemetry.Flush();
+                        _telemetry.Dispose();
+                    }
                 }
-                
-                _broker?.Dispose();
-                _broker = null;
+                catch (Exception ex)
+                {
+                    _logger.Error("BrokerManager", "Error disposing broker manager", ex);
+                }
             }
         }
     }

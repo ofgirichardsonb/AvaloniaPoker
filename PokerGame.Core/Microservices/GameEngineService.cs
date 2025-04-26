@@ -143,7 +143,8 @@ namespace PokerGame.Core.Microservices
         /// Handles messages received from other microservices
         /// </summary>
         /// <param name="message">The message to handle</param>
-        public override async Task HandleMessageAsync(Message message)
+        // This method is no longer needed since we implemented the interface method that takes an object
+protected virtual async Task HandleMessageAsync(Message message)
 {
     await HandleMessageAsync((object)message);
 }
@@ -278,13 +279,29 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
     return true;
 }
 
-public async Task HandleMessageAsync(object messageObj)
+/// <summary>
+        /// Handles messages received from other services
+        /// </summary>
+        /// <param name="messageObj">The message to handle</param>
+        public async Task HandleMessageAsync(object messageObj)
         {
-            if (!(messageObj is Message message))
+            if (messageObj == null)
             {
-                Console.WriteLine($"Error: HandleMessageAsync called with invalid message type: {messageObj?.GetType().Name ?? "null"}");
-                return;
+                throw new ArgumentNullException(nameof(messageObj));
             }
+            
+            if (messageObj is Message message)
+            {
+                await HandleMessageInternalAsync(message);
+            }
+            else
+            {
+                Console.WriteLine($"Error: HandleMessageAsync called with invalid message type: {messageObj.GetType().Name}");
+            }
+        }
+        
+        public async Task HandleMessageInternalAsync(Message message)
+        {
             
             switch (message.Type)
             {
@@ -1151,7 +1168,76 @@ public async Task HandleMessageAsync(object messageObj)
         }
         
         /// <summary>
-        /// Broadcasts the current game state to all listeners
+        /// Starts the service
+        /// </summary>
+        public async Task StartAsync()
+        {
+            if (IsRunning)
+            {
+                Console.WriteLine("Game engine service is already running");
+                return;
+            }
+            
+            try
+            {
+                Console.WriteLine("Starting game engine service...");
+                
+                // There's no IsRunningMessageLoop property or StartMessageLoop method 
+                // in the MicroserviceBase class. Use the base Start() method instead.
+                base.Start();
+                
+                // Set service state
+                IsRunning = true;
+                
+                Console.WriteLine("Game engine service started successfully");
+                
+                // No specific initialization tasks to await
+                await Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error starting game engine service: {ex.Message}");
+                IsRunning = false;
+                throw;
+            }
+        }
+        
+        /// <summary>
+        /// Stops the service
+        /// </summary>
+        public async Task StopAsync()
+        {
+            if (!IsRunning)
+            {
+                Console.WriteLine("Game engine service is not running");
+                return;
+            }
+            
+            try
+            {
+                Console.WriteLine("Stopping game engine service...");
+                
+                // There's no IsRunningMessageLoop property or StopMessageLoop method 
+                // in the MicroserviceBase class. Use the base Stop() method instead.
+                base.Stop();
+                
+                // Set service state
+                IsRunning = false;
+                
+                Console.WriteLine("Game engine service stopped successfully");
+                
+                // No specific cleanup tasks to await
+                await Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error stopping game engine service: {ex.Message}");
+                throw;
+            }
+        }
+        
+        /// <summary>
+        /// Broadcasts the current game state to all clients
         /// </summary>
         public void BroadcastGameState()
         {

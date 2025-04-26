@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using NetMQ;
@@ -14,12 +15,14 @@ namespace MessageBroker
     public class BrokerClient : IDisposable
     {
         private readonly BrokerLogger _logger = BrokerLogger.Instance;
+        private readonly TelemetryHelper _telemetry = TelemetryHelper.Instance;
         private readonly string _clientId;
         private readonly string _clientName;
         private readonly string _clientType;
         private readonly List<string> _capabilities;
         private readonly string _brokerAddress;
         private readonly int _brokerPort;
+        private bool _telemetryEnabled = false;
         
         private DealerSocket? _socket;
         private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
@@ -27,6 +30,14 @@ namespace MessageBroker
         
         private readonly ConcurrentDictionary<string, TaskCompletionSource<BrokerMessage>> _pendingRequests = new ConcurrentDictionary<string, TaskCompletionSource<BrokerMessage>>();
         private readonly ConcurrentDictionary<string, ServiceRegistrationPayload> _knownServices = new ConcurrentDictionary<string, ServiceRegistrationPayload>();
+        
+        // Metrics for telemetry
+        private long _messagesSent = 0;
+        private long _messagesReceived = 0;
+        private long _requestsSent = 0;
+        private long _responseReceived = 0;
+        private long _acknowledgmentsSent = 0;
+        private long _acknowledgementsReceived = 0;
         
         // Event for received messages
         public event EventHandler<BrokerMessage>? MessageReceived;
@@ -92,18 +103,90 @@ namespace MessageBroker
         }
         
         /// <summary>
+        /// Initializes telemetry with the provided instrumentation key
+        /// </summary>
+        /// <param name="instrumentationKey">The Application Insights instrumentation key</param>
+        public bool InitializeTelemetry(string? instrumentationKey = null)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(instrumentationKey))
+                {
+                    // Try to get from environment variable
+                    instrumentationKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
+                }
+                
+                if (!string.IsNullOrEmpty(instrumentationKey))
+                {
+                    _logger.Info("BrokerClient", "Initializing telemetry...");
+                    if (_telemetry.Initialize(instrumentationKey))
+                    {
+                        _telemetryEnabled = true;
+                        _logger.Info("BrokerClient", "Telemetry initialized successfully");
+                        
+                        // Track telemetry initialization
+                        var props = new Dictionary<string, string>
+                        {
+                            { "ClientId", _clientId },
+                            { "ClientName", _clientName },
+                            { "ClientType", _clientType }
+                        };
+                        
+                        _telemetry.TrackClientEvent(_clientId, "TelemetryInitialized", props);
+                        return true;
+                    }
+                    else
+                    {
+                        _logger.Error("BrokerClient", "Failed to initialize telemetry");
+                    }
+                }
+                else
+                {
+                    _logger.Warning("BrokerClient", "Application Insights instrumentation key not provided, telemetry disabled");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("BrokerClient", "Error initializing telemetry", ex);
+            }
+            
+            _telemetryEnabled = false;
+            return false;
+        }
+        
+        /// <summary>
         /// Connects to the broker
         /// </summary>
-        public void Connect()
+        /// <param name="enableTelemetry">Whether to enable telemetry</param>
+        /// <param name="instrumentationKey">The Application Insights instrumentation key (or null to use environment variable)</param>
+        public void Connect(bool enableTelemetry = false, string? instrumentationKey = null)
         {
             try
             {
                 _logger.Info("BrokerClient", $"Connecting to broker at {_brokerAddress}:{_brokerPort}");
                 
+                // Initialize telemetry if enabled
+                if (enableTelemetry)
+                {
+                    InitializeTelemetry(instrumentationKey);
+                }
+                
                 // Create and configure socket
                 _socket = new DealerSocket();
                 _socket.Options.Identity = System.Text.Encoding.UTF8.GetBytes(_clientId);
                 _socket.Connect($"tcp://{_brokerAddress}:{_brokerPort}");
+                
+                // Track connection in telemetry
+                if (_telemetryEnabled)
+                {
+                    var props = new Dictionary<string, string>
+                    {
+                        { "BrokerAddress", _brokerAddress },
+                        { "BrokerPort", _brokerPort.ToString() }
+                    };
+                    
+                    _telemetry.TrackClientEvent(_clientId, "ClientConnecting", props);
+                }
                 
                 // Start receiving messages
                 _receiveTask = Task.Run(ReceiveMessagesAsync);
@@ -112,12 +195,33 @@ namespace MessageBroker
                 RegisterWithBroker();
                 
                 _logger.Info("BrokerClient", "Connected to broker successfully");
+                
+                // Track successful connection in telemetry
+                if (_telemetryEnabled)
+                {
+                    _telemetry.TrackClientEvent(_clientId, "ClientConnected");
+                }
             }
             catch (Exception ex)
             {
                 _logger.Error("BrokerClient", "Error connecting to broker", ex);
+                
+                // Track connection failure in telemetry
+                if (_telemetryEnabled)
+                {
+                    _telemetry.TrackException(ex, "BrokerClient");
+                }
+                
                 throw;
             }
+        }
+        
+        /// <summary>
+        /// Connects to the broker
+        /// </summary>
+        public void Connect()
+        {
+            Connect(false);
         }
         
         /// <summary>
@@ -202,14 +306,61 @@ namespace MessageBroker
         /// <param name="message">The message to process</param>
         private void ProcessReceivedMessage(BrokerMessage message)
         {
+            var stopwatch = new Stopwatch();
+            stopwatch.Start();
+            
             try
             {
                 _logger.Debug("BrokerClient", $"Received message: Type={message.Type}, ID={message.MessageId}, From={message.SenderId}, To={message.ReceiverId}");
+                
+                // Track message received in telemetry
+                if (_telemetryEnabled)
+                {
+                    var props = new Dictionary<string, string>
+                    {
+                        { "MessageId", message.MessageId },
+                        { "MessageType", message.Type.ToString() },
+                        { "SenderId", message.SenderId ?? "unknown" }
+                    };
+                    
+                    if (!string.IsNullOrEmpty(message.Topic))
+                    {
+                        props["Topic"] = message.Topic;
+                    }
+                    
+                    _telemetry.TrackClientEvent(_clientId, "MessageReceived", props);
+                    
+                    if (message.Type == BrokerMessageType.Response)
+                    {
+                        Interlocked.Increment(ref _responseReceived);
+                    }
+                    else if (message.Type == BrokerMessageType.Acknowledgment)
+                    {
+                        Interlocked.Increment(ref _acknowledgementsReceived);
+                    }
+                    
+                    Interlocked.Increment(ref _messagesReceived);
+                }
                 
                 // Check if this is a response to a pending request
                 if (!string.IsNullOrEmpty(message.InResponseTo) && _pendingRequests.TryRemove(message.InResponseTo, out var tcs))
                 {
                     _logger.Debug("BrokerClient", $"Completing pending request: {message.InResponseTo}");
+                    
+                    // Track response received in telemetry if it's a response to our request
+                    if (_telemetryEnabled)
+                    {
+                        var props = new Dictionary<string, string>
+                        {
+                            { "MessageId", message.MessageId },
+                            { "RequestId", message.InResponseTo },
+                            { "MessageType", message.Type.ToString() },
+                            { "SenderId", message.SenderId ?? "unknown" }
+                        };
+                        
+                        _telemetry.TrackClientEvent(_clientId, "ResponseReceived", props);
+                    }
+                    
                     tcs.SetResult(message);
                     return;
                 }
@@ -226,6 +377,41 @@ namespace MessageBroker
             catch (Exception ex)
             {
                 _logger.Error("BrokerClient", $"Error processing message: {message.MessageId}", ex);
+                
+                // Track processing error in telemetry
+                if (_telemetryEnabled)
+                {
+                    var props = new Dictionary<string, string>
+                    {
+                        { "MessageId", message.MessageId },
+                        { "MessageType", message.Type.ToString() },
+                        { "SenderId", message.SenderId ?? "unknown" },
+                        { "Duration", stopwatch.ElapsedMilliseconds.ToString() },
+                        { "ErrorMessage", ex.Message }
+                    };
+                    
+                    _telemetry.TrackClientEvent(_clientId, "MessageProcessingError", props);
+                    _telemetry.TrackException(ex, "BrokerClient");
+                }
+            }
+            finally
+            {
+                stopwatch.Stop();
+                
+                // Track processing time in telemetry
+                if (_telemetryEnabled && stopwatch.ElapsedMilliseconds > 100)
+                {
+                    // Only track processing time for messages that took significant time to process
+                    var props = new Dictionary<string, string>
+                    {
+                        { "MessageId", message.MessageId },
+                        { "MessageType", message.Type.ToString() },
+                        { "SenderId", message.SenderId ?? "unknown" },
+                        { "Duration", stopwatch.ElapsedMilliseconds.ToString() }
+                    };
+                    
+                    _telemetry.TrackClientEvent(_clientId, "MessageProcessingTime", props);
+                }
             }
         }
         
@@ -272,6 +458,9 @@ namespace MessageBroker
         /// <returns>A task that completes when the message is sent</returns>
         public async Task SendMessageAsync(BrokerMessage message)
         {
+            var stopwatch = new Stopwatch();
+            stopwatch.Start();
+            
             try
             {
                 if (_socket == null || _socket.IsDisposed)
@@ -289,15 +478,75 @@ namespace MessageBroker
                 
                 _logger.Debug("BrokerClient", $"Sending message: Type={message.Type}, ID={message.MessageId}, To={message.ReceiverId}");
                 
+                // Track message send in telemetry
+                if (_telemetryEnabled)
+                {
+                    var props = new Dictionary<string, string>
+                    {
+                        { "MessageId", message.MessageId },
+                        { "MessageType", message.Type.ToString() },
+                        { "ReceiverId", message.ReceiverId ?? "broadcast" }
+                    };
+                    
+                    if (!string.IsNullOrEmpty(message.Topic))
+                    {
+                        props["Topic"] = message.Topic;
+                    }
+                    
+                    _telemetry.TrackClientEvent(_clientId, "MessageSending", props);
+                    
+                    if (message.Type == BrokerMessageType.Request)
+                    {
+                        Interlocked.Increment(ref _requestsSent);
+                    }
+                    
+                    Interlocked.Increment(ref _messagesSent);
+                }
+                
                 // Send the message
                 _socket.SendFrame(messageJson);
+                
+                // Track successful message send in telemetry
+                if (_telemetryEnabled)
+                {
+                    var props = new Dictionary<string, string>
+                    {
+                        { "MessageId", message.MessageId },
+                        { "MessageType", message.Type.ToString() },
+                        { "ReceiverId", message.ReceiverId ?? "broadcast" },
+                        { "Duration", stopwatch.ElapsedMilliseconds.ToString() }
+                    };
+                    
+                    _telemetry.TrackClientEvent(_clientId, "MessageSent", props);
+                }
                 
                 await Task.CompletedTask;
             }
             catch (Exception ex)
             {
                 _logger.Error("BrokerClient", $"Error sending message: {message.MessageId}", ex);
+                
+                // Track send failure in telemetry
+                if (_telemetryEnabled)
+                {
+                    var props = new Dictionary<string, string>
+                    {
+                        { "MessageId", message.MessageId },
+                        { "MessageType", message.Type.ToString() },
+                        { "ReceiverId", message.ReceiverId ?? "broadcast" },
+                        { "Duration", stopwatch.ElapsedMilliseconds.ToString() },
+                        { "ErrorMessage", ex.Message }
+                    };
+                    
+                    _telemetry.TrackClientEvent(_clientId, "MessageSendFailed", props);
+                    _telemetry.TrackException(ex, "BrokerClient");
+                }
+                
                 throw;
+            }
+            finally
+            {
+                stopwatch.Stop();
             }
         }
         
@@ -310,9 +559,30 @@ namespace MessageBroker
         public async Task<BrokerMessage> SendRequestAsync(BrokerMessage message, TimeSpan? timeout = null)
         {
             timeout ??= TimeSpan.FromSeconds(30);
+            var stopwatch = new Stopwatch();
+            stopwatch.Start();
             
             try
             {
+                // Track request sending in telemetry
+                if (_telemetryEnabled)
+                {
+                    var props = new Dictionary<string, string>
+                    {
+                        { "MessageId", message.MessageId },
+                        { "MessageType", message.Type.ToString() },
+                        { "ReceiverId", message.ReceiverId ?? "broadcast" },
+                        { "Timeout", timeout.Value.TotalMilliseconds.ToString() }
+                    };
+                    
+                    if (!string.IsNullOrEmpty(message.Topic))
+                    {
+                        props["Topic"] = message.Topic;
+                    }
+                    
+                    _telemetry.TrackClientEvent(_clientId, "RequestSending", props);
+                }
+                
                 // Create a task completion source for the response
                 var tcs = new TaskCompletionSource<BrokerMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
                 _pendingRequests[message.MessageId] = tcs;
@@ -322,17 +592,73 @@ namespace MessageBroker
                 
                 // Wait for the response with timeout
                 using var cts = new CancellationTokenSource(timeout.Value);
-                using var registration = cts.Token.Register(() => tcs.TrySetException(new TimeoutException($"Request timed out after {timeout.Value.TotalSeconds} seconds")));
+                using var registration = cts.Token.Register(() => 
+                {
+                    if (tcs.TrySetException(new TimeoutException($"Request timed out after {timeout.Value.TotalSeconds} seconds")))
+                    {
+                        // Track request timeout in telemetry
+                        if (_telemetryEnabled)
+                        {
+                            var props = new Dictionary<string, string>
+                            {
+                                { "MessageId", message.MessageId },
+                                { "MessageType", message.Type.ToString() },
+                                { "ReceiverId", message.ReceiverId ?? "broadcast" },
+                                { "Timeout", timeout.Value.TotalMilliseconds.ToString() },
+                                { "ElapsedTime", stopwatch.ElapsedMilliseconds.ToString() }
+                            };
+                            
+                            _telemetry.TrackClientEvent(_clientId, "RequestTimeout", props);
+                        }
+                    }
+                });
                 
-                return await tcs.Task;
+                var response = await tcs.Task;
+                
+                // Track successful request in telemetry
+                if (_telemetryEnabled)
+                {
+                    var props = new Dictionary<string, string>
+                    {
+                        { "MessageId", message.MessageId },
+                        { "ResponseId", response.MessageId },
+                        { "MessageType", message.Type.ToString() },
+                        { "ReceiverId", message.ReceiverId ?? "broadcast" },
+                        { "ResponseTime", stopwatch.ElapsedMilliseconds.ToString() }
+                    };
+                    
+                    _telemetry.TrackClientEvent(_clientId, "RequestCompleted", props);
+                }
+                
+                return response;
             }
             catch (Exception ex)
             {
                 _logger.Error("BrokerClient", $"Error sending request: {message.MessageId}", ex);
+                
+                // Track request failure in telemetry
+                if (_telemetryEnabled)
+                {
+                    var props = new Dictionary<string, string>
+                    {
+                        { "MessageId", message.MessageId },
+                        { "MessageType", message.Type.ToString() },
+                        { "ReceiverId", message.ReceiverId ?? "broadcast" },
+                        { "Duration", stopwatch.ElapsedMilliseconds.ToString() },
+                        { "ErrorMessage", ex.Message },
+                        { "ErrorType", ex.GetType().Name }
+                    };
+                    
+                    _telemetry.TrackClientEvent(_clientId, "RequestFailed", props);
+                    _telemetry.TrackException(ex, "BrokerClient");
+                }
+                
                 throw;
             }
             finally
             {
+                stopwatch.Stop();
+                
                 // Remove from pending requests if still there
                 _pendingRequests.TryRemove(message.MessageId, out _);
             }
@@ -431,37 +757,81 @@ namespace MessageBroker
         /// </summary>
         public void Dispose()
         {
-            _logger.Info("BrokerClient", "Shutting down client...");
-            
-            // Signal cancellation
-            _cancellationTokenSource.Cancel();
-            
-            // Wait for the receive task to complete
-            if (_receiveTask != null)
+            try
             {
-                try
+                _logger.Info("BrokerClient", "Shutting down client...");
+                
+                // Track client shutdown in telemetry
+                if (_telemetryEnabled)
                 {
-                    _receiveTask.Wait(1000);
+                    var props = new Dictionary<string, string>
+                    {
+                        { "MessagesSent", _messagesSent.ToString() },
+                        { "MessagesReceived", _messagesReceived.ToString() },
+                        { "RequestsSent", _requestsSent.ToString() },
+                        { "ResponsesReceived", _responseReceived.ToString() },
+                        { "AcknowledgmentsSent", _acknowledgmentsSent.ToString() },
+                        { "AcknowledgmentsReceived", _acknowledgementsReceived.ToString() },
+                        { "PendingRequests", _pendingRequests.Count.ToString() }
+                    };
+                    
+                    _telemetry.TrackClientEvent(_clientId, "ClientShuttingDown", props);
                 }
-                catch (AggregateException)
+                
+                // Signal cancellation
+                _cancellationTokenSource.Cancel();
+                
+                // Wait for the receive task to complete
+                if (_receiveTask != null)
                 {
-                    // Ignore TaskCanceledException
+                    try
+                    {
+                        _receiveTask.Wait(1000);
+                    }
+                    catch (AggregateException)
+                    {
+                        // Ignore TaskCanceledException
+                    }
+                }
+                
+                // Clean up resources
+                _socket?.Dispose();
+                _cancellationTokenSource.Dispose();
+                
+                // Complete any pending requests with an error
+                var pendingCount = _pendingRequests.Count;
+                foreach (var request in _pendingRequests)
+                {
+                    request.Value.TrySetException(new Exception("Client was disposed"));
+                }
+                
+                _pendingRequests.Clear();
+                
+                _logger.Info("BrokerClient", "Client shut down successfully");
+                
+                // Track client shutdown complete in telemetry
+                if (_telemetryEnabled)
+                {
+                    var props = new Dictionary<string, string>
+                    {
+                        { "CompletedPendingRequests", pendingCount.ToString() }
+                    };
+                    
+                    _telemetry.TrackClientEvent(_clientId, "ClientShutDown", props);
+                    _telemetry.Flush();
                 }
             }
-            
-            // Clean up resources
-            _socket?.Dispose();
-            _cancellationTokenSource.Dispose();
-            
-            // Complete any pending requests with an error
-            foreach (var request in _pendingRequests)
+            catch (Exception ex)
             {
-                request.Value.TrySetException(new Exception("Client was disposed"));
+                _logger.Error("BrokerClient", "Error during client shutdown", ex);
+                
+                // Track shutdown error in telemetry
+                if (_telemetryEnabled)
+                {
+                    _telemetry.TrackException(ex, "BrokerClient");
+                    _telemetry.Flush();
+                }
             }
-            
-            _pendingRequests.Clear();
-            
-            _logger.Info("BrokerClient", "Client shut down successfully");
         }
     }
 }

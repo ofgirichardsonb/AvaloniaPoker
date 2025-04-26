@@ -23,7 +23,7 @@ namespace MessageBroker
         private readonly TelemetryClient _telemetryClient;
         private readonly DependencyTrackingTelemetryModule _dependencyModule;
         private bool _isInitialized = false;
-        private string _instrumentationKey;
+        private string? _instrumentationKey;
         
         /// <summary>
         /// Gets a value indicating whether the telemetry service is initialized
@@ -58,7 +58,10 @@ namespace MessageBroker
             try
             {
                 _instrumentationKey = instrumentationKey;
-                _telemetryClient.TelemetryConfiguration.InstrumentationKey = instrumentationKey;
+                
+                // Use ConnectionString instead of InstrumentationKey (which is deprecated)
+                string connectionString = $"InstrumentationKey={instrumentationKey}";
+                _telemetryClient.TelemetryConfiguration.ConnectionString = connectionString;
                 
                 // Set common properties for all telemetry
                 _telemetryClient.Context.Component.Version = GetAppVersion();
@@ -204,6 +207,29 @@ namespace MessageBroker
             catch (Exception ex)
             {
                 Console.WriteLine($"Error tracking client operation: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Tracks a client event
+        /// </summary>
+        /// <param name="clientId">The ID of the client</param>
+        /// <param name="eventName">The name of the event</param>
+        /// <param name="properties">Additional properties for the event</param>
+        public void TrackClientEvent(string clientId, string eventName, IDictionary<string, string>? properties = null)
+        {
+            if (!_isInitialized) return;
+            
+            try
+            {
+                var eventProperties = properties ?? new Dictionary<string, string>();
+                eventProperties["ClientId"] = clientId;
+                
+                _telemetryClient.TrackEvent($"MessageBroker.Client.{eventName}", eventProperties);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error tracking client event: {ex.Message}");
             }
         }
         

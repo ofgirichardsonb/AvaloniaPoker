@@ -58,7 +58,8 @@ namespace PokerGame.Core.Telemetry
             try
             {
                 _instrumentationKey = instrumentationKey;
-                _telemetryClient.TelemetryConfiguration.InstrumentationKey = instrumentationKey;
+                // Use ConnectionString instead of InstrumentationKey
+                _telemetryClient.TelemetryConfiguration.ConnectionString = $"InstrumentationKey={instrumentationKey}";
                 
                 // Set common properties for all telemetry
                 _telemetryClient.Context.Component.Version = GetAppVersion();
@@ -194,7 +195,7 @@ namespace PokerGame.Core.Telemetry
             
             try
             {
-                _telemetryClient.TrackDependency(dependencyTypeName, target, dependencyName, data, startTime, duration, success);
+                _telemetryClient.TrackDependency(dependencyTypeName, target, dependencyName, data, startTime, duration, success ? "200" : "500", success);
             }
             catch (Exception ex)
             {

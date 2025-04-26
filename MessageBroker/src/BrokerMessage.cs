@@ -16,6 +16,8 @@ namespace MessageBroker
         Acknowledgment = 3,
         Error = 4,
         Ping = 5,
+        Request = 6,
+        Response = 7,
         
         // Application-specific messages - can be extended as needed
         Custom = 100,
@@ -59,6 +61,11 @@ namespace MessageBroker
         /// Gets or sets the serialized payload of the message
         /// </summary>
         public string? SerializedPayload { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the topic of the message for pub/sub patterns
+        /// </summary>
+        public string? Topic { get; set; }
         
         /// <summary>
         /// Gets or sets the timestamp when the message was created
