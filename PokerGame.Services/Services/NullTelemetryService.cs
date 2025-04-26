@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using PokerGame.Abstractions;
 
 namespace PokerGame.Services
@@ -24,7 +23,7 @@ namespace PokerGame.Services
         /// <summary>
         /// No-op implementation of TrackEvent
         /// </summary>
-        public void TrackEvent(string eventName, Dictionary<string, string>? properties = null)
+        public void TrackEvent(string eventName, IDictionary<string, string>? properties = null)
         {
             // Do nothing
         }
@@ -32,7 +31,7 @@ namespace PokerGame.Services
         /// <summary>
         /// No-op implementation of TrackException
         /// </summary>
-        public void TrackException(Exception exception, Dictionary<string, string>? properties = null)
+        public void TrackException(Exception exception, IDictionary<string, string>? properties = null)
         {
             // Do nothing
         }
@@ -40,7 +39,7 @@ namespace PokerGame.Services
         /// <summary>
         /// No-op implementation of TrackMetric
         /// </summary>
-        public void TrackMetric(string name, double value, Dictionary<string, string>? properties = null)
+        public void TrackMetric(string metricName, double value, IDictionary<string, string>? properties = null)
         {
             // Do nothing
         }
@@ -48,7 +47,7 @@ namespace PokerGame.Services
         /// <summary>
         /// No-op implementation of TrackDependency
         /// </summary>
-        public void TrackDependency(string dependencyType, string target, string dependencyName, string data, DateTimeOffset startTime, TimeSpan duration, string resultCode, bool success)
+        public void TrackDependency(string dependencyName, string target, DateTimeOffset startTime, TimeSpan duration, bool success, IDictionary<string, string>? properties = null)
         {
             // Do nothing
         }
@@ -56,15 +55,7 @@ namespace PokerGame.Services
         /// <summary>
         /// No-op implementation of TrackRequest
         /// </summary>
-        public void TrackRequest(string name, DateTimeOffset startTime, TimeSpan duration, string responseCode, bool success)
-        {
-            // Do nothing
-        }
-
-        /// <summary>
-        /// No-op implementation of TrackClientEvent
-        /// </summary>
-        public void TrackClientEvent(string name, Dictionary<string, string>? properties = null)
+        public void TrackRequest(string messageName, DateTimeOffset startTime, TimeSpan duration, string responseCode, bool success, IDictionary<string, string>? properties = null)
         {
             // Do nothing
         }
@@ -78,59 +69,11 @@ namespace PokerGame.Services
         }
 
         /// <summary>
-        /// No-op implementation of TrackEvent (async variant)
+        /// No-op implementation of Dispose
         /// </summary>
-        public Task TrackEventAsync(string eventName, Dictionary<string, string>? properties = null)
+        public void Dispose()
         {
-            return Task.CompletedTask;
-        }
-
-        /// <summary>
-        /// No-op implementation of TrackException (async variant)
-        /// </summary>
-        public Task TrackExceptionAsync(Exception exception, Dictionary<string, string>? properties = null)
-        {
-            return Task.CompletedTask;
-        }
-
-        /// <summary>
-        /// No-op implementation of TrackMetric (async variant)
-        /// </summary>
-        public Task TrackMetricAsync(string name, double value, Dictionary<string, string>? properties = null)
-        {
-            return Task.CompletedTask;
-        }
-
-        /// <summary>
-        /// No-op implementation of TrackDependency (async variant)
-        /// </summary>
-        public Task TrackDependencyAsync(string dependencyType, string target, string dependencyName, string data, DateTimeOffset startTime, TimeSpan duration, string resultCode, bool success)
-        {
-            return Task.CompletedTask;
-        }
-
-        /// <summary>
-        /// No-op implementation of TrackRequest (async variant)
-        /// </summary>
-        public Task TrackRequestAsync(string name, DateTimeOffset startTime, TimeSpan duration, string responseCode, bool success)
-        {
-            return Task.CompletedTask;
-        }
-
-        /// <summary>
-        /// No-op implementation of TrackClientEvent (async variant)
-        /// </summary>
-        public Task TrackClientEventAsync(string name, Dictionary<string, string>? properties = null)
-        {
-            return Task.CompletedTask;
-        }
-
-        /// <summary>
-        /// No-op implementation of FlushAsync
-        /// </summary>
-        public Task FlushAsync()
-        {
-            return Task.CompletedTask;
+            // Do nothing
         }
     }
 }

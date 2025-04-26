@@ -20,8 +20,17 @@ namespace PokerGame.Services
         {
             try
             {
-                _telemetryService = PokerGame.Core.Telemetry.TelemetryService.Instance;
-                Console.WriteLine("TelemetryDecoratorFactory initialized successfully");
+                var coreTelemetryService = PokerGame.Core.Telemetry.TelemetryService.Instance;
+                if (coreTelemetryService != null && coreTelemetryService.IsInitialized)
+                {
+                    _telemetryService = new TelemetryServiceAdapter(coreTelemetryService);
+                    Console.WriteLine("TelemetryDecoratorFactory initialized successfully with core TelemetryService");
+                }
+                else
+                {
+                    _telemetryService = new NullTelemetryService();
+                    Console.WriteLine("TelemetryDecoratorFactory initialized with NullTelemetryService (core service not initialized)");
+                }
             }
             catch (Exception ex)
             {

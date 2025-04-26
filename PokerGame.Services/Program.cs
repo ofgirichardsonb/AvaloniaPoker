@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using PokerGame.Core.Microservices;
@@ -9,6 +10,7 @@ using PokerGame.Core.Telemetry;
 using PokerGame.Abstractions;
 using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.Extensions.Configuration;
 
 namespace PokerGame.Services
 {
@@ -30,8 +32,49 @@ namespace PokerGame.Services
                 Console.WriteLine("PokerGame.Services Microservice Host");
                 Console.WriteLine("===================================");
 
-                // Initialize telemetry first
-                _telemetryService = TelemetryService.Instance;
+                // Build configuration from appsettings.json
+                IConfiguration configuration = new ConfigurationBuilder()
+                    .SetBasePath(Directory.GetCurrentDirectory())
+                    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                    .AddJsonFile($"appsettings.development.json", optional: true, reloadOnChange: true)
+                    .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")}.json", optional: true, reloadOnChange: true)
+                    .AddEnvironmentVariables() // Also read from environment variables
+                    .Build();
+
+                // Initialize telemetry with configuration
+                string? instrumentationKey = configuration["ApplicationInsights:InstrumentationKey"];
+                
+                // Fall back to environment variable if not in appsettings.json
+                if (string.IsNullOrEmpty(instrumentationKey))
+                {
+                    instrumentationKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
+                }
+                
+                // Get the TelemetryService instance and initialize it if possible
+                var coreTelemetryService = PokerGame.Core.Telemetry.TelemetryService.Instance;
+                
+                if (!string.IsNullOrEmpty(instrumentationKey))
+                {
+                    Console.WriteLine("Initializing telemetry with Application Insights key...");
+                    var initialized = coreTelemetryService.Initialize(instrumentationKey);
+                    Console.WriteLine($"Telemetry initialization {(initialized ? "successful" : "failed")}");
+                    
+                    if (initialized)
+                    {
+                        _telemetryService = new TelemetryServiceAdapter(coreTelemetryService);
+                    }
+                    else
+                    {
+                        _telemetryService = new NullTelemetryService();
+                        Console.WriteLine("Falling back to NullTelemetryService due to initialization failure");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("No Application Insights key found, telemetry will be disabled");
+                    _telemetryService = new NullTelemetryService();
+                }
+                
                 _telemetryService.TrackEvent("ServiceHostStarted");
 
                 // Create the root command and options
