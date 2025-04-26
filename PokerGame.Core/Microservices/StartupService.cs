@@ -167,7 +167,7 @@ namespace PokerGame.Core.Microservices
         /// Handles messages received from other services
         /// </summary>
         /// <param name="message">The received message</param>
-        protected internal override async Task HandleMessageAsync(Message message)
+        public override async Task HandleMessageAsync(Message message)
         {
             switch (message.Type)
             {

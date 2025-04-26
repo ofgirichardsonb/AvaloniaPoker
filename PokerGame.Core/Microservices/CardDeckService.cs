@@ -273,7 +273,7 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         /// <param name="message">The message to handle</param>
         /// <returns>A task representing the asynchronous operation</returns>
-        protected internal override async Task HandleMessageAsync(Message message)
+        public override async Task HandleMessageAsync(Message message)
         {
             try
             {

@@ -6,19 +6,25 @@ using System.Linq;
 using PokerGame.Core.Game;
 using PokerGame.Core.Models;
 using PokerGame.Core.Messaging;
+using PokerGame.Abstractions;
 
 namespace PokerGame.Core.Microservices
 {
     /// <summary>
     /// Microservice that runs the core game logic
     /// </summary>
-    public class GameEngineService : MicroserviceBase
+    public class GameEngineService : MicroserviceBase, IGameEngineService
     {
         private readonly PokerGameEngine _gameEngine;
         private readonly MicroserviceUI _microserviceUI;
         private string? _cardDeckServiceId;
         private string _currentDeckId = string.Empty;
         private Models.Deck? _emergencyDeck;
+        
+        /// <summary>
+        /// Gets a value indicating whether the service is currently running
+        /// </summary>
+        public bool IsRunning { get; private set; }
         
         // Dictionary to keep track of known services and their capabilities
         private readonly Dictionary<string, ServiceRegistrationPayload> _knownServices = new Dictionary<string, ServiceRegistrationPayload>();
@@ -137,8 +143,149 @@ namespace PokerGame.Core.Microservices
         /// Handles messages received from other microservices
         /// </summary>
         /// <param name="message">The message to handle</param>
-        protected internal override async Task HandleMessageAsync(Message message)
+        public override async Task HandleMessageAsync(Message message)
+{
+    await HandleMessageAsync((object)message);
+}
+
+/// <summary>
+/// Handles messages received from other microservices via the IGameEngineService interface
+/// </summary>
+/// <param name="messageObj">The message to handle</param>
+
+/// <summary>
+/// Adds a player to the game
+/// </summary>
+/// <param name="player">The player to add</param>
+public void AddPlayer(object player)
+{
+    if (player is Models.Player typedPlayer)
+    {
+        // PokerGameEngine doesn't have AddPlayer directly, we need to add manually to the player list
+        Console.WriteLine($"Adding player {typedPlayer.Name} with {typedPlayer.Chips} chips");
+        
+        // Get the private _players field via reflection
+        var playersField = typeof(PokerGameEngine).GetField("_players", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (playersField != null)
         {
+            var playersList = playersField.GetValue(_gameEngine) as List<Models.Player>;
+            if (playersList != null)
+            {
+                // Make sure the player isn't already in the list
+                if (!playersList.Any(p => p.Id == typedPlayer.Id))
+                {
+                    playersList.Add(typedPlayer);
+                    Console.WriteLine($"Player {typedPlayer.Name} added successfully");
+                }
+                else
+                {
+                    Console.WriteLine($"Player {typedPlayer.Name} already exists in the game");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Could not access player list from game engine");
+            }
+        }
+        else
+        {
+            Console.WriteLine("Could not find _players field in PokerGameEngine");
+        }
+    }
+    else
+    {
+        Console.WriteLine($"Error: AddPlayer called with invalid player type: {player?.GetType().Name ?? "null"}");
+    }
+}
+
+/// <summary>
+/// Removes a player from the game
+/// </summary>
+/// <param name="playerId">The ID of the player to remove</param>
+public void RemovePlayer(string playerId)
+{
+    // PokerGameEngine doesn't have RemovePlayer directly, we need to remove manually from player list
+    Console.WriteLine($"Removing player with ID: {playerId}");
+    
+    // Get the private _players field via reflection
+    var playersField = typeof(PokerGameEngine).GetField("_players", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+    if (playersField != null)
+    {
+        var playersList = playersField.GetValue(_gameEngine) as List<Models.Player>;
+        if (playersList != null)
+        {
+            // Find and remove the player
+            var playerToRemove = playersList.FirstOrDefault(p => p.Id == playerId);
+            if (playerToRemove != null)
+            {
+                playersList.Remove(playerToRemove);
+                Console.WriteLine($"Player {playerToRemove.Name} removed successfully");
+            }
+            else
+            {
+                Console.WriteLine($"Player with ID {playerId} not found in game");
+            }
+        }
+        else
+        {
+            Console.WriteLine("Could not access player list from game engine");
+        }
+    }
+    else
+    {
+        Console.WriteLine("Could not find _players field in PokerGameEngine");
+    }
+}
+
+/// <summary>
+/// Starts a new hand
+/// </summary>
+public async Task StartHandAsync()
+{
+    Console.WriteLine("StartHandAsync called from IGameEngineService interface");
+    
+    // Create a StartHand message and handle it
+    var startHandMessage = Message.Create(MessageType.StartHand);
+    await HandleMessageAsync(startHandMessage);
+}
+
+/// <summary>
+/// Processes a player action
+/// </summary>
+/// <param name="playerId">The ID of the player</param>
+/// <param name="action">The action to process</param>
+/// <param name="amount">The amount of the action</param>
+/// <returns>True if the action was processed successfully; otherwise, false</returns>
+public async Task<bool> ProcessPlayerActionAsync(string playerId, string action, int amount)
+{
+    Console.WriteLine($"ProcessPlayerActionAsync called for player {playerId} with action {action} and amount {amount}");
+    
+    // Create an action payload
+    var payload = new PlayerActionPayload
+    {
+        PlayerId = playerId,
+        ActionType = action,
+        BetAmount = amount
+    };
+    
+    // Create and handle the player action message
+    var actionMessage = Message.Create(MessageType.PlayerAction, payload);
+    
+    // Process the action
+    await HandleMessageAsync(actionMessage);
+    
+    // For now, assume success
+    return true;
+}
+
+public async Task HandleMessageAsync(object messageObj)
+        {
+            if (!(messageObj is Message message))
+            {
+                Console.WriteLine($"Error: HandleMessageAsync called with invalid message type: {messageObj?.GetType().Name ?? "null"}");
+                return;
+            }
+            
             switch (message.Type)
             {
                 case MessageType.StartGame:

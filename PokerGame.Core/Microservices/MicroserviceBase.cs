@@ -22,6 +22,16 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         public string ServiceId => _serviceId;
         
+        /// <summary>
+        /// Gets the name of this service
+        /// </summary>
+        public string ServiceName => _serviceName;
+        
+        /// <summary>
+        /// Gets the type of this service
+        /// </summary>
+        public string ServiceType => _serviceType;
+        
         protected PublisherSocket? _publisherSocket;
         protected SubscriberSocket? _subscriberSocket;
         protected readonly ConcurrentQueue<Message> _messageQueue = new ConcurrentQueue<Message>();
@@ -662,7 +672,7 @@ namespace PokerGame.Core.Microservices
         /// Handles a message received from another service
         /// </summary>
         /// <param name="message">The message to handle</param>
-        protected internal virtual Task HandleMessageAsync(Message message)
+        public virtual Task HandleMessageAsync(Message message)
         {
             // Base implementation does nothing
             return Task.CompletedTask;
