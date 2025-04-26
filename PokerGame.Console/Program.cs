@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using PokerGame.Core.Game;
 using PokerGame.Core.Interfaces;
 using PokerGame.Services;
+using MessageBroker;
 
 namespace PokerGame.Console
 {
@@ -86,7 +87,7 @@ namespace PokerGame.Console
                     microserviceManager.StartMicroservices(args);
                     
                     // Initialize the broker manager
-                    var brokerManager = MessageBroker.BrokerManager.Instance;
+                    var brokerManager = BrokerManager.Instance;
                     brokerManager.Start();
                 }
                 else

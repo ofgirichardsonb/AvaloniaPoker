@@ -50,3 +50,15 @@ args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --mic
 
 [deployment]
 run = ["sh", "-c", "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --curses"]
+
+[[ports]]
+localPort = 5570
+externalPort = 80
+
+[[ports]]
+localPort = 5571
+externalPort = 3000
+
+[[ports]]
+localPort = 5572
+externalPort = 3001
