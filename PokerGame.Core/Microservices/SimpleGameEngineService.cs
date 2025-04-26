@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 using System.Threading;
 using PokerGame.Core.Messaging;
 using PokerGame.Core.Models;
@@ -252,7 +253,7 @@ namespace PokerGame.Core.Microservices
                 foreach (var player in _players)
                 {
                     var cards = _localDeck.DealCards(2);
-                    player.Hand.AddRange(cards);
+                    player.HoleCards.AddRange(cards);
                     
                     Logger.Log($"Dealt {cards.Count} cards to {player.Name} from emergency deck: {string.Join(" ", cards)}");
                 }
@@ -269,7 +270,7 @@ namespace PokerGame.Core.Microservices
                 foreach (var player in _players)
                 {
                     var cards = _localDeck.DealCards(2);
-                    player.Hand.AddRange(cards);
+                    player.HoleCards.AddRange(cards);
                     
                     Logger.Log($"Dealt {cards.Count} cards to {player.Name} from emergency deck: {string.Join(" ", cards)}");
                 }
@@ -481,7 +482,7 @@ namespace PokerGame.Core.Microservices
         {
             try
             {
-                var actionPayload = message.GetPayload<PlayerActionPayload>();
+                var actionPayload = message.GetPayload<PokerPlayerActionPayload>();
                 if (actionPayload == null)
                 {
                     Logger.LogError("Invalid player action payload");
@@ -499,18 +500,18 @@ namespace PokerGame.Core.Microservices
                 // Process the action based on its type
                 switch (actionPayload.Action)
                 {
-                    case PlayerActionType.Fold:
+                    case PokerPlayerActionType.Fold:
                         // Player folds
                         player.Fold();
                         Logger.Log($"Player {player.Name} folded");
                         break;
                         
-                    case PlayerActionType.Check:
+                    case PokerPlayerActionType.Check:
                         // Player checks
                         Logger.Log($"Player {player.Name} checked");
                         break;
                         
-                    case PlayerActionType.Call:
+                    case PokerPlayerActionType.Call:
                         // Player calls
                         var callAmount = actionPayload.Amount;
                         var actualCallAmount = player.PlaceBet(callAmount);
@@ -518,7 +519,7 @@ namespace PokerGame.Core.Microservices
                         Logger.Log($"Player {player.Name} called ${callAmount} (actual: ${actualCallAmount})");
                         break;
                         
-                    case PlayerActionType.Raise:
+                    case PokerPlayerActionType.Raise:
                         // Player raises
                         var raiseAmount = actionPayload.Amount;
                         var actualRaiseAmount = player.PlaceBet(raiseAmount);
@@ -736,9 +737,9 @@ namespace PokerGame.Core.Microservices
     }
     
     /// <summary>
-    /// Types of player actions
+    /// Types of poker player actions
     /// </summary>
-    public enum PlayerActionType
+    public enum PokerPlayerActionType
     {
         Fold,
         Check,
@@ -747,9 +748,9 @@ namespace PokerGame.Core.Microservices
     }
     
     /// <summary>
-    /// Payload for player action messages
+    /// Payload for poker player action messages
     /// </summary>
-    public class PlayerActionPayload
+    public class PokerPlayerActionPayload
     {
         /// <summary>
         /// Gets or sets the ID of the player performing the action
@@ -761,7 +762,7 @@ namespace PokerGame.Core.Microservices
         /// Gets or sets the type of action
         /// </summary>
         [JsonPropertyName("action")]
-        public PlayerActionType Action { get; set; }
+        public PokerPlayerActionType Action { get; set; }
         
         /// <summary>
         /// Gets or sets the amount of the action (for call/raise)

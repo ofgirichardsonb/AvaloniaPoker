@@ -28,10 +28,10 @@ namespace PokerGame.Core.Models
         public int Chips { get; set; }
         
         /// <summary>
-        /// Gets or sets the player's current hand of cards
+        /// Gets or sets the player's hole cards (private cards in Texas Hold'Em)
         /// </summary>
-        [JsonPropertyName("hand")]
-        public List<Card> Hand { get; set; } = new List<Card>();
+        [JsonPropertyName("holeCards")]
+        public List<Card> HoleCards { get; set; } = new List<Card>();
         
         /// <summary>
         /// Gets or sets whether the player has folded their hand
@@ -84,7 +84,7 @@ namespace PokerGame.Core.Models
         }
         
         /// <summary>
-        /// Adds a card to the player's hand
+        /// Adds a card to the player's hole cards
         /// </summary>
         /// <param name="card">The card to add</param>
         public void AddCard(Card card)
@@ -94,15 +94,15 @@ namespace PokerGame.Core.Models
                 throw new ArgumentNullException(nameof(card));
             }
             
-            Hand.Add(card);
+            HoleCards.Add(card);
         }
         
         /// <summary>
-        /// Clears the player's hand
+        /// Clears the player's hole cards
         /// </summary>
         public void ClearHand()
         {
-            Hand.Clear();
+            HoleCards.Clear();
             HasFolded = false;
         }
         
