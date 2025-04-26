@@ -410,39 +410,5 @@ namespace PokerGame.Core.Microservices
         }
     }
     
-    /// <summary>
-    /// Payload for service registration messages
-    /// </summary>
-    public class ServiceRegistrationPayload
-    {
-        /// <summary>
-        /// Gets or sets the unique identifier of the service
-        /// </summary>
-        [JsonPropertyName("serviceId")]
-        public string ServiceId { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// Gets or sets the name of the service
-        /// </summary>
-        [JsonPropertyName("serviceName")]
-        public string ServiceName { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// Gets or sets the type of the service
-        /// </summary>
-        [JsonPropertyName("serviceType")]
-        public string ServiceType { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// Gets or sets the publisher port of the service
-        /// </summary>
-        [JsonPropertyName("publisherPort")]
-        public int PublisherPort { get; set; }
-        
-        /// <summary>
-        /// Gets or sets the subscriber port of the service
-        /// </summary>
-        [JsonPropertyName("subscriberPort")]
-        public int SubscriberPort { get; set; }
-    }
+    // This class has been moved to MessageTypes.cs
 }

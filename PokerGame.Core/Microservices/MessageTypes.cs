@@ -196,27 +196,44 @@ namespace PokerGame.Core.Microservices
         /// <summary>
         /// Gets or sets the unique identifier of the service
         /// </summary>
+        [JsonPropertyName("serviceId")]
         public string ServiceId { get; set; } = string.Empty;
         
         /// <summary>
         /// Gets or sets the name of the service
         /// </summary>
+        [JsonPropertyName("serviceName")]
         public string ServiceName { get; set; } = string.Empty;
         
         /// <summary>
         /// Gets or sets the type of the service
         /// </summary>
+        [JsonPropertyName("serviceType")]
         public string ServiceType { get; set; } = string.Empty;
         
         /// <summary>
         /// Gets or sets the endpoint URI of the service
         /// </summary>
+        [JsonPropertyName("endpoint")]
         public string Endpoint { get; set; } = string.Empty;
         
         /// <summary>
         /// Gets or sets the capabilities of the service
         /// </summary>
+        [JsonPropertyName("capabilities")]
         public List<string> Capabilities { get; set; } = new List<string>();
+        
+        /// <summary>
+        /// Gets or sets the publisher port of the service
+        /// </summary>
+        [JsonPropertyName("publisherPort")]
+        public int PublisherPort { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the subscriber port of the service
+        /// </summary>
+        [JsonPropertyName("subscriberPort")]
+        public int SubscriberPort { get; set; }
     }
     
     /// <summary>
@@ -258,6 +275,18 @@ namespace PokerGame.Core.Microservices
         /// Gets or sets the index of the current player
         /// </summary>
         public int CurrentPlayerIndex { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the list of best hands for each active player (only populated during showdown)
+        /// </summary>
+        [JsonPropertyName("bestHands")]
+        public List<HandInfo> BestHands { get; set; } = new List<HandInfo>();
+        
+        /// <summary>
+        /// Gets or sets the IDs of the winning players (only populated during showdown)
+        /// </summary>
+        [JsonPropertyName("winnerIds")]
+        public List<string> WinnerIds { get; set; } = new List<string>();
     }
     
     /// <summary>
@@ -409,6 +438,52 @@ namespace PokerGame.Core.Microservices
         /// Gets or sets additional context data for the notification
         /// </summary>
         public string Context { get; set; } = string.Empty;
+    }
+    
+    /// <summary>
+    /// Information about a player's best poker hand
+    /// </summary>
+    public class HandInfo
+    {
+        /// <summary>
+        /// Gets or sets the player ID associated with this hand
+        /// </summary>
+        [JsonPropertyName("playerId")]
+        public string PlayerId { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the cards that make up this hand
+        /// </summary>
+        [JsonPropertyName("cards")]
+        public List<Card> Cards { get; set; } = new List<Card>();
+        
+        /// <summary>
+        /// Gets or sets the rank of this hand
+        /// </summary>
+        [JsonPropertyName("rank")]
+        public Game.HandRank Rank { get; set; }
+        
+        /// <summary>
+        /// Gets or sets a human-readable description of this hand
+        /// </summary>
+        [JsonPropertyName("description")]
+        public string Description { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Creates a HandInfo from a Hand
+        /// </summary>
+        /// <param name="hand">The hand</param>
+        /// <returns>A new HandInfo instance</returns>
+        public static HandInfo FromHand(Game.Hand hand)
+        {
+            return new HandInfo
+            {
+                PlayerId = hand.PlayerId,
+                Cards = new List<Card>(hand.Cards),
+                Rank = hand.Rank,
+                Description = hand.Description
+            };
+        }
     }
     
     // Note: The DeckCreatePayload, DeckIdPayload, DeckDealPayload, DeckDealResponsePayload, 

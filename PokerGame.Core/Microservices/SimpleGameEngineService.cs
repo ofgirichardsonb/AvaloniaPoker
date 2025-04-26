@@ -703,7 +703,7 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         private void HandleShowdown()
         {
-            // For now, just randomly select a winner
+            // Get the active players (those who haven't folded)
             var activePlayers = _players.Where(p => !p.HasFolded).ToList();
             if (activePlayers.Count == 0)
             {
@@ -711,12 +711,94 @@ namespace PokerGame.Core.Microservices
                 return;
             }
             
-            var winner = activePlayers[_random.Next(activePlayers.Count)];
+            // If there's only one active player, they win by default
+            if (activePlayers.Count == 1)
+            {
+                var winner = activePlayers[0];
+                winner.AwardChips(_pot);
+                
+                Logger.Log($"Player {winner.Name} won ${_pot} by default (all other players folded)");
+                
+                // Reset the pot
+                _pot = 0;
+                return;
+            }
             
-            // Award the pot to the winner
-            winner.AwardChips(_pot);
+            // Evaluate the best hand for each active player
+            var playerHands = new List<Game.Hand>();
+            var bestHandsForBroadcast = new List<HandInfo>();
             
-            Logger.Log($"Player {winner.Name} won ${_pot}");
+            foreach (var player in activePlayers)
+            {
+                // Evaluate the player's best hand
+                var bestHand = Game.HandEvaluator.EvaluateBestHand(player.HoleCards, _communityCards, player.Id);
+                
+                // Add to the list of hands for determining the winner
+                playerHands.Add(bestHand);
+                
+                // Add to the list of hands for broadcasting
+                bestHandsForBroadcast.Add(HandInfo.FromHand(bestHand));
+                
+                Logger.Log($"Player {player.Name} has {bestHand}");
+            }
+            
+            // Determine the winner(s)
+            var winningHands = Game.HandEvaluator.DetermineWinners(playerHands);
+            
+            // If there's a tie, split the pot
+            int winnerCount = winningHands.Count;
+            int winningsPerPlayer = _pot / winnerCount;
+            int remainder = _pot % winnerCount; // In case pot isn't evenly divisible
+            
+            // Track winner IDs for broadcasting
+            var winnerIds = new List<string>();
+            
+            // Award chips to the winners
+            for (int i = 0; i < winningHands.Count; i++)
+            {
+                var winningHand = winningHands[i];
+                var winner = _players.First(p => p.Id == winningHand.PlayerId);
+                
+                // Award chips (last winner gets any remainder)
+                int winnings = winningsPerPlayer;
+                if (i == winningHands.Count - 1)
+                {
+                    winnings += remainder;
+                }
+                
+                winner.AwardChips(winnings);
+                winnerIds.Add(winner.Id);
+                
+                Logger.Log($"Player {winner.Name} won ${winnings} with {winningHand.Description}");
+            }
+            
+            // Create a game state payload with the showdown results
+            var gameStatePayload = new GameStatePayload
+            {
+                CurrentState = _gameState,
+                Pot = _pot,
+                CurrentBet = 0,
+                CommunityCards = new List<Card>(_communityCards),
+                Players = _players.Select(p => new PlayerInfo
+                {
+                    PlayerId = p.Id,
+                    Name = p.Name,
+                    Chips = p.Chips,
+                    HasFolded = p.HasFolded,
+                    IsAllIn = p.IsAllIn,
+                    CurrentBet = p.CurrentBet,
+                    // Include hole cards for all players since it's showdown time
+                    HoleCards = new List<Card>(p.HoleCards)
+                }).ToList(),
+                DealerPosition = _currentDealerIndex,
+                CurrentPlayerIndex = _currentPlayerIndex,
+                BestHands = bestHandsForBroadcast,
+                WinnerIds = winnerIds
+            };
+            
+            // Broadcast the showdown results
+            var message = SimpleMessage.Create(SimpleMessageType.GameState, gameStatePayload);
+            PublishMessage(message);
             
             // Reset the pot
             _pot = 0;
@@ -736,122 +818,5 @@ namespace PokerGame.Core.Microservices
         }
     }
     
-    /// <summary>
-    /// Types of poker player actions
-    /// </summary>
-    public enum PokerPlayerActionType
-    {
-        Fold,
-        Check,
-        Call,
-        Raise
-    }
-    
-    /// <summary>
-    /// Payload for poker player action messages
-    /// </summary>
-    public class PokerPlayerActionPayload
-    {
-        /// <summary>
-        /// Gets or sets the ID of the player performing the action
-        /// </summary>
-        [JsonPropertyName("playerId")]
-        public string PlayerId { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// Gets or sets the type of action
-        /// </summary>
-        [JsonPropertyName("action")]
-        public PokerPlayerActionType Action { get; set; }
-        
-        /// <summary>
-        /// Gets or sets the amount of the action (for call/raise)
-        /// </summary>
-        [JsonPropertyName("amount")]
-        public int Amount { get; set; }
-    }
-    
-    /// <summary>
-    /// Information about a player for the game state payload
-    /// </summary>
-    public class PlayerInfo
-    {
-        /// <summary>
-        /// Gets or sets the unique identifier for the player
-        /// </summary>
-        [JsonPropertyName("id")]
-        public string Id { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// Gets or sets the name of the player
-        /// </summary>
-        [JsonPropertyName("name")]
-        public string Name { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// Gets or sets the player's current chip count
-        /// </summary>
-        [JsonPropertyName("chips")]
-        public int Chips { get; set; }
-        
-        /// <summary>
-        /// Gets or sets whether the player has folded their hand
-        /// </summary>
-        [JsonPropertyName("hasFolded")]
-        public bool HasFolded { get; set; }
-        
-        /// <summary>
-        /// Gets or sets whether the player is the dealer for the current hand
-        /// </summary>
-        [JsonPropertyName("isDealer")]
-        public bool IsDealer { get; set; }
-        
-        /// <summary>
-        /// Gets or sets whether the player is currently active in the game
-        /// </summary>
-        [JsonPropertyName("isActive")]
-        public bool IsActive { get; set; }
-        
-        /// <summary>
-        /// Gets or sets the player's current bet amount in the current betting round
-        /// </summary>
-        [JsonPropertyName("currentBet")]
-        public int CurrentBet { get; set; }
-        
-        /// <summary>
-        /// Gets or sets the player's total bet amount in the current hand
-        /// </summary>
-        [JsonPropertyName("totalBet")]
-        public int TotalBet { get; set; }
-    }
-    
-    /// <summary>
-    /// Payload for game state messages
-    /// </summary>
-    public class GameStatePayload
-    {
-        /// <summary>
-        /// Gets or sets the current game state
-        /// </summary>
-        [JsonPropertyName("state")]
-        public GameState State { get; set; }
-        
-        /// <summary>
-        /// Gets or sets the current pot amount
-        /// </summary>
-        [JsonPropertyName("pot")]
-        public int Pot { get; set; }
-        
-        /// <summary>
-        /// Gets or sets the community cards
-        /// </summary>
-        [JsonPropertyName("communityCards")]
-        public List<Card> CommunityCards { get; set; } = new List<Card>();
-        
-        /// <summary>
-        /// Gets or sets the players in the game
-        /// </summary>
-        [JsonPropertyName("players")]
-        public List<PlayerInfo> Players { get; set; } = new List<PlayerInfo>();
-    }
+    // These payload classes are now defined in the MessageTypes.cs file
 }
