@@ -15,7 +15,8 @@ namespace PokerGame.Core.Microservices
         private readonly string _serviceName;
         private readonly string _serviceType;
         private readonly bool _verbose;
-        private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+        private readonly ExecutionContext _executionContext;
+        private readonly CancellationTokenSource _cancellationTokenSource;
         private SimpleMessageBroker _messageBroker;
         private readonly Logger _logger;
         private Task _backgroundTask;
@@ -52,6 +53,20 @@ namespace PokerGame.Core.Microservices
         /// <param name="subscriberPort">The port on which this service will subscribe to messages</param>
         /// <param name="verbose">Whether to enable verbose logging</param>
         protected SimpleServiceBase(string serviceName, string serviceType, int publisherPort, int subscriberPort, bool verbose = false)
+            : this(serviceName, serviceType, publisherPort, subscriberPort, null, verbose)
+        {
+        }
+        
+        /// <summary>
+        /// Creates a new simple service instance with an execution context
+        /// </summary>
+        /// <param name="serviceName">The human-readable name of the service</param>
+        /// <param name="serviceType">The type of the service (e.g., "GameEngine", "CardDeck")</param>
+        /// <param name="publisherPort">The port on which this service will publish messages</param>
+        /// <param name="subscriberPort">The port on which this service will subscribe to messages</param>
+        /// <param name="executionContext">The execution context for this service</param>
+        /// <param name="verbose">Whether to enable verbose logging</param>
+        protected SimpleServiceBase(string serviceName, string serviceType, int publisherPort, int subscriberPort, ExecutionContext? executionContext = null, bool verbose = false)
         {
             _serviceId = Guid.NewGuid().ToString();
             _serviceName = serviceName;
@@ -59,6 +74,8 @@ namespace PokerGame.Core.Microservices
             _publisherPort = publisherPort;
             _subscriberPort = subscriberPort;
             _verbose = verbose;
+            _executionContext = executionContext ?? new ExecutionContext();
+            _cancellationTokenSource = _executionContext.CancellationTokenSource ?? new CancellationTokenSource();
             _logger = new Logger($"{serviceType}_{_serviceId.Substring(0, 8)}", verbose);
             
             _logger.Log($"Created {_serviceType} service '{_serviceName}' with ID {_serviceId}");
@@ -79,12 +96,23 @@ namespace PokerGame.Core.Microservices
                 _logger.Log($"Starting {_serviceType} service '{_serviceName}'...");
                 
                 // Create and start the message broker
-                _messageBroker = new SimpleMessageBroker(_serviceId, _publisherPort, _subscriberPort, _verbose);
+                _messageBroker = new SimpleMessageBroker(_serviceId, _publisherPort, _subscriberPort, _executionContext, _verbose);
                 _messageBroker.MessageReceived += OnMessageReceived;
                 _messageBroker.Start();
                 
-                // Start the background task
-                _backgroundTask = Task.Run(() => BackgroundLoop(_cancellationTokenSource.Token));
+                // Start the background task using the execution context if available
+                if (_executionContext.TaskScheduler != null)
+                {
+                    _backgroundTask = Task.Factory.StartNew(
+                        () => BackgroundLoop(_cancellationTokenSource.Token),
+                        _cancellationTokenSource.Token,
+                        TaskCreationOptions.LongRunning,
+                        _executionContext.TaskScheduler);
+                }
+                else
+                {
+                    _backgroundTask = Task.Run(() => BackgroundLoop(_cancellationTokenSource.Token));
+                }
                 
                 // Register the service
                 RegisterService();

@@ -18,7 +18,7 @@ namespace PokerGame.Core.Messaging
         private readonly int _subscriberPort;
         private readonly bool _verbose;
         private readonly ConcurrentQueue<string> _messageQueue = new ConcurrentQueue<string>();
-        private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+        private CancellationTokenSource _cancellationTokenSource;
         private Task _publisherTask;
         private Task _subscriberTask;
         private Task _processingTask;
@@ -26,6 +26,7 @@ namespace PokerGame.Core.Messaging
         private SubscriberSocket _subscriberSocket;
         private bool _disposed = false;
         private readonly Logger _logger;
+        private readonly ExecutionContext _executionContext;
 
         // Event raised when a new message is received
         public event EventHandler<MessageReceivedEventArgs> MessageReceived;
@@ -38,11 +39,26 @@ namespace PokerGame.Core.Messaging
         /// <param name="subscriberPort">The port on which this broker will subscribe to messages</param>
         /// <param name="verbose">Whether to log verbose messages</param>
         public SimpleMessageBroker(string serviceId, int publisherPort, int subscriberPort, bool verbose = false)
+            : this(serviceId, publisherPort, subscriberPort, new ExecutionContext(), verbose)
+        {
+        }
+        
+        /// <summary>
+        /// Creates a new simple message broker with an execution context
+        /// </summary>
+        /// <param name="serviceId">The unique ID of the service using this broker</param>
+        /// <param name="publisherPort">The port on which this broker will publish messages</param>
+        /// <param name="subscriberPort">The port on which this broker will subscribe to messages</param>
+        /// <param name="executionContext">The execution context for this broker</param>
+        /// <param name="verbose">Whether to log verbose messages</param>
+        public SimpleMessageBroker(string serviceId, int publisherPort, int subscriberPort, ExecutionContext executionContext, bool verbose = false)
         {
             _serviceId = serviceId;
             _publisherPort = publisherPort;
             _subscriberPort = subscriberPort;
             _verbose = verbose;
+            _executionContext = executionContext ?? new ExecutionContext();
+            _cancellationTokenSource = _executionContext.CancellationTokenSource ?? new CancellationTokenSource();
             _logger = new Logger($"{serviceId}_MessageBroker", verbose);
             
             _logger.Log($"Created SimpleMessageBroker for service {serviceId} with publisher={publisherPort}, subscriber={subscriberPort}");

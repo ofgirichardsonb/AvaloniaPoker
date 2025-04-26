@@ -93,12 +93,40 @@ namespace PokerGame.Core.Process
                         Console.WriteLine("DotNetPath not found in configuration.");
                     }
                     
-                    // Check if we should auto-detect the path
+                    // Get project paths
+                    string? configuredBasePath = processManagerSection.GetValue<string>("ProjectBasePath");
+                    if (!string.IsNullOrEmpty(configuredBasePath))
+                    {
+                        _projectBasePath = configuredBasePath;
+                        Console.WriteLine($"Using project base path from configuration: {_projectBasePath}");
+                    }
+                    
+                    string? configuredConsoleProjectPath = processManagerSection.GetValue<string>("ConsoleProjectPath");
+                    if (!string.IsNullOrEmpty(configuredConsoleProjectPath))
+                    {
+                        _consoleProjectPath = configuredConsoleProjectPath;
+                        Console.WriteLine($"Using console project path from configuration: {_consoleProjectPath}");
+                    }
+                    
+                    string? configuredServicesProjectPath = processManagerSection.GetValue<string>("ServicesProjectPath");
+                    if (!string.IsNullOrEmpty(configuredServicesProjectPath))
+                    {
+                        _servicesProjectPath = configuredServicesProjectPath;
+                        Console.WriteLine($"Using services project path from configuration: {_servicesProjectPath}");
+                    }
+                    
+                    // Check if we should auto-detect the dotnet path
                     bool autoDetect = processManagerSection.GetValue<bool>("AutoDetectDotNetPath");
                     if (autoDetect)
                     {
                         Console.WriteLine("Auto-detection of dotnet path is enabled.");
                         InitializeDotNetPath();
+                    }
+                    
+                    // If no project base path is set, try to determine it based on the executing assembly
+                    if (string.IsNullOrEmpty(_projectBasePath))
+                    {
+                        DetermineProjectBasePath();
                     }
                 }
                 else
@@ -157,6 +185,150 @@ namespace PokerGame.Core.Process
             
             // Not found
             return null;
+        }
+        
+        /// <summary>
+        /// Tries to determine the project base path based on the executing assembly location
+        /// </summary>
+        private void DetermineProjectBasePath()
+        {
+            try
+            {
+                // Get the directory of the executing assembly
+                string assemblyLocation = AppDomain.CurrentDomain.BaseDirectory;
+                Console.WriteLine($"Assembly location: {assemblyLocation}");
+                
+                // Try to find the solution directory by looking for the sln file
+                string? solutionDir = FindSolutionDirectory(assemblyLocation);
+                if (!string.IsNullOrEmpty(solutionDir))
+                {
+                    _projectBasePath = solutionDir;
+                    Console.WriteLine($"Project base path determined as: {_projectBasePath}");
+                    return;
+                }
+                
+                // If we couldn't find the solution directory, try a few common patterns
+                // First, check if we're in a bin/Release/net8.0 or similar directory
+                var dir = new DirectoryInfo(assemblyLocation);
+                if (dir.Name.StartsWith("net") && dir.Parent != null && 
+                    (dir.Parent.Name == "Release" || dir.Parent.Name == "Debug") && 
+                    dir.Parent.Parent != null && dir.Parent.Parent.Name == "bin" && 
+                    dir.Parent.Parent.Parent != null)
+                {
+                    // We're in a project's output directory, go up to the project directory
+                    _projectBasePath = dir.Parent.Parent.Parent.FullName;
+                    
+                    // Now check if this is a project directory by looking for the project file
+                    string? projectDir = FindProjectDirectory(_projectBasePath);
+                    if (projectDir != null && !string.IsNullOrEmpty(projectDir))
+                    {
+                        _projectBasePath = projectDir;
+                        Console.WriteLine($"Project base path determined from output directory: {_projectBasePath}");
+                        return;
+                    }
+                }
+                
+                // Last resort: check for the existence of the project directories to navigate
+                if (Directory.Exists(Path.Combine(assemblyLocation, "PokerGame.Core")))
+                {
+                    _projectBasePath = assemblyLocation;
+                    Console.WriteLine($"Project base path set to assembly directory: {_projectBasePath}");
+                    return;
+                }
+                
+                // If all else fails, try going up one directory at a time and check for project folders
+                dir = new DirectoryInfo(assemblyLocation);
+                while (dir != null && dir.Parent != null)
+                {
+                    dir = dir.Parent;
+                    if (Directory.Exists(Path.Combine(dir.FullName, "PokerGame.Core")) || 
+                        Directory.Exists(Path.Combine(dir.FullName, "PokerGame.Console")))
+                    {
+                        _projectBasePath = dir.FullName;
+                        Console.WriteLine($"Project base path determined by finding project directories: {_projectBasePath}");
+                        return;
+                    }
+                }
+                
+                // If we can't determine the base path, use the current directory
+                _projectBasePath = Directory.GetCurrentDirectory();
+                Console.WriteLine($"Couldn't determine project base path, using current directory: {_projectBasePath}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error determining project base path: {ex.Message}");
+                _projectBasePath = Directory.GetCurrentDirectory();
+                Console.WriteLine($"Using current directory as fallback: {_projectBasePath}");
+            }
+        }
+        
+        /// <summary>
+        /// Finds the solution directory by looking for a .sln file
+        /// </summary>
+        private string? FindSolutionDirectory(string startDir)
+        {
+            try
+            {
+                // Start with the given directory
+                string directory = startDir;
+                
+                // Keep going up directories looking for a .sln file
+                while (!string.IsNullOrEmpty(directory))
+                {
+                    // Look for .sln files in this directory
+                    string[] slnFiles = Directory.GetFiles(directory, "*.sln");
+                    if (slnFiles.Length > 0)
+                    {
+                        return directory;
+                    }
+                    
+                    // Go up one directory
+                    var parent = Directory.GetParent(directory);
+                    if (parent == null)
+                        break;
+                        
+                    directory = parent.FullName;
+                }
+                
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error finding solution directory: {ex.Message}");
+                return null;
+            }
+        }
+        
+        /// <summary>
+        /// Finds the project directory by looking for a .csproj file or certain project directories
+        /// </summary>
+        private string? FindProjectDirectory(string startDir)
+        {
+            try
+            {
+                // Check if this is a project directory
+                string[] csprojFiles = Directory.GetFiles(startDir, "*.csproj");
+                if (csprojFiles.Length > 0)
+                {
+                    // This is a project directory, get its parent (which would be the solution directory)
+                    var parent = Directory.GetParent(startDir);
+                    return parent?.FullName;
+                }
+                
+                // Check if the solution directory contains our project directories
+                if (Directory.Exists(Path.Combine(startDir, "PokerGame.Core")) || 
+                    Directory.Exists(Path.Combine(startDir, "PokerGame.Console")))
+                {
+                    return startDir;
+                }
+                
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error finding project directory: {ex.Message}");
+                return null;
+            }
         }
 
         /// <summary>
@@ -254,6 +426,9 @@ namespace PokerGame.Core.Process
 
         // Configurable paths
         private string _dotnetPath = "dotnet";
+        private string _projectBasePath = "";
+        private string _consoleProjectPath = "PokerGame.Console/PokerGame.Console.csproj";
+        private string _servicesProjectPath = "PokerGame.Services/PokerGame.Services.csproj";
         
         /// <summary>
         /// Gets or sets the path to the dotnet executable
@@ -263,6 +438,45 @@ namespace PokerGame.Core.Process
             get => _dotnetPath;
             set => _dotnetPath = !string.IsNullOrEmpty(value) ? value : "dotnet";
         }
+        
+        /// <summary>
+        /// Gets or sets the base path for project files
+        /// </summary>
+        public string ProjectBasePath
+        {
+            get => _projectBasePath;
+            set => _projectBasePath = value ?? "";
+        }
+        
+        /// <summary>
+        /// Gets or sets the path to the console project
+        /// </summary>
+        public string ConsoleProjectPath
+        {
+            get => _consoleProjectPath;
+            set => _consoleProjectPath = !string.IsNullOrEmpty(value) ? value : "PokerGame.Console/PokerGame.Console.csproj";
+        }
+        
+        /// <summary>
+        /// Gets or sets the path to the services project
+        /// </summary>
+        public string ServicesProjectPath
+        {
+            get => _servicesProjectPath;
+            set => _servicesProjectPath = !string.IsNullOrEmpty(value) ? value : "PokerGame.Services/PokerGame.Services.csproj";
+        }
+        
+        /// <summary>
+        /// Gets the full path to the console project
+        /// </summary>
+        public string GetFullConsoleProjectPath() => 
+            Path.Combine(ProjectBasePath, ConsoleProjectPath);
+            
+        /// <summary>
+        /// Gets the full path to the services project
+        /// </summary>
+        public string GetFullServicesProjectPath() => 
+            Path.Combine(ProjectBasePath, ServicesProjectPath);
         
         /// <summary>
         /// Initializes the dotnet path by detecting it from the environment
@@ -343,9 +557,12 @@ namespace PokerGame.Core.Process
             if (verbose)
                 arguments += " --verbose";
                 
+            string projectPath = GetFullServicesProjectPath();
+            Console.WriteLine($"Starting services host with project path: {projectPath}");
+                
             return StartProcess(
                 _dotnetPath, 
-                $"run --project PokerGame.Services/PokerGame.Services.csproj -- {arguments}",
+                $"run --project {projectPath} -- {arguments}",
                 "ServicesHost");
         }
 
@@ -368,9 +585,12 @@ namespace PokerGame.Core.Process
             if (verbose)
                 arguments += " --verbose";
                 
+            string projectPath = GetFullConsoleProjectPath();
+            Console.WriteLine($"Starting console client with project path: {projectPath}");
+                
             return StartProcess(
                 _dotnetPath, 
-                $"run --project PokerGame.Console/PokerGame.Console.csproj -- {arguments}",
+                $"run --project {projectPath} -- {arguments}",
                 useCurses ? "CursesUI" : "ConsoleUI");
         }
 
