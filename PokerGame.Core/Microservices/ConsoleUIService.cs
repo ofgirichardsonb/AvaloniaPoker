@@ -31,7 +31,7 @@ namespace PokerGame.Core.Microservices
         private string? _gameEngineServiceId;
         private bool _waitingForPlayerAction = false;
         private string _activePlayerId = string.Empty;
-        private readonly bool _useEnhancedUI;
+        private bool _useEnhancedUI;
         private object? _enhancedUiInstance; // Will hold a dynamic reference to CursesUI when needed
         
         /// <summary>
@@ -44,23 +44,44 @@ namespace PokerGame.Core.Microservices
             : base("PlayerUI", "Console UI", publisherPort, subscriberPort)
         {
             _useEnhancedUI = useEnhancedUI;
+            Console.WriteLine($"ConsoleUIService created with enhanced UI: {_useEnhancedUI}");
             
-            // Initialize enhanced UI if requested
-            if (_useEnhancedUI)
+            // Defer initialization of the enhanced UI to the Start method
+            // This ensures proper sequencing with other microservices
+        }
+        
+        /// <summary>
+        /// Starts the UI service
+        /// </summary>
+        public override void Start()
+        {
+            base.Start();
+            
+            // Initialize enhanced UI if requested - doing this here ensures proper initialization order
+            if (_useEnhancedUI && _enhancedUiInstance == null)
             {
                 try
                 {
+                    Console.WriteLine("Initializing Enhanced UI in Start method...");
                     // Create CursesUI instance via reflection to avoid direct dependency
-                    // This allows the service to still function if Curses is not available
                     var cursesUIType = Type.GetType("PokerGame.Console.CursesUI, PokerGame.Console");
                     if (cursesUIType != null)
                     {
                         _enhancedUiInstance = Activator.CreateInstance(cursesUIType);
-                        Console.WriteLine("Successfully initialized Enhanced Console UI");
+                        Console.WriteLine("Successfully created Enhanced Console UI instance");
                         
                         // Call Initialize method
                         var initMethod = cursesUIType.GetMethod("Initialize");
-                        initMethod?.Invoke(_enhancedUiInstance, null);
+                        if (initMethod != null)
+                        {
+                            initMethod.Invoke(_enhancedUiInstance, null);
+                            Console.WriteLine("Successfully initialized Enhanced Console UI");
+                        }
+                        else
+                        {
+                            Console.WriteLine("Could not find Initialize method on CursesUI");
+                            _useEnhancedUI = false;
+                        }
                     }
                     else
                     {
@@ -71,17 +92,10 @@ namespace PokerGame.Core.Microservices
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error initializing enhanced UI: {ex.Message}");
+                    Console.WriteLine(ex.StackTrace);
                     _useEnhancedUI = false;
                 }
             }
-        }
-        
-        /// <summary>
-        /// Starts the UI service
-        /// </summary>
-        public override void Start()
-        {
-            base.Start();
             
             // Start the input processing task
             Task.Run(ProcessUserInputAsync);
@@ -166,6 +180,20 @@ namespace PokerGame.Core.Microservices
                     if (!string.IsNullOrEmpty(displayText))
                     {
                         Console.WriteLine(displayText);
+                    }
+                    break;
+                
+                case MessageType.ActionResponse:
+                    var response = message.GetPayload<ActionResponsePayload>();
+                    if (response != null)
+                    {
+                        Console.WriteLine($"Action response received: {response.Message}");
+                        if (!response.Success)
+                        {
+                            Console.WriteLine($"Error processing action: {response.Message}");
+                            // If the action failed, we might want to re-prompt the player
+                            _waitingForPlayerAction = true;
+                        }
                     }
                     break;
                     
@@ -409,6 +437,8 @@ namespace PokerGame.Core.Microservices
         {
             if (_gameEngineServiceId != null && _waitingForPlayerAction)
             {
+                Console.WriteLine($"Sending player action: {actionType} with bet amount: {betAmount}");
+                
                 var payload = new PlayerActionPayload
                 {
                     PlayerId = _activePlayerId,
@@ -417,9 +447,39 @@ namespace PokerGame.Core.Microservices
                 };
                 
                 var message = Message.Create(MessageType.PlayerAction, payload);
+                
+                // Set the sender ID explicitly
+                message.SenderId = ServiceId;
+                
+                Console.WriteLine($"Sending action to game engine {_gameEngineServiceId}");
                 SendTo(message, _gameEngineServiceId);
                 
+                // Give some time for processing before next action
+                Thread.Sleep(100);
+                
                 _waitingForPlayerAction = false;
+                Console.WriteLine("Player action sent, waiting for response");
+                
+                // Request a game state update after sending the action
+                // This ensures we see the latest state even if the response handling has issues
+                RequestGameStateUpdate();
+            }
+            else
+            {
+                Console.WriteLine($"Cannot send player action: gameEngineServiceId={_gameEngineServiceId}, waitingForPlayerAction={_waitingForPlayerAction}");
+            }
+        }
+        
+        /// <summary>
+        /// Requests a game state update from the game engine
+        /// </summary>
+        private void RequestGameStateUpdate()
+        {
+            if (_gameEngineServiceId != null)
+            {
+                // Create a simple message to request game state
+                var message = Message.Create(MessageType.GameState);
+                SendTo(message, _gameEngineServiceId);
             }
         }
         

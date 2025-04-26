@@ -257,26 +257,80 @@ namespace PokerGame.Core.Microservices
                     break;
                     
                 case MessageType.PlayerAction:
+                    Console.WriteLine($"Received PlayerAction message from {message.SenderId}");
+                    
                     var actionPayload = message.GetPayload<PlayerActionPayload>();
                     if (actionPayload != null)
                     {
-                        _gameEngine.ProcessPlayerAction(actionPayload.ActionType, actionPayload.BetAmount);
+                        Console.WriteLine($"Processing player action: {actionPayload.ActionType} from player {actionPayload.PlayerId}");
                         
-                        // If we need to deal community cards after this action
-                        if (_gameEngine.State == Game.GameState.Flop)
+                        // Force updating of active player if needed
+                        try
                         {
-                            await DealCommunityCardsAsync(3); // Flop
+                            // Ensure we're in a proper state to process actions
+                            if (_gameEngine.State == Game.GameState.Setup)
+                            {
+                                Console.WriteLine("Forcing game state to PreFlop before processing action");
+                                typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, Game.GameState.PreFlop);
+                            }
+                            
+                            // Process the action
+                            Console.WriteLine($"Processing action: {actionPayload.ActionType} with amount: {actionPayload.BetAmount}");
+                            _gameEngine.ProcessPlayerAction(actionPayload.ActionType, actionPayload.BetAmount);
+                            
+                            // Log the state after action
+                            Console.WriteLine($"Game state after action: {_gameEngine.State}");
+                            
+                            // If we need to deal community cards after this action
+                            if (_gameEngine.State == Game.GameState.Flop)
+                            {
+                                Console.WriteLine("Dealing FLOP cards");
+                                await DealCommunityCardsAsync(3); // Flop
+                            }
+                            else if (_gameEngine.State == Game.GameState.Turn)
+                            {
+                                Console.WriteLine("Dealing TURN card");
+                                await DealCommunityCardsAsync(1); // Turn
+                            }
+                            else if (_gameEngine.State == Game.GameState.River)
+                            {
+                                Console.WriteLine("Dealing RIVER card");
+                                await DealCommunityCardsAsync(1); // River
+                            }
+                            
+                            // Make sure to update the game state to all clients
+                            Console.WriteLine("Broadcasting game state after player action");
+                            BroadcastGameState();
+                            
+                            // Send a response back to the UI
+                            var responseMessage = Message.Create(MessageType.ActionResponse);
+                            responseMessage.SetPayload(new ActionResponsePayload
+                            {
+                                Success = true,
+                                ActionType = actionPayload.ActionType,
+                                Message = $"Action {actionPayload.ActionType} processed successfully"
+                            });
+                            SendTo(responseMessage, message.SenderId);
                         }
-                        else if (_gameEngine.State == Game.GameState.Turn)
+                        catch (Exception ex)
                         {
-                            await DealCommunityCardsAsync(1); // Turn
+                            Console.WriteLine($"Error processing player action: {ex.Message}");
+                            Console.WriteLine(ex.StackTrace);
+                            
+                            // Send failure response
+                            var responseMessage = Message.Create(MessageType.ActionResponse);
+                            responseMessage.SetPayload(new ActionResponsePayload
+                            {
+                                Success = false,
+                                ActionType = actionPayload.ActionType,
+                                Message = $"Error: {ex.Message}"
+                            });
+                            SendTo(responseMessage, message.SenderId);
                         }
-                        else if (_gameEngine.State == Game.GameState.River)
-                        {
-                            await DealCommunityCardsAsync(1); // River
-                        }
-                        
-                        BroadcastGameState();
+                    }
+                    else
+                    {
+                        Console.WriteLine("Received PlayerAction message with null payload");
                     }
                     break;
                     

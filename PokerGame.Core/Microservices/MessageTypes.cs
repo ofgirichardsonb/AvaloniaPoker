@@ -22,6 +22,7 @@ namespace PokerGame.Core.Microservices
         StartHand,
         DealCards,
         PlayerAction,
+        ActionResponse,
         RoundComplete,
         HandComplete,
         
@@ -347,6 +348,27 @@ namespace PokerGame.Core.Microservices
         /// Gets or sets additional error details
         /// </summary>
         public string Details { get; set; } = string.Empty;
+    }
+    
+    /// <summary>
+    /// Payload for action response messages
+    /// </summary>
+    public class ActionResponsePayload
+    {
+        /// <summary>
+        /// Gets or sets whether the action was successful
+        /// </summary>
+        public bool Success { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the action type that was processed
+        /// </summary>
+        public string ActionType { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the response message
+        /// </summary>
+        public string Message { get; set; } = string.Empty;
     }
     
     // Note: The DeckCreatePayload, DeckIdPayload, DeckDealPayload, DeckDealResponsePayload, 

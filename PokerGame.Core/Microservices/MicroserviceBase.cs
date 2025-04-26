@@ -191,11 +191,49 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         /// <param name="message">The message to send</param>
         /// <param name="receiverId">The ID of the receiving service</param>
-        protected internal virtual void SendTo(Message message, string receiverId)
+        /// <returns>True if the message was sent successfully</returns>
+        protected internal virtual bool SendTo(Message message, string receiverId)
         {
-            message.SenderId = _serviceId;
-            message.ReceiverId = receiverId;
-            _publisherSocket?.SendFrame(message.ToJson());
+            try
+            {
+                // Make sure both IDs are set
+                if (string.IsNullOrEmpty(_serviceId))
+                {
+                    Console.WriteLine("Warning: Sender ID is not set.");
+                    return false;
+                }
+                
+                if (string.IsNullOrEmpty(receiverId))
+                {
+                    Console.WriteLine("Warning: Target service ID is not set.");
+                    return false;
+                }
+                
+                // Set the sender and target IDs
+                message.SenderId = _serviceId;
+                message.ReceiverId = receiverId;
+                
+                // Add a unique message ID if not already present
+                if (string.IsNullOrEmpty(message.MessageId))
+                {
+                    message.MessageId = Guid.NewGuid().ToString();
+                }
+                
+                string serialized = message.ToJson();
+                Console.WriteLine($"Sending message type {message.Type} to {receiverId}");
+                
+                // Use the publisher socket to send the message
+                _publisherSocket?.SendFrame(serialized);
+                
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Log any errors
+                Console.WriteLine($"Error sending message: {ex.Message}");
+                Console.WriteLine(ex.StackTrace);
+                return false;
+            }
         }
         
         /// <summary>
