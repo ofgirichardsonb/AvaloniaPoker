@@ -143,7 +143,7 @@ namespace PokerGame.Core.Microservices
                                 }
                                 
                                 // Try to receive a message with a short timeout
-                                if (_subscriberSocket.TryReceiveFrameString(TimeSpan.FromMilliseconds(50), out string? messageJson) && 
+                                if (_subscriberSocket != null && _subscriberSocket.TryReceiveFrameString(TimeSpan.FromMilliseconds(50), out string? messageJson) && 
                                     !string.IsNullOrEmpty(messageJson))
                                 {
                                     try
@@ -153,7 +153,9 @@ namespace PokerGame.Core.Microservices
                                         
                                         if (message != null && 
                                             (message.Type == MessageType.Ping || message.Type == MessageType.DeckCreate) &&
-                                            (string.IsNullOrEmpty(message.ReceiverId) || message.ReceiverId == _serviceId))
+                                            (string.IsNullOrEmpty(message.ReceiverId) || message.ReceiverId == _serviceId) &&
+                                            !string.IsNullOrEmpty(message.MessageId) &&
+                                            !string.IsNullOrEmpty(message.SenderId))
                                         {
                                             Console.WriteLine($"!!!! CRITICAL OVERRIDE: Received {message.Type} message {message.MessageId} from {message.SenderId}");
                                             
