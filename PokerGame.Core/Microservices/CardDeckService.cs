@@ -19,16 +19,28 @@ namespace PokerGame.Core.Microservices
         public const int DefaultPublisherPort = 5559;
         public const int DefaultSubscriberPort = 5560;
         
+        // Flag to indicate if this service should always use emergency decks
+        private readonly bool _useEmergencyDeckMode;
+        
         /// <summary>
         /// Creates a new card deck service
         /// </summary>
         /// <param name="publisherPort">The port to publish messages on</param>
         /// <param name="subscriberPort">The port to subscribe to messages on</param>
+        /// <param name="useEmergencyDeckMode">Whether to always use emergency decks instead of network communication</param>
         public CardDeckService(
             int publisherPort = DefaultPublisherPort,
-            int subscriberPort = DefaultSubscriberPort)
+            int subscriberPort = DefaultSubscriberPort,
+            bool useEmergencyDeckMode = false)
             : base("CardDeck", "Card Deck Service", publisherPort, subscriberPort)
         {
+            _useEmergencyDeckMode = useEmergencyDeckMode;
+            
+            if (_useEmergencyDeckMode)
+            {
+                Console.WriteLine("===> CardDeckService: Running in emergency deck mode - will create decks immediately without network");
+            }
+            
             // Ensure that the card deck service is properly initialized
             VerifyCriticalMessageHandlers();
         }
@@ -285,6 +297,55 @@ namespace PokerGame.Core.Microservices
                     else if (message.Type == MessageType.DeckCreate)
                     {
                         Console.WriteLine($"===> DECKCREATE HANDLER: Processing deck creation {message.MessageId}");
+                    }
+                }
+                
+                // Special handling for messages when in emergency deck mode
+                if (_useEmergencyDeckMode && message.Type == MessageType.DeckCreate)
+                {
+                    Console.WriteLine($"===> CardDeckService: Using EMERGENCY DECK MODE for DeckCreate message {message.MessageId}");
+                    var createPayload = message.GetPayload<DeckCreatePayload>();
+                    if (createPayload != null)
+                    {
+                        try
+                        {
+                            // Create the deck immediately with no delay or network communication
+                            Console.WriteLine($"===> CardDeckService: EMERGENCY creating deck with ID {createPayload.DeckId}");
+                            CreateDeck(createPayload.DeckId, createPayload.Shuffle);
+                            Console.WriteLine($"===> CardDeckService: EMERGENCY deck {createPayload.DeckId} created successfully");
+                            
+                            // Send immediate confirmation without relying on normal message channels
+                            var confirmationPayload = new DeckStatusPayload 
+                            { 
+                                DeckId = createPayload.DeckId,
+                                Success = true,
+                                Message = "Deck created successfully (emergency mode)"
+                            };
+                            
+                            var confirmationMessage = Message.Create(MessageType.DeckCreated, confirmationPayload);
+                            confirmationMessage.InResponseTo = message.MessageId;
+                            confirmationMessage.SenderId = _serviceId;
+                            confirmationMessage.ReceiverId = message.SenderId;
+                            
+                            Console.WriteLine($"===> CardDeckService: EMERGENCY broadcasting confirmation to {message.SenderId}");
+                            Broadcast(confirmationMessage);
+                            
+                            // Send an acknowledgment message too
+                            var ackMessage = Message.Create(MessageType.Acknowledgment, DateTime.UtcNow.ToString("o"));
+                            ackMessage.InResponseTo = message.MessageId;
+                            ackMessage.SenderId = _serviceId;
+                            ackMessage.ReceiverId = message.SenderId;
+                            Broadcast(ackMessage);
+                            
+                            Console.WriteLine($"===> CardDeckService: EMERGENCY deck creation process complete");
+                            
+                            // Return immediately to bypass normal processing
+                            return;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"===> CardDeckService: EMERGENCY ERROR creating deck: {ex.Message}");
+                        }
                     }
                 }
                 

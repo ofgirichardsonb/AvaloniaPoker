@@ -14,39 +14,44 @@ namespace PokerGame.Console
         /// Starts the microservice-based application
         /// </summary>
         /// <param name="args">Command line arguments</param>
-        /// <param name="useCursesUi">Whether to use the enhanced curses UI</param>
-        public static void StartMicroservices(string[] args, bool useCursesUi = false)
+        /// <param name="useEnhancedUi">Whether to use the enhanced UI</param>
+        /// <param name="serviceType">Type of service to run, if null runs all services</param>
+        /// <param name="portOffset">Port offset for services</param>
+        /// <param name="useEmergencyDeck">Whether to use emergency deck</param>
+        public static void StartMicroservices(string[] args, bool useEnhancedUi = false, string? serviceType = null, 
+                                             int portOffset = 0, bool useEmergencyDeck = false)
         {
             System.Console.WriteLine("Starting poker game with microservices architecture...");
             
             // Ensure we explicitly pass the enhanced UI flag
-            if (useCursesUi)
+            if (useEnhancedUi)
             {
-                System.Console.WriteLine("Enhanced UI (curses) explicitly enabled via command line");
-                // Make sure --curses is in the args array
-                bool hasCursesFlag = false;
+                System.Console.WriteLine("Enhanced UI explicitly enabled via command line");
+                bool hasEnhancedUiFlag = false;
+                
                 foreach (var arg in args)
                 {
                     if (arg.Equals("--curses", StringComparison.OrdinalIgnoreCase) || 
-                        arg.Equals("-c", StringComparison.OrdinalIgnoreCase))
+                        arg.Equals("-c", StringComparison.OrdinalIgnoreCase) ||
+                        arg.Equals("--enhanced-ui", StringComparison.OrdinalIgnoreCase))
                     {
-                        hasCursesFlag = true;
+                        hasEnhancedUiFlag = true;
                         break;
                     }
                 }
                 
-                if (!hasCursesFlag)
+                if (!hasEnhancedUiFlag)
                 {
-                    // Add the curses flag to the args array
+                    // Add the enhanced UI flag to the args array
                     var newArgs = new string[args.Length + 1];
                     Array.Copy(args, newArgs, args.Length);
-                    newArgs[args.Length] = "--curses";
+                    newArgs[args.Length] = "--enhanced-ui";
                     args = newArgs;
                     
-                    System.Console.WriteLine("Added --curses flag to arguments");
+                    System.Console.WriteLine("Added --enhanced-ui flag to arguments");
                 }
                 
-                System.Console.WriteLine("Using enhanced curses UI...");
+                System.Console.WriteLine("Using enhanced UI...");
             }
             
             // Create the microservice manager
@@ -62,10 +67,54 @@ namespace PokerGame.Console
             
             try
             {
-                manager = new MicroserviceManager();
+                manager = new MicroserviceManager(portOffset);
                 
-                // Start all required microservices with UI preference
-                manager.StartMicroservices(args);
+                // Check if running a specific service or all services
+                if (serviceType != null)
+                {
+                    // Single service mode - start only the specified service
+                    System.Console.WriteLine($"Running in single-service mode: {serviceType}");
+                    
+                    switch (serviceType.ToLowerInvariant())
+                    {
+                        case "gameengine":
+                            System.Console.WriteLine("Starting Game Engine Service only...");
+                            manager.StartGameEngineService(args);
+                            break;
+                            
+                        case "carddeck":
+                            System.Console.WriteLine("Starting Card Deck Service only...");
+                            if (useEmergencyDeck)
+                            {
+                                System.Console.WriteLine("Using emergency deck mode");
+                                // Add emergency deck flag to args if needed
+                                if (!Array.Exists(args, arg => arg.Equals("--emergency-deck", StringComparison.OrdinalIgnoreCase)))
+                                {
+                                    var newArgs = new string[args.Length + 1];
+                                    Array.Copy(args, newArgs, args.Length);
+                                    newArgs[args.Length] = "--emergency-deck";
+                                    args = newArgs;
+                                }
+                            }
+                            manager.StartCardDeckService(args);
+                            break;
+                            
+                        case "consoleui":
+                            System.Console.WriteLine("Starting Console UI Service only...");
+                            manager.StartConsoleUIService(args, useEnhancedUi);
+                            break;
+                            
+                        default:
+                            System.Console.WriteLine($"Unknown service type: {serviceType}. Valid types are: GameEngine, CardDeck, ConsoleUI");
+                            return;
+                    }
+                }
+                else
+                {
+                    // Start all required microservices
+                    System.Console.WriteLine("Starting all microservices...");
+                    manager.StartMicroservices(args);
+                }
                 
                 // Keep the main thread alive until user wants to exit
                 System.Console.WriteLine("Press Ctrl+C to exit");
@@ -76,6 +125,11 @@ namespace PokerGame.Console
             catch (Exception ex)
             {
                 System.Console.WriteLine($"Error: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    System.Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+                }
+                System.Console.WriteLine(ex.StackTrace);
             }
             finally
             {

@@ -17,16 +17,48 @@ namespace PokerGame.Console
             bool useCursesUi = Array.Exists(args, arg => 
                 arg.Equals("--curses", StringComparison.OrdinalIgnoreCase) || 
                 arg.Equals("-c", StringComparison.OrdinalIgnoreCase));
+            
+            // Check for enhanced UI flag
+            bool useEnhancedUi = useCursesUi || Array.Exists(args, arg => 
+                arg.Equals("--enhanced-ui", StringComparison.OrdinalIgnoreCase));
+            
+            // Check for emergency deck flag
+            bool useEmergencyDeck = Array.Exists(args, arg => 
+                arg.Equals("--emergency-deck", StringComparison.OrdinalIgnoreCase));
+            
+            // Extract port offset if provided
+            int portOffset = 0;
+            foreach (string arg in args)
+            {
+                if (arg.StartsWith("--port-offset="))
+                {
+                    string offsetStr = arg.Substring("--port-offset=".Length);
+                    if (int.TryParse(offsetStr, out int offset))
+                    {
+                        portOffset = offset;
+                    }
+                }
+            }
+            
+            // Extract service type if provided
+            string? serviceType = null;
+            foreach (string arg in args)
+            {
+                if (arg.StartsWith("--service-type="))
+                {
+                    serviceType = arg.Substring("--service-type=".Length);
+                }
+            }
 
             if (useMicroservices)
             {
-                // Run in microservice mode and pass the UI flag
-                MicroserviceConsoleProgram.StartMicroservices(args, useCursesUi);
+                // Run in microservice mode with optional service type for single-service mode
+                MicroserviceConsoleProgram.StartMicroservices(args, useEnhancedUi, serviceType, portOffset, useEmergencyDeck);
             }
             else
             {
                 // Run in traditional mode with either standard or enhanced UI
-                RunTraditionalMode(useCursesUi);
+                RunTraditionalMode(useCursesUi || useEnhancedUi);
             }
         }
         

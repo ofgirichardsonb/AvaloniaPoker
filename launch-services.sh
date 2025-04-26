@@ -1,0 +1,140 @@
+#!/bin/bash
+
+# Advanced script to launch the poker game services in separate processes
+# This is more reliable than managing everything in a single .NET async process
+
+CONSOLE_PORT_OFFSET=10 # Make sure each instance gets separate ports
+
+# Function to launch a service
+launch_service() {
+    local service_type=$1
+    local port_offset=$2
+    local extra_args=$3
+    
+    echo "Launching $service_type service with port offset $port_offset..."
+    
+    # Launch the service in the background
+    dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- \
+        --microservices \
+        --service-type=$service_type \
+        --port-offset=$port_offset \
+        $extra_args &
+    
+    # Store the PID
+    local pid=$!
+    echo "$service_type service launched with PID $pid"
+    echo $pid > ".$service_type.pid"
+    
+    # Give it a moment to start up
+    sleep 2
+}
+
+# Function to stop a service
+stop_service() {
+    local service_type=$1
+    
+    if [ -f ".$service_type.pid" ]; then
+        local pid=$(cat ".$service_type.pid")
+        echo "Stopping $service_type service (PID $pid)..."
+        kill $pid 2>/dev/null
+        rm ".$service_type.pid"
+    else
+        echo "$service_type service not running"
+    fi
+}
+
+# Stop any running services
+stop_all_services() {
+    echo "Stopping all services..."
+    stop_service "gameengine"
+    stop_service "carddeck" 
+    stop_service "consoleui"
+}
+
+# Start the services in the correct order with proper delays
+start_all_services() {
+    echo "Starting all services..."
+    
+    # Start the Game Engine service first
+    launch_service "gameengine" $CONSOLE_PORT_OFFSET ""
+    sleep 3
+    
+    # Start the Card Deck service second
+    launch_service "carddeck" $((CONSOLE_PORT_OFFSET + 10)) ""
+    sleep 3
+    
+    # Start the Console UI service last
+    launch_service "consoleui" $((CONSOLE_PORT_OFFSET + 20)) "--enhanced-ui"
+    
+    echo "All services started. Poker game should be running."
+}
+
+# Start in verbose mode with more debugging information
+start_verbose() {
+    echo "Starting all services in verbose mode..."
+    launch_service "gameengine" $CONSOLE_PORT_OFFSET "--verbose"
+    sleep 3
+    launch_service "carddeck" $((CONSOLE_PORT_OFFSET + 10)) "--verbose"
+    sleep 3
+    launch_service "consoleui" $((CONSOLE_PORT_OFFSET + 20)) "--enhanced-ui --verbose"
+}
+
+# Start with emergency deck mode for better reliability
+start_emergency() {
+    echo "Starting in emergency deck mode (more reliable)..."
+    launch_service "gameengine" $CONSOLE_PORT_OFFSET ""
+    sleep 2
+    launch_service "carddeck" $((CONSOLE_PORT_OFFSET + 10)) "--emergency-deck"
+    sleep 2
+    launch_service "consoleui" $((CONSOLE_PORT_OFFSET + 20)) "--enhanced-ui"
+}
+
+# Main script execution
+case "$1" in
+    start)
+        start_all_services
+        ;;
+    stop)
+        stop_all_services
+        ;;
+    restart)
+        stop_all_services
+        sleep 2
+        start_all_services
+        ;;
+    verbose)
+        start_verbose
+        ;;
+    emergency)
+        start_emergency
+        ;;
+    start-engine)
+        launch_service "gameengine" $CONSOLE_PORT_OFFSET ""
+        ;;
+    start-deck)
+        launch_service "carddeck" $((CONSOLE_PORT_OFFSET + 10)) ""
+        ;;
+    start-ui)
+        launch_service "consoleui" $((CONSOLE_PORT_OFFSET + 20)) "--enhanced-ui"
+        ;;
+    curses)
+        # Start the Console UI service with curses interface
+        launch_service "consoleui" $((CONSOLE_PORT_OFFSET + 20)) "--curses"
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|verbose|emergency|start-engine|start-deck|start-ui|curses}"
+        echo ""
+        echo "  start       - Start all services normally"
+        echo "  stop        - Stop all running services"
+        echo "  restart     - Restart all services"
+        echo "  verbose     - Start with verbose logging"
+        echo "  emergency   - Start with emergency deck mode (more reliable)"
+        echo "  start-engine - Start only the game engine service"
+        echo "  start-deck  - Start only the card deck service"
+        echo "  start-ui    - Start only the console UI service"
+        echo "  curses      - Start only the UI with NCurses interface"
+        exit 1
+        ;;
+esac
+
+echo "Done."

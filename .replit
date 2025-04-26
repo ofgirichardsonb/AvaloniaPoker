@@ -28,6 +28,18 @@ args = "verbose_poker"
 task = "workflow.run"
 args = "test_poker_fix"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "poker_multi_service"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "poker_multi_verbose"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "poker_curses"
+
 [[workflows.workflow]]
 name = "PokerGame"
 author = "agent"
@@ -59,6 +71,30 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --microservices --verbose"
+
+[[workflows.workflow]]
+name = "poker_multi_service"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "./launch-services.sh emergency"
+
+[[workflows.workflow]]
+name = "poker_multi_verbose"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "./launch-services.sh verbose"
+
+[[workflows.workflow]]
+name = "poker_curses"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "./launch-services.sh curses"
 
 [deployment]
 run = ["sh", "-c", "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --curses"]
