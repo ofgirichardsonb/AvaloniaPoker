@@ -18,47 +18,11 @@ args = "PokerGame"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "poker_console_workflow"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "verbose_poker"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "test_poker_fix"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "poker_multi_service"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "poker_multi_verbose"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "poker_curses"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "poker_standard"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "poker_verbose_test"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "poker_standard_test"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "test_fixed_poker"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "fixed_final_messaging"
+args = "clean_poker_test"
 
 [[workflows.workflow]]
 name = "PokerGame"
@@ -69,46 +33,6 @@ task = "shell.exec"
 args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --curses"
 
 [[workflows.workflow]]
-name = "poker_console_workflow"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj"
-
-[[workflows.workflow]]
-name = "verbose_poker"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --verbose"
-
-[[workflows.workflow]]
-name = "test_poker_fix"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --microservices --verbose"
-
-[[workflows.workflow]]
-name = "poker_multi_service"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "./launch-services.sh emergency"
-
-[[workflows.workflow]]
-name = "poker_multi_verbose"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "./launch-services.sh verbose"
-
-[[workflows.workflow]]
 name = "poker_curses"
 author = "agent"
 
@@ -117,44 +41,12 @@ task = "shell.exec"
 args = "./launch-services.sh curses"
 
 [[workflows.workflow]]
-name = "poker_standard"
+name = "clean_poker_test"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "./launch-services.sh start"
-
-[[workflows.workflow]]
-name = "poker_verbose_test"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "./launch-services.sh verbose"
-
-[[workflows.workflow]]
-name = "poker_standard_test"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "./launch-services.sh start"
-
-[[workflows.workflow]]
-name = "test_fixed_poker"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --microservices --verbose --debug"
-
-[[workflows.workflow]]
-name = "fixed_final_messaging"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "./launch-services.sh emergency"
+args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --microservices --port-offset 5000 --verbose"
 
 [deployment]
 run = ["sh", "-c", "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --curses"]
