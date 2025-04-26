@@ -81,8 +81,25 @@ namespace MessageBroker
         /// <param name="backendPort">The port that services connect to</param>
         /// <param name="monitorPort">The port that provides monitoring information</param>
         public CentralMessageBroker(int frontendPort = 5570, int backendPort = 5571, int monitorPort = 5572)
-            : this(null, frontendPort, backendPort, monitorPort)
         {
+            _brokerId = $"Broker-{Guid.NewGuid()}";
+            _frontendPort = frontendPort;
+            _backendPort = backendPort;
+            _monitorPort = monitorPort;
+            _ownThread = true;
+            
+            _logger.Info("Broker", $"Creating broker with ID {_brokerId}");
+            _logger.Info("Broker", $"Frontend port: {_frontendPort}, Backend port: {_backendPort}, Monitor port: {_monitorPort}");
+            _logger.Info("Broker", $"Using own thread");
+            
+            // Start the broker in a background task
+            _brokerTask = Task.Run(RunBrokerAsync);
+            
+            // Start acknowledgment checker
+            Task.Run(CheckPendingAcknowledgmentsAsync);
+            
+            // Start expired message cleaner
+            Task.Run(CleanExpiredMessagesAsync);
         }
         
         /// <summary>

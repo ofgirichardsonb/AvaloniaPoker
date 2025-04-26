@@ -26,13 +26,35 @@ namespace MessageBroker.Tests
                 
                 // Connect clients
                 Console.WriteLine("Connecting clients...");
-                await client1.ConnectAsync();
-                await client2.ConnectAsync();
+                client1.Connect();
+                client2.Connect();
                 
-                // Register services
-                Console.WriteLine("Registering services...");
-                await client1.RegisterServiceAsync();
-                await client2.RegisterServiceAsync();
+                // Send registration message - note: we don't have RegisterService method directly
+                Console.WriteLine("Sending service registration messages...");
+                var payload1 = new ServiceRegistrationPayload
+                {
+                    ServiceId = client1.ClientId,
+                    ServiceName = client1.ClientName,
+                    ServiceType = client1.ClientType,
+                    Capabilities = client1.Capabilities.ToList()
+                };
+                
+                var regMessage1 = BrokerMessage.Create(BrokerMessageType.ServiceRegistration, payload1);
+                regMessage1.SenderId = client1.ClientId;
+                
+                var payload2 = new ServiceRegistrationPayload
+                {
+                    ServiceId = client2.ClientId,
+                    ServiceName = client2.ClientName,
+                    ServiceType = client2.ClientType,
+                    Capabilities = client2.Capabilities.ToList()
+                };
+                
+                var regMessage2 = BrokerMessage.Create(BrokerMessageType.ServiceRegistration, payload2);
+                regMessage2.SenderId = client2.ClientId;
+                
+                await client1.SendMessageAsync(regMessage1);
+                await client2.SendMessageAsync(regMessage2);
                 
                 // Discover services
                 Console.WriteLine("Discovering services...");
@@ -61,41 +83,49 @@ namespace MessageBroker.Tests
                         Task.Run(async () =>
                         {
                             Console.WriteLine($"Client2 sending acknowledgment for message: {message.MessageId}");
-                            await client2.SendAcknowledgmentAsync(message);
+                            var ackMessage = new BrokerMessage
+                            {
+                                Type = BrokerMessageType.Acknowledgment,
+                                SenderId = client2.ClientId,
+                                ReceiverId = message.SenderId,
+                                InResponseTo = message.MessageId
+                            };
+                            await client2.SendMessageAsync(ackMessage);
                         });
                     }
                 };
                 
-                // Send ping message from client1 to client2
+                // Test ping functionality
                 Console.WriteLine("Sending ping from client1 to client2...");
-                var response = await client1.SendAndWaitForResponseAsync(
-                    BrokerMessageType.Ping,
-                    client2.ServiceId,
-                    null,
-                    TimeSpan.FromSeconds(5)
-                );
+                var pingResult = await client1.PingServiceAsync(client2.ClientId, TimeSpan.FromSeconds(5));
                 
-                if (response != null)
+                if (pingResult)
                 {
-                    Console.WriteLine("Received response to ping!");
+                    Console.WriteLine("Ping successful!");
                 }
                 else
                 {
-                    Console.WriteLine("No response received to ping.");
+                    Console.WriteLine("Ping failed.");
                 }
                 
-                // Broadcast message from client1
-                Console.WriteLine("Broadcasting message from client1...");
-                await client1.BroadcastMessageAsync(BrokerMessageType.Heartbeat, null);
+                // Send direct message from client1 to client2
+                Console.WriteLine("Sending direct message from client1 to client2...");
+                var heartbeatMessage = new BrokerMessage
+                {
+                    Type = BrokerMessageType.Heartbeat,
+                    SenderId = client1.ClientId,
+                    ReceiverId = client2.ClientId
+                };
+                await client1.SendMessageAsync(heartbeatMessage);
                 
                 // Wait for messages to be processed
                 Console.WriteLine("Waiting for messages to be processed...");
                 await Task.Delay(2000);
                 
-                // Stop broker and clients
+                // Disconnect clients
                 Console.WriteLine("Stopping clients...");
-                await client1.DisconnectAsync();
-                await client2.DisconnectAsync();
+                client1.Dispose();
+                client2.Dispose();
                 
                 Console.WriteLine("Stopping broker manager...");
                 BrokerManager.Instance.Stop();

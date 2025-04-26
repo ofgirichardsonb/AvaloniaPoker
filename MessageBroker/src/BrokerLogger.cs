@@ -33,7 +33,7 @@ namespace MessageBroker
         
         private readonly ConcurrentQueue<LogEntry> _logQueue = new ConcurrentQueue<LogEntry>();
         private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
-        private readonly Thread _logProcessingThread;
+        private readonly Thread? _logProcessingThread;
         private readonly StreamWriter? _logFileWriter;
         private readonly bool _logToConsole;
         private readonly LogLevel _minimumLogLevel;
@@ -211,7 +211,7 @@ namespace MessageBroker
         public void Shutdown()
         {
             _cancellationTokenSource.Cancel();
-            _logProcessingThread.Join(1000);
+            _logProcessingThread?.Join(1000);
         }
         
         /// <summary>

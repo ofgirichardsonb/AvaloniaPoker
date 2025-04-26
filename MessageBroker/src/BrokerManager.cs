@@ -14,9 +14,9 @@ namespace MessageBroker
         
         private CentralMessageBroker? _broker;
         private readonly string _brokerId;
-        private readonly int _frontendPort;
-        private readonly int _backendPort;
-        private readonly int _monitorPort;
+        private int _frontendPort;
+        private int _backendPort;
+        private int _monitorPort;
         private bool _isStarted;
         
         /// <summary>
@@ -166,18 +166,36 @@ namespace MessageBroker
         /// <summary>
         /// Creates a new client connected to the broker
         /// </summary>
-        /// <param name="serviceId">The service ID</param>
+        /// <param name="serviceName">The service name</param>
         /// <param name="serviceType">The service type</param>
         /// <param name="capabilities">The service capabilities</param>
         /// <returns>A new BrokerClient instance</returns>
-        public BrokerClient CreateClient(string serviceId, string serviceType, string[]? capabilities = null)
+        public BrokerClient CreateClient(string serviceName, string serviceType, List<string>? capabilities = null)
         {
             if (!_isStarted)
             {
                 _logger.Warning("BrokerManager", "Creating client for non-started broker");
             }
             
-            return new BrokerClient(serviceId, serviceType, capabilities, _frontendPort);
+            return new BrokerClient(serviceName, serviceType, capabilities, "localhost", _frontendPort);
+        }
+        
+        /// <summary>
+        /// Creates a new client connected to the broker
+        /// </summary>
+        /// <param name="serviceName">The service name</param>
+        /// <param name="serviceType">The service type</param>
+        /// <param name="capabilities">The service capabilities as array</param>
+        /// <returns>A new BrokerClient instance</returns>
+        public BrokerClient CreateClient(string serviceName, string serviceType, string[]? capabilities = null)
+        {
+            List<string>? capList = null;
+            if (capabilities != null)
+            {
+                capList = new List<string>(capabilities);
+            }
+            
+            return CreateClient(serviceName, serviceType, capList);
         }
         
         /// <summary>
