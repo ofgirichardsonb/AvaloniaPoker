@@ -13,18 +13,18 @@ namespace PokerGame.Core.Microservices
     /// </summary>
     public abstract class MicroserviceBase : IDisposable
     {
-        private readonly string _serviceId;
-        private readonly string _serviceName;
-        private readonly string _serviceType;
+        protected readonly string _serviceId;
+        protected readonly string _serviceName;
+        protected readonly string _serviceType;
         
         /// <summary>
         /// Gets the unique ID of this service
         /// </summary>
         public string ServiceId => _serviceId;
         
-        private PublisherSocket? _publisherSocket;
-        private SubscriberSocket? _subscriberSocket;
-        private readonly ConcurrentQueue<Message> _messageQueue = new ConcurrentQueue<Message>();
+        protected PublisherSocket? _publisherSocket;
+        protected SubscriberSocket? _subscriberSocket;
+        protected readonly ConcurrentQueue<Message> _messageQueue = new ConcurrentQueue<Message>();
         
         private CancellationTokenSource? _cancellationTokenSource = new CancellationTokenSource();
         private Task? _processingTask;
@@ -250,6 +250,9 @@ namespace PokerGame.Core.Microservices
         {
             try
             {
+                // DEBUG INFO: Log the direct message sending details
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Direct message send attempt: Type: {message.Type}, ID: {message.MessageId}, Sending to: {receiverId}");
+                
                 // Make sure both IDs are set
                 if (string.IsNullOrEmpty(_serviceId))
                 {
@@ -276,7 +279,10 @@ namespace PokerGame.Core.Microservices
                 string serialized = message.ToJson();
                 Console.WriteLine($"Sending message type {message.Type} to {receiverId}");
                 
-                // Use the publisher socket to send the message
+                // Important fix: When sending a message to a specific service,
+                // it needs to be broadcast so all services can see it
+                // The receiver ID field is used to filter who should process it
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Broadcasting message {message.Type} to {receiverId} (using broadcast instead of direct send)");
                 _publisherSocket?.SendFrame(serialized);
                 
                 return true;
@@ -382,16 +388,70 @@ namespace PokerGame.Core.Microservices
                     {
                         try 
                         {
+                            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Received raw message: {messageJson.Substring(0, Math.Min(100, messageJson.Length))}...");
+                            
+                            // Enhanced logging for critical message types
+                            if (messageJson.Contains("\"Type\":3") || messageJson.Contains("\"Type\":11"))
+                            {
+                                Console.WriteLine($"====> CRITICAL MESSAGE [{_serviceType} {_serviceId}] RECEIVED: {messageJson}");
+                            }
+                            
                             var message = Message.FromJson(messageJson);
+                            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Parsed message type: {message.Type}, from: {message.SenderId}, to: {message.ReceiverId ?? "broadcast"}");
                             
                             // Skip our own messages
                             if (message.SenderId == _serviceId)
-                                continue;
-                                
-                            // Process messages addressed to everyone or specifically to us
-                            if (string.IsNullOrEmpty(message.ReceiverId) || message.ReceiverId == _serviceId)
                             {
+                                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Skipping own message: {message.MessageId}");
+                                continue;
+                            }
+                                
+                            // VERY IMPORTANT: Special handling for Ping and DeckCreate when we are a CardDeck service
+                            // These messages need priority handling
+                            if (_serviceType == "CardDeck" && 
+                                (message.Type == MessageType.Ping || message.Type == MessageType.DeckCreate) &&
+                                (string.IsNullOrEmpty(message.ReceiverId) || message.ReceiverId == _serviceId))
+                            {
+                                Console.WriteLine($"====> [{_serviceType} {_serviceId}] PRIORITY HANDLING for {message.Type}, ID: {message.MessageId}");
+                                
+                                // Handle Ping messages immediately with direct acknowledgment
+                                var ackMessage = Message.Create(MessageType.Acknowledgment, DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff"));
+                                ackMessage.InResponseTo = message.MessageId;
+                                ackMessage.SenderId = _serviceId;
+                                ackMessage.ReceiverId = message.SenderId;
+                                
+                                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Sending IMMEDIATE ACK for {message.Type}, ID: {message.MessageId} to {message.SenderId}");
+                                
+                                // Broadcast the acknowledgment
+                                var serializedAck = ackMessage.ToJson();
+                                Console.WriteLine($"====> [{_serviceType} {_serviceId}] SENDING RAW SOCKET FRAME FOR ACK: {serializedAck}");
+                                _publisherSocket?.SendFrame(serializedAck);
+                                
+                                // Try sending duplicate ack with different approach for redundancy
+                                try 
+                                {
+                                    Console.WriteLine($"====> [{_serviceType} {_serviceId}] DIRECT BROADCAST of ACK for {message.MessageId}");
+                                    Broadcast(ackMessage);
+                                    Console.WriteLine($"====> [{_serviceType} {_serviceId}] DIRECT BROADCAST of ACK COMPLETED");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"====> [{_serviceType} {_serviceId}] ERROR in direct broadcast ACK: {ex.Message}");
+                                }
+                                
+                                // Still queue the message for normal processing
+                                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Enqueueing priority message: {message.Type}, ID: {message.MessageId}");
                                 _messageQueue.Enqueue(message);
+                            }
+                            // Process messages addressed to everyone or specifically to us
+                            else if (string.IsNullOrEmpty(message.ReceiverId) || message.ReceiverId == _serviceId)
+                            {
+                                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Enqueueing message: {message.Type}, ID: {message.MessageId}");
+                                _messageQueue.Enqueue(message);
+                            }
+                            else
+                            {
+                                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Ignoring message addressed to: {message.ReceiverId}");
                             }
                         }
                         catch (ObjectDisposedException)
@@ -421,6 +481,42 @@ namespace PokerGame.Core.Microservices
                         {
                             processedCount++;
                             
+                            // CRITICAL FIX: Handle ping and DeckCreate with highest priority and guaranteed ack
+                            if (message.Type == MessageType.Ping || message.Type == MessageType.DeckCreate)
+                            {
+                                Console.WriteLine($"====> MicroserviceBase for {_serviceType}: CRITICAL MESSAGE HANDLING for {message.Type}");
+                                
+                                // Always send acknowledgment first for critical messages
+                                var ackMessage = Message.Create(MessageType.Acknowledgment, DateTime.UtcNow.ToString("o"));
+                                ackMessage.InResponseTo = message.MessageId;
+                                ackMessage.SenderId = _serviceId;
+                                ackMessage.ReceiverId = message.SenderId;
+                                
+                                // Multiple redundant acknowledgment methods
+                                try 
+                                {
+                                    // Method 1: Direct socket send
+                                    var serializedAck = ackMessage.ToJson();
+                                    Console.WriteLine($"====> [{_serviceType} {_serviceId}] CRITICAL ACK 1: Raw socket for {message.Type} {message.MessageId}");
+                                    _publisherSocket?.SendFrame(serializedAck);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"====> [{_serviceType} {_serviceId}] ACK error 1: {ex.Message}");
+                                }
+                                
+                                try
+                                {
+                                    // Method 2: Broadcast 
+                                    Console.WriteLine($"====> [{_serviceType} {_serviceId}] CRITICAL ACK 2: Broadcast for {message.Type} {message.MessageId}");
+                                    Broadcast(ackMessage);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"====> [{_serviceType} {_serviceId}] ACK error 2: {ex.Message}");
+                                }
+                            }
+                            
                             switch (message.Type)
                             {
                                 case MessageType.ServiceRegistration:
@@ -432,8 +528,13 @@ namespace PokerGame.Core.Microservices
                                     break;
                                     
                                 default:
+                                    // Log this message for debugging
+                                    Console.WriteLine($"====> MicroserviceBase for {_serviceType}: Delegating message type {message.Type} (ID: {message.MessageId}) to derived class {this.GetType().Name}");
+                                    
                                     // Let the derived class handle other message types
                                     await HandleMessageAsync(message);
+                                    
+                                    Console.WriteLine($"====> MicroserviceBase for {_serviceType}: Completed handling message {message.Type} (ID: {message.MessageId})");
                                     break;
                             }
                         }

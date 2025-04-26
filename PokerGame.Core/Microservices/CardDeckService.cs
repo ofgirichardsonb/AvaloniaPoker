@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using PokerGame.Core.Models;
+using NetMQ;
+using NetMQ.Sockets;
 
 namespace PokerGame.Core.Microservices
 {
@@ -27,6 +29,176 @@ namespace PokerGame.Core.Microservices
             int subscriberPort = DefaultSubscriberPort)
             : base("CardDeck", "Card Deck Service", publisherPort, subscriberPort)
         {
+            // Ensure that the card deck service is properly initialized
+            VerifyCriticalMessageHandlers();
+        }
+        
+        /// <summary>
+        /// Verifies that critical message handlers are properly set up
+        /// </summary>
+        private void VerifyCriticalMessageHandlers()
+        {
+            Console.WriteLine("===> CardDeckService: Verifying critical message handlers");
+            
+            // Send a self-acknowledgement to confirm the publisher socket is working
+            try
+            {
+                var testMessage = Message.Create(MessageType.Ping, "self-test");
+                testMessage.SenderId = _serviceId;
+                testMessage.ReceiverId = _serviceId;  
+                
+                Console.WriteLine("===> CardDeckService: Publishing self-test message");
+                _publisherSocket?.SendFrame(testMessage.ToJson());
+                
+                Console.WriteLine("===> CardDeckService: Self-test message published successfully");
+                Console.WriteLine("===> CardDeckService: Critical message handlers verified!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"===> CardDeckService: ERROR verifying critical message handlers: {ex.Message}");
+                Console.WriteLine($"===> CardDeckService: ERROR Stack Trace: {ex.StackTrace}");
+            }
+        }
+        
+        /// <summary>
+        /// Starts the card deck service with special handling for critical messages
+        /// </summary>
+        public override void Start()
+        {
+            Console.WriteLine("===> CardDeckService: Starting with enhanced critical message handling");
+            
+            // Override message handling to implement direct low-level acknowledgment
+            SetupCriticalMessageHandler();
+            
+            // Call the base implementation to set up the service
+            base.Start();
+            
+            // Register for direct message handling
+            Console.WriteLine("===> CardDeckService: Setting up direct acknowledgment handling");
+            
+            // Send a startup message to announce this service's capabilities
+            var startupMessage = Message.Create(MessageType.ServiceRegistration, 
+                new ServiceRegistrationPayload 
+                { 
+                    ServiceId = _serviceId,
+                    ServiceName = "Card Deck Service",
+                    ServiceType = "CardDeck",
+                    Capabilities = new List<string> { "DeckCreate", "DeckShuffle", "DeckDeal", "DeckStatus" }
+                });
+            
+            Console.WriteLine("===> CardDeckService: Broadcasting startup message");
+            Broadcast(startupMessage);
+            
+            // Send a self-acknowledgement to ensure the message handling is working
+            Console.WriteLine("===> CardDeckService: Sending self-test message");
+            var testMessage = Message.Create(MessageType.Ping, "self-test");
+            testMessage.SenderId = _serviceId;
+            testMessage.ReceiverId = _serviceId;
+            _publisherSocket?.SendFrame(testMessage.ToJson());
+            
+            Console.WriteLine("===> CardDeckService: Enhanced startup complete");
+        }
+        
+        /// <summary>
+        /// Sets up a special critical message handler that ensures acknowledgments are sent properly
+        /// </summary>
+        private void SetupCriticalMessageHandler()
+        {
+            Console.WriteLine("===> CardDeckService: Setting up OVERRIDE message handler for critical messages");
+            
+            // Start a background task to continuously monitor the message queue and prioritize critical messages
+            Task.Run(async () =>
+            {
+                Console.WriteLine("===> CardDeckService: OVERRIDE message handler started");
+                
+                while (true)
+                {
+                    try
+                    {
+                        // Listen for incoming messages directly from the socket
+                        if (_subscriberSocket != null)
+                        {
+                            try
+                            {
+                                // Try to receive a message with a short timeout
+                                if (_subscriberSocket.TryReceiveFrameString(TimeSpan.FromMilliseconds(50), out string? messageJson) && 
+                                    !string.IsNullOrEmpty(messageJson))
+                                {
+                                    try
+                                    {
+                                        // Parse the message
+                                        var message = Message.FromJson(messageJson);
+                                        
+                                        if (message != null && 
+                                            (message.Type == MessageType.Ping || message.Type == MessageType.DeckCreate) &&
+                                            (string.IsNullOrEmpty(message.ReceiverId) || message.ReceiverId == _serviceId))
+                                        {
+                                            Console.WriteLine($"!!!! CRITICAL OVERRIDE: Received {message.Type} message {message.MessageId} from {message.SenderId}");
+                                            
+                                            // Create and send acknowledgment immediately
+                                            var ackMessage = Message.Create(MessageType.Acknowledgment, DateTime.UtcNow.ToString("o"));
+                                            ackMessage.InResponseTo = message.MessageId;
+                                            ackMessage.SenderId = _serviceId;
+                                            ackMessage.ReceiverId = message.SenderId;
+                                            
+                                            // Send acknowledgment with multiple approaches for redundancy
+                                            string serializedAck = ackMessage.ToJson();
+                                            
+                                            try
+                                            {
+                                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Sending raw socket ACK for {message.MessageId}");
+                                                _publisherSocket?.SendFrame(serializedAck);
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Error sending raw socket ACK: {ex.Message}");
+                                            }
+                                            
+                                            try 
+                                            {
+                                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Broadcasting ACK for {message.MessageId}");
+                                                Broadcast(ackMessage);
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Error broadcasting ACK: {ex.Message}");
+                                            }
+                                            
+                                            // Process the critical message accordingly
+                                            if (message.Type == MessageType.Ping)
+                                            {
+                                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Processing ping {message.MessageId}");
+                                                // Additional ping processing if needed
+                                            }
+                                            else if (message.Type == MessageType.DeckCreate)
+                                            {
+                                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Processing deck creation {message.MessageId}");
+                                                // We'll still let the normal message processing handle the actual deck creation
+                                            }
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine($"!!!! CRITICAL OVERRIDE: Error processing message: {ex.Message}");
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Error receiving message: {ex.Message}");
+                            }
+                        }
+                        
+                        // Small delay to prevent CPU overuse
+                        await Task.Delay(5);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"!!!! CRITICAL OVERRIDE: Unhandled error: {ex.Message}");
+                        await Task.Delay(100);  // Longer delay on error
+                    }
+                }
+            });
         }
         
         /// <summary>
@@ -38,18 +210,96 @@ namespace PokerGame.Core.Microservices
         {
             try
             {
+                Console.WriteLine($"===> CRITICAL DIAGNOSTIC: CardDeckService handling message type {message.Type} with ID {message.MessageId}");
+                
+                // Debug - dump publisher socket status
+                Console.WriteLine($"===> SOCKET STATUS: Publisher Socket null? {_publisherSocket == null}");
+                try
+                {
+                    Console.WriteLine($"===> SOCKET INFO: Publisher Socket info: {(_publisherSocket?.GetType()?.FullName ?? "null")}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"===> SOCKET ERROR: Failed to get publisher socket info: {ex.Message}");
+                }
+                
+                // SUPER CRITICAL: Handle acknowledgments immediately and with maximum redundancy
+                if (message.Type == MessageType.Ping || message.Type == MessageType.DeckCreate) 
+                {
+                    Console.WriteLine($"===> CRITICAL ACK HANDLING: Immediate ACK for {message.Type} {message.MessageId}");
+                    
+                    // Create the acknowledgment message
+                    var ackMessage = Message.Create(MessageType.Acknowledgment, DateTime.UtcNow.ToString("o"));
+                    ackMessage.InResponseTo = message.MessageId;
+                    ackMessage.ReceiverId = message.SenderId;
+                    ackMessage.SenderId = _serviceId;
+                    
+                    // APPROACH 1: Use the broadcast method
+                    try
+                    {
+                        Console.WriteLine($"===> APPROACH 1: Broadcasting ACK for {message.MessageId} to {message.SenderId}");
+                        Broadcast(ackMessage);
+                        Console.WriteLine($"===> APPROACH 1: Broadcast completed");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"===> ERROR in approach 1: {ex.Message}");
+                    }
+                    
+                    // APPROACH 2: Direct socket send
+                    try
+                    {
+                        Console.WriteLine($"===> APPROACH 2: Direct socket ACK for {message.MessageId}");
+                        var serializedAck = ackMessage.ToJson();
+                        Console.WriteLine($"===> APPROACH 2: Serialized ACK: {serializedAck}");
+                        _publisherSocket?.SendFrame(serializedAck);
+                        Console.WriteLine($"===> APPROACH 2: SendFrame completed");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"===> ERROR in approach 2: {ex.Message}");
+                    }
+                    
+                    // APPROACH 3: Create new socket just for this message
+                    try
+                    {
+                        Console.WriteLine($"===> APPROACH 3: Creating dedicated socket for ACK");
+                        using (var pubSocket = new PublisherSocket())
+                        {
+                            pubSocket.Bind($"tcp://127.0.0.1:{new Random().Next(6000, 7000)}");
+                            var serializedAck = ackMessage.ToJson();
+                            pubSocket.SendFrame(serializedAck);
+                            Console.WriteLine($"===> APPROACH 3: Dedicated socket ACK sent");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"===> ERROR in approach 3: {ex.Message}");
+                    }
+                    
+                    // Specific handling for different message types
+                    if (message.Type == MessageType.Ping)
+                    {
+                        Console.WriteLine($"===> PING HANDLER: Processing ping {message.MessageId}");
+                    }
+                    else if (message.Type == MessageType.DeckCreate)
+                    {
+                        Console.WriteLine($"===> DECKCREATE HANDLER: Processing deck creation {message.MessageId}");
+                    }
+                }
+                
                 switch (message.Type)
                 {
                     case MessageType.DeckCreate:
-                        Console.WriteLine($"CardDeckService: Received DeckCreate message from {message.SenderId}");
+                        Console.WriteLine($"===> CardDeckService: Received DeckCreate message with ID {message.MessageId} from {message.SenderId}");
                         var createPayload = message.GetPayload<DeckCreatePayload>();
                         if (createPayload != null)
                         {
                             try
                             {
-                                Console.WriteLine($"CardDeckService: Creating deck with ID {createPayload.DeckId}");
+                                Console.WriteLine($"===> CardDeckService: Creating deck with ID {createPayload.DeckId}");
                                 CreateDeck(createPayload.DeckId, createPayload.Shuffle);
-                                Console.WriteLine($"CardDeckService: Deck {createPayload.DeckId} created successfully");
+                                Console.WriteLine($"===> CardDeckService: Deck {createPayload.DeckId} created successfully");
                                 
                                 // Send confirmation directly back to the sender
                                 var confirmationPayload = new DeckStatusPayload 
@@ -60,14 +310,23 @@ namespace PokerGame.Core.Microservices
                                 };
                                 
                                 var confirmationMessage = Message.Create(MessageType.DeckCreated, confirmationPayload);
-                                SendTo(confirmationMessage, message.SenderId);
+                                confirmationMessage.InResponseTo = message.MessageId;
+                                
+                                Console.WriteLine($"===> CardDeckService: Sending DeckCreated confirmation to {message.SenderId} for message {message.MessageId}");
+                                // IMPORTANT FIX: Broadcast the confirmation instead of direct send
+                                Console.WriteLine($"===> CardDeckService: Broadcasting confirmation with receiver ID set to {message.SenderId}");
+                                confirmationMessage.ReceiverId = message.SenderId;
+                                Broadcast(confirmationMessage);
+                                Console.WriteLine($"===> CardDeckService: DeckCreated confirmation sent");
                                 
                                 // Also broadcast the deck status
+                                Console.WriteLine($"===> CardDeckService: Broadcasting deck status for {createPayload.DeckId}");
                                 BroadcastDeckStatus(createPayload.DeckId);
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"CardDeckService: Error creating deck: {ex.Message}");
+                                Console.WriteLine($"===> CardDeckService: ERROR creating deck: {ex.Message}");
+                                Console.WriteLine($"===> CardDeckService: {ex.StackTrace}");
                                 
                                 // Send error message back to sender
                                 var errorPayload = new DeckStatusPayload 
@@ -78,12 +337,15 @@ namespace PokerGame.Core.Microservices
                                 };
                                 
                                 var errorMessage = Message.Create(MessageType.Error, errorPayload);
+                                errorMessage.InResponseTo = message.MessageId;
+                                
+                                Console.WriteLine($"===> CardDeckService: Sending error for DeckCreate to {message.SenderId}");
                                 SendTo(errorMessage, message.SenderId);
                             }
                         }
                         else
                         {
-                            Console.WriteLine("CardDeckService: Received null DeckCreatePayload");
+                            Console.WriteLine($"===> CardDeckService: Received null DeckCreatePayload for message {message.MessageId}");
                         }
                         break;
                         
@@ -149,6 +411,31 @@ namespace PokerGame.Core.Microservices
                         if (statusPayload != null)
                         {
                             BroadcastDeckStatus(statusPayload.DeckId);
+                        }
+                        break;
+                        
+                    case MessageType.Ping:
+                        Console.WriteLine($"===> CardDeckService: Received Ping message with ID {message.MessageId} from {message.SenderId}");
+                        
+                        try
+                        {
+                            // Send a direct acknowledgment back to the sender
+                            var pingAckMessage = Message.Create(MessageType.Acknowledgment, DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff"));
+                            pingAckMessage.InResponseTo = message.MessageId;
+                            
+                            Console.WriteLine($"===> CardDeckService: Creating ping acknowledgment for message {message.MessageId} to {message.SenderId}");
+                            
+                            // IMPORTANT FIX: Broadcast the acknowledgment instead of direct send
+                            Console.WriteLine($"===> CardDeckService: Broadcasting acknowledgment with receiver ID set to {message.SenderId}");
+                            pingAckMessage.ReceiverId = message.SenderId;
+                            Broadcast(pingAckMessage);
+                            
+                            Console.WriteLine($"===> CardDeckService: Acknowledgment sent for message {message.MessageId}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"===> CardDeckService: ERROR sending ping acknowledgment: {ex.Message}");
+                            Console.WriteLine($"===> CardDeckService: {ex.StackTrace}");
                         }
                         break;
                 }

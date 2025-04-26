@@ -17,7 +17,7 @@ namespace PokerGame.Core.Microservices
         private int ConsoleUIPublisherPort;
         private int ConsoleUISubscriberPort; // Same as GameEngine's publisher for subscription
         private int CardDeckPublisherPort;
-        private int CardDeckSubscriberPort; // Same as GameEngine's publisher for subscription
+        private int CardDeckSubscriberPort; // This should connect to the game engine's publisher port
         
         // Initialize with random port offset to avoid conflicts when restarting
         private void InitializePorts()
@@ -34,6 +34,11 @@ namespace PokerGame.Core.Microservices
             ConsoleUISubscriberPort = GameEnginePublisherPort; // Connect to Game Engine's publisher port
             CardDeckPublisherPort = 25559 + offset;
             CardDeckSubscriberPort = GameEnginePublisherPort; // Connect to Game Engine's publisher port
+            
+            // Debug port configuration
+            Console.WriteLine($"====> PORT CONFIG: GameEngine Publisher: {GameEnginePublisherPort}, Subscriber: {GameEngineSubscriberPort}");
+            Console.WriteLine($"====> PORT CONFIG: ConsoleUI Publisher: {ConsoleUIPublisherPort}, Subscriber: {ConsoleUISubscriberPort}");
+            Console.WriteLine($"====> PORT CONFIG: CardDeck Publisher: {CardDeckPublisherPort}, Subscriber: {CardDeckSubscriberPort}");
         }
         
         /// <summary>

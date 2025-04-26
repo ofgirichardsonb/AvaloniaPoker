@@ -1,0 +1,87 @@
+==== POKER GAME UI INITIALIZATION ====
+Enhanced UI flag: True
+Enhanced UI instance exists: True
+====================================
+╔═════════════════════════════════════════════════════════╗
+║       TEXAS HOLD'EM POKER - ENHANCED CONSOLE UI         ║
+╚═════════════════════════════════════════════════════════╝
+Enhanced UI in microservices mode is ready!
+Enter number of players (2-8): Verifying service connections...
+Notifying game engine about card deck service...
+Waiting for card deck service registration to be processed...
+Registered service: Card Deck Service (ID: 0347699d-4f02-4e76-ba53-7e53d0a90e44, Type: CardDeck)
+Connected to card deck service: Card Deck Service
+Directly registered service: Card Deck Service (ID: 0347699d-4f02-4e76-ba53-7e53d0a90e44, Type: CardDeck)
+Ensuring players are properly registered with the game engine...
+[c5444783-8ce2-4dc5-9af5-4751ce645e13] Sending message Ping to 0347699d-4f02-4e76-ba53-7e53d0a90e44 with acknowledgment (timeout: 2000ms, max retries: 1)
+Created MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-d118b37f with publisher=3623, subscriber=3624
+MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-d118b37f started successfully
+Sent message 48b6a4fc-3d83-454e-9df7-02f260e0b062 of type Ping
+Sending forced StartHand command to engine service
+Received StartHand message
+Locating card deck service (Attempt 1/3)
+Using known card deck service: 0347699d-4f02-4e76-ba53-7e53d0a90e44
+No deck ID found, creating a new deck
+Deck creation attempt 1 of 3
+Creating new deck with ID: deck-b4b7aff6 using reliable messaging
+Sending DeckCreate message to 0347699d-4f02-4e76-ba53-7e53d0a90e44 with reliable delivery
+[c5444783-8ce2-4dc5-9af5-4751ce645e13] Sending message DeckCreate to 0347699d-4f02-4e76-ba53-7e53d0a90e44 with acknowledgment (timeout: 5000ms, max retries: 2)
+Created MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-4d81603c with publisher=4686, subscriber=4687
+MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-4d81603c started successfully
+Sent message 6f1a85da-15c9-4372-9f48-207c18380436 of type DeckCreate
+Message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping) timed out waiting for acknowledgment. Retry 1/3
+Retrying message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping)
+Sent message 48b6a4fc-3d83-454e-9df7-02f260e0b062 of type Ping
+Message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping) timed out waiting for acknowledgment. Retry 2/3
+Retrying message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping)
+Sent message 48b6a4fc-3d83-454e-9df7-02f260e0b062 of type Ping
+Message 6f1a85da-15c9-4372-9f48-207c18380436 (DeckCreate) timed out waiting for acknowledgment. Retry 1/3
+Retrying message 6f1a85da-15c9-4372-9f48-207c18380436 (DeckCreate)
+Sent message 6f1a85da-15c9-4372-9f48-207c18380436 of type DeckCreate
+Message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping) timed out waiting for acknowledgment. Retry 3/3
+Retrying message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping)
+Sent message 48b6a4fc-3d83-454e-9df7-02f260e0b062 of type Ping
+Message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping) timed out waiting for acknowledgment. Retry 4/3
+Maximum retries reached for message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping)
+MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-d118b37f stopped
+MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-d118b37f stopped
+[c5444783-8ce2-4dc5-9af5-4751ce645e13] Message Ping not acknowledged, waiting 500ms before retry
+[c5444783-8ce2-4dc5-9af5-4751ce645e13] Retry attempt 1/1 for message Ping to 0347699d-4f02-4e76-ba53-7e53d0a90e44
+Created MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-079c944a with publisher=4862, subscriber=4863
+MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-079c944a started successfully
+Sent message 48b6a4fc-3d83-454e-9df7-02f260e0b062 of type Ping
+Message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping) timed out waiting for acknowledgment. Retry 1/3
+Retrying message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping)
+Sent message 48b6a4fc-3d83-454e-9df7-02f260e0b062 of type Ping
+Message 6f1a85da-15c9-4372-9f48-207c18380436 (DeckCreate) timed out waiting for acknowledgment. Retry 2/3
+Retrying message 6f1a85da-15c9-4372-9f48-207c18380436 (DeckCreate)
+Sent message 6f1a85da-15c9-4372-9f48-207c18380436 of type DeckCreate
+Message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping) timed out waiting for acknowledgment. Retry 2/3
+Retrying message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping)
+Sent message 48b6a4fc-3d83-454e-9df7-02f260e0b062 of type Ping
+Message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping) timed out waiting for acknowledgment. Retry 3/3
+Retrying message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping)
+Sent message 48b6a4fc-3d83-454e-9df7-02f260e0b062 of type Ping
+Message 6f1a85da-15c9-4372-9f48-207c18380436 (DeckCreate) timed out waiting for acknowledgment. Retry 3/3
+Retrying message 6f1a85da-15c9-4372-9f48-207c18380436 (DeckCreate)
+Sent message 6f1a85da-15c9-4372-9f48-207c18380436 of type DeckCreate
+Message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping) timed out waiting for acknowledgment. Retry 4/3
+Maximum retries reached for message 48b6a4fc-3d83-454e-9df7-02f260e0b062 (Ping)
+MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-079c944a stopped
+MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-079c944a stopped
+[c5444783-8ce2-4dc5-9af5-4751ce645e13] Failed to get acknowledgment for message Ping to 0347699d-4f02-4e76-ba53-7e53d0a90e44 after 1 retries
+Warning: Card deck service 0347699d-4f02-4e76-ba53-7e53d0a90e44 did not respond to ping
+Shutting down microservices...
+Message 6f1a85da-15c9-4372-9f48-207c18380436 (DeckCreate) timed out waiting for acknowledgment. Retry 4/3
+Maximum retries reached for message 6f1a85da-15c9-4372-9f48-207c18380436 (DeckCreate)
+MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-4d81603c stopped
+MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-4d81603c stopped
+[c5444783-8ce2-4dc5-9af5-4751ce645e13] Message DeckCreate not acknowledged, waiting 832ms before retry
+[c5444783-8ce2-4dc5-9af5-4751ce645e13] Retry attempt 1/2 for message DeckCreate to 0347699d-4f02-4e76-ba53-7e53d0a90e44
+Created MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-4f97f8b4 with publisher=4057, subscriber=4058
+MessageBroker c5444783-8ce2-4dc5-9af5-4751ce645e13-4f97f8b4 started successfully
+Sent message 6f1a85da-15c9-4372-9f48-207c18380436 of type DeckCreate
+Shutting down microservices...
+
+Process finished with exit code 137.
+

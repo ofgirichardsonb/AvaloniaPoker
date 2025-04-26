@@ -547,10 +547,10 @@ namespace PokerGame.Core.Microservices
                     Console.WriteLine("Failed to receive acknowledgment for deck creation. Retries exhausted.");
                     
                     // If we've already tried a couple of times, go straight to emergency deck
-                    if (currentRetry >= 2)
+                    if (currentRetry >= 1) // Changed from 2 to 1 for faster failover
                     {
-                        Console.WriteLine("Multiple deck creation failures detected, skipping further attempts.");
-                        break; // Exit the loop to create emergency deck
+                        Console.WriteLine("Immediate failover to emergency deck after first failure.");
+                        break; // Exit the loop to create emergency deck immediately
                     }
                     
                     await Task.Delay(500); // Reduced delay for faster failover
@@ -702,13 +702,27 @@ namespace PokerGame.Core.Microservices
                 var message = Message.Create(MessageType.DeckDeal, dealPayload);
                 message.MessageId = Guid.NewGuid().ToString();
                 
-                // Use reliable messaging with acknowledgment
+                // FAST FAILOVER: Check if we've had ANY problems with the deck service
+                // and immediately use emergency deck for faster gameplay
+                if (_emergencyDeck != null)
+                {
+                    // We've had problems before, so just use the emergency deck immediately
+                    Console.WriteLine("Using existing emergency deck immediately for faster gameplay");
+                    _currentDeckId = "emergency-local-deck";
+                    
+                    // Go back and use the emergency deck path
+                    await Task.Delay(50); // Small delay before recursive call
+                    await DealCardsToPlayersAsync();
+                    return;
+                }
+                
+                // Try with the card service, but only once with minimal timeout
                 bool ackReceived = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
                     this, 
                     message, 
                     _cardDeckServiceId, 
-                    timeoutMs: 3000,
-                    maxRetries: 1,  // Minimal retry for faster failover
+                    timeoutMs: 1500, // Reduced timeout for faster failover
+                    maxRetries: 0,   // No retries for immediate failover
                     useExponentialBackoff: false);
                 
                 if (!ackReceived)
@@ -801,14 +815,28 @@ namespace PokerGame.Core.Microservices
             var message = Message.Create(MessageType.DeckDeal, dealPayload);
             message.MessageId = Guid.NewGuid().ToString();
             
-            // Use reliable messaging with acknowledgment with fully qualified namespace
+            // FAST FAILOVER: Check if we've had ANY problems with the deck service
+            // and immediately use emergency deck for faster gameplay
+            if (_emergencyDeck != null)
+            {
+                // We've had problems before, so just use the emergency deck immediately
+                Console.WriteLine("Using existing emergency deck immediately for community cards");
+                _currentDeckId = "emergency-local-deck";
+                
+                // Go back and use the emergency deck path
+                await Task.Delay(50); // Small delay before recursive call
+                await DealCommunityCardsAsync(count);
+                return;
+            }
+            
+            // Try once with minimal timeout for fast failover
             bool ackReceived = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
                 this, 
                 message, 
                 _cardDeckServiceId, 
-                timeoutMs: 3000,
-                maxRetries: 2,
-                useExponentialBackoff: true);
+                timeoutMs: 1500, // Reduced timeout for faster failover
+                maxRetries: 0,   // No retries for immediate failover
+                useExponentialBackoff: false);
                 
             if (!ackReceived)
             {
@@ -839,6 +867,20 @@ namespace PokerGame.Core.Microservices
                 return;
             }
             
+            // FAST FAILOVER: Check if we've had ANY problems with the deck service
+            // and immediately use emergency deck for faster gameplay
+            if (_emergencyDeck != null)
+            {
+                // We've had problems before, so just use the emergency deck immediately
+                Console.WriteLine("Using existing emergency deck immediately for burning a card");
+                _currentDeckId = "emergency-local-deck";
+                
+                // Go back and use the emergency deck path
+                await Task.Delay(20); // Very small delay before recursive call
+                await BurnCardAsync();
+                return;
+            }
+            
             // Normal operation with card deck service
             if (_cardDeckServiceId == null || string.IsNullOrEmpty(_currentDeckId))
             {
@@ -855,13 +897,13 @@ namespace PokerGame.Core.Microservices
             var message = Message.Create(MessageType.DeckBurn, burnPayload);
             message.MessageId = Guid.NewGuid().ToString();
             
-            // Use reliable messaging with acknowledgment with fully qualified namespace
+            // Try once with minimal timeout for fast failover
             bool ackReceived = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
                 this, 
                 message, 
                 _cardDeckServiceId, 
-                timeoutMs: 2000,
-                maxRetries: 2,
+                timeoutMs: 1000, // Reduced timeout for faster failover
+                maxRetries: 0,   // No retries for immediate failover
                 useExponentialBackoff: false);
                 
             if (!ackReceived)
