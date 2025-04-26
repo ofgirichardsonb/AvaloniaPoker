@@ -12,8 +12,24 @@ namespace PokerGame.Services
     /// </summary>
     public static class TelemetryDecoratorFactory
     {
-        // Direct reference to the TelemetryService instance, cast to ITelemetryService
-        private static readonly ITelemetryService _telemetryService = (ITelemetryService)PokerGame.Core.Telemetry.TelemetryService.Instance;
+        // Direct reference to the TelemetryService instance
+        private static readonly ITelemetryService _telemetryService;
+        
+        // Static constructor to safely initialize the telemetry service
+        static TelemetryDecoratorFactory()
+        {
+            try
+            {
+                _telemetryService = PokerGame.Core.Telemetry.TelemetryService.Instance;
+                Console.WriteLine("TelemetryDecoratorFactory initialized successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing TelemetryDecoratorFactory: {ex.Message}");
+                // Provide a fallback implementation to avoid null reference exceptions
+                _telemetryService = new NullTelemetryService();
+            }
+        }
         
         /// <summary>
         /// Creates a new telemetry decorator for the specified service

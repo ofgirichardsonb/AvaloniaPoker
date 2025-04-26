@@ -135,26 +135,42 @@ namespace PokerGame.Services
                 // Start the requested services
                 if (runGameEngine)
                 {
-                    // Calculate ports based on the Core's MicroserviceManager port scheme
-                    int publisherPort = 25556 + portOffset;
-                    int subscriberPort = 25557 + portOffset;
-                    Console.WriteLine($"Starting Game Engine Service (publisher: {publisherPort}, subscriber: {subscriberPort})...");
-                    
-                    var gameEngineService = new GameEngineService(publisherPort, subscriberPort);
-                    var decoratedService = _microserviceManager.RegisterService(gameEngineService);
-                    Console.WriteLine($"Game Engine Service started with ID: {decoratedService.ServiceId}");
+                    try
+                    {
+                        // Calculate ports based on the Core's MicroserviceManager port scheme
+                        int publisherPort = 25556 + portOffset;
+                        int subscriberPort = 25557 + portOffset;
+                        Console.WriteLine($"Starting Game Engine Service (publisher: {publisherPort}, subscriber: {subscriberPort})...");
+                        
+                        var gameEngineService = new GameEngineService(publisherPort, subscriberPort);
+                        var decoratedService = _microserviceManager.RegisterService(gameEngineService);
+                        Console.WriteLine($"Game Engine Service started with ID: {decoratedService.ServiceId}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error starting Game Engine Service: {ex.Message}");
+                        Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                    }
                 }
 
                 if (runCardDeck)
                 {
-                    // Calculate ports based on the Core's MicroserviceManager port scheme
-                    int publisherPort = 25559 + portOffset;
-                    int subscriberPort = 25556 + portOffset; // Connect to Game Engine's publisher port
-                    Console.WriteLine($"Starting Card Deck Service (publisher: {publisherPort}, subscriber: {subscriberPort})...");
-                    
-                    var cardDeckService = new CardDeckService(publisherPort, subscriberPort);
-                    var decoratedService = _microserviceManager.RegisterService(cardDeckService);
-                    Console.WriteLine($"Card Deck Service started with ID: {decoratedService.ServiceId}");
+                    try
+                    {
+                        // Calculate ports based on the Core's MicroserviceManager port scheme
+                        int publisherPort = 25559 + portOffset;
+                        int subscriberPort = 25556 + portOffset; // Connect to Game Engine's publisher port
+                        Console.WriteLine($"Starting Card Deck Service (publisher: {publisherPort}, subscriber: {subscriberPort})...");
+                        
+                        var cardDeckService = new CardDeckService(publisherPort, subscriberPort);
+                        var decoratedService = _microserviceManager.RegisterService(cardDeckService);
+                        Console.WriteLine($"Card Deck Service started with ID: {decoratedService.ServiceId}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error starting Card Deck Service: {ex.Message}");
+                        Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                    }
                 }
 
                 if (!runGameEngine && !runCardDeck)
