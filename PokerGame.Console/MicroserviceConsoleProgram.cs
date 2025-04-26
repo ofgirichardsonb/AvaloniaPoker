@@ -105,16 +105,8 @@ namespace PokerGame.Console
             }
             finally
             {
-                // Force NetMQ cleanup as a final safety measure
-                try
-                {
-                    System.Console.WriteLine("Cleaning up NetMQ resources...");
-                    NetMQ.NetMQConfig.Cleanup(false);
-                }
-                catch (Exception ex)
-                {
-                    System.Console.WriteLine($"Final cleanup error: {ex.Message}");
-                }
+                // No need to force NetMQ cleanup here as it causes hanging
+                // The NetMQContextHelper will handle cleanup properly
                 
                 // We don't need to stop services here anymore, since they are
                 // running in separate processes managed by PokerGame.Services
