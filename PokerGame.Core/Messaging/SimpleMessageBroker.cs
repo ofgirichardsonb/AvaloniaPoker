@@ -202,8 +202,11 @@ namespace PokerGame.Core.Messaging
                                     // Deserialize and process the message
                                     SimpleMessage message = JsonSerializer.Deserialize<SimpleMessage>(json);
                                     
-                                    // Skip our own messages (publisher loop feedback)
-                                    if (message.SenderId == _serviceId)
+                                    // Don't skip response messages that are addressed directly to us
+                                    bool isResponseToUs = !string.IsNullOrEmpty(message.InResponseTo) && message.ReceiverId == _serviceId;
+                                    
+                                    // Skip our own messages that aren't responses to us
+                                    if (message.SenderId == _serviceId && !isResponseToUs)
                                     {
                                         if (_verbose)
                                         {

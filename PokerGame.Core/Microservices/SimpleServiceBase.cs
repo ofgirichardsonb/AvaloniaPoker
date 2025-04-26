@@ -307,9 +307,16 @@ namespace PokerGame.Core.Microservices
             {
                 var message = e.Message;
                 
-                // Skip our own messages
-                if (message.SenderId == _serviceId)
+                // Don't skip response messages that are addressed directly to us, even if we're the sender
+                bool isResponseToUs = !string.IsNullOrEmpty(message.InResponseTo) && message.ReceiverId == _serviceId;
+                
+                // Skip our own messages that aren't responses to us
+                if (message.SenderId == _serviceId && !isResponseToUs)
                 {
+                    if (_verbose)
+                    {
+                        _logger.Log($"Skipping own message: {message.MessageId}");
+                    }
                     return;
                 }
                 
@@ -322,7 +329,7 @@ namespace PokerGame.Core.Microservices
                 // Log the received message
                 if (_verbose)
                 {
-                    _logger.Log($"Received message: Type={message.Type}, From={message.SenderId}, To={message.ReceiverId}");
+                    _logger.Log($"Received message: Type={message.Type}, From={message.SenderId}, To={message.ReceiverId}, InResponseTo={message.InResponseTo}");
                 }
                 
                 // Handle the message based on its type
