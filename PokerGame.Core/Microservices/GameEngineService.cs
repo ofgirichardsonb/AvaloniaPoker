@@ -52,6 +52,46 @@ namespace PokerGame.Core.Microservices
             {
                 _cardDeckServiceId = registrationInfo.ServiceId;
                 Console.WriteLine($"Connected to card deck service: {registrationInfo.ServiceName}");
+                
+                // If we were using an emergency deck, check if we want to switch back
+                if (_currentDeckId == "emergency-local-deck" && _emergencyDeck != null)
+                {
+                    // Since we just connected to a real card deck service, make a note but don't switch automatically
+                    // This avoids disruption in the middle of a hand
+                    Console.WriteLine("Card deck service is now available, but continuing with emergency deck for current hand");
+                    
+                    // We'll create a new deck on the next hand instead
+                }
+                
+                // Send a ping message to verify the service is fully operational
+                Task.Run(async () => {
+                    try 
+                    {
+                        var pingMessage = Message.Create(MessageType.Ping, DateTime.UtcNow.ToString());
+                        pingMessage.MessageId = Guid.NewGuid().ToString();
+                        
+                        bool pingResponse = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
+                            this,
+                            pingMessage,
+                            registrationInfo.ServiceId,
+                            timeoutMs: 2000,
+                            maxRetries: 1,
+                            useExponentialBackoff: false);
+                            
+                        if (pingResponse)
+                        {
+                            Console.WriteLine($"Card deck service {registrationInfo.ServiceId} responded to ping successfully");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Warning: Card deck service {registrationInfo.ServiceId} did not respond to ping");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error pinging card deck service: {ex.Message}");
+                    }
+                });
             }
         }
         
@@ -66,14 +106,9 @@ namespace PokerGame.Core.Microservices
                 var payload = message.GetPayload<ServiceRegistrationPayload>();
                 if (payload != null)
                 {
-                    // Store the service in our registry
-                    _knownServices[payload.ServiceId] = payload;
-                    
-                    if (payload.ServiceType == "CardDeck")
-                    {
-                        _cardDeckServiceId = payload.ServiceId;
-                        Console.WriteLine($"Directly registered card deck service: {payload.ServiceName} (ID: {payload.ServiceId})");
-                    }
+                    // Use our standard registration handler to keep logic consistent
+                    OnServiceRegistered(payload);
+                    Console.WriteLine($"Directly registered service: {payload.ServiceName} (ID: {payload.ServiceId}, Type: {payload.ServiceType})");
                 }
             }
         }
@@ -504,13 +539,21 @@ namespace PokerGame.Core.Microservices
                     message, 
                     _cardDeckServiceId, 
                     timeoutMs: 5000,
-                    maxRetries: 5,
+                    maxRetries: 2, // Reduced retries for faster failover
                     useExponentialBackoff: true);
                 
                 if (!ackReceived)
                 {
-                    Console.WriteLine("Failed to receive acknowledgment for deck creation with all retries. Will try again...");
-                    await Task.Delay(1000); // Longer delay between major retry cycles
+                    Console.WriteLine("Failed to receive acknowledgment for deck creation. Retries exhausted.");
+                    
+                    // If we've already tried a couple of times, go straight to emergency deck
+                    if (currentRetry >= 2)
+                    {
+                        Console.WriteLine("Multiple deck creation failures detected, skipping further attempts.");
+                        break; // Exit the loop to create emergency deck
+                    }
+                    
+                    await Task.Delay(500); // Reduced delay for faster failover
                     continue;
                 }
                 
@@ -649,7 +692,7 @@ namespace PokerGame.Core.Microservices
             // Deal 2 cards to each player
             foreach (var player in _gameEngine.Players)
             {
-                // Request 2 cards from the deck service
+                // Request 2 cards from the deck service with reliable delivery
                 var dealPayload = new DeckDealPayload
                 {
                     DeckId = _currentDeckId,
@@ -657,9 +700,44 @@ namespace PokerGame.Core.Microservices
                 };
                 
                 var message = Message.Create(MessageType.DeckDeal, dealPayload);
-                SendTo(message, _cardDeckServiceId);
+                message.MessageId = Guid.NewGuid().ToString();
                 
-                // Small delay between deals
+                // Use reliable messaging with acknowledgment
+                bool ackReceived = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
+                    this, 
+                    message, 
+                    _cardDeckServiceId, 
+                    timeoutMs: 3000,
+                    maxRetries: 1,  // Minimal retry for faster failover
+                    useExponentialBackoff: false);
+                
+                if (!ackReceived)
+                {
+                    Console.WriteLine("Warning: Failed to get acknowledgment for dealing hole cards");
+                    
+                    // Fall back to emergency deck immediately if available
+                    if (_emergencyDeck == null)
+                    {
+                        // Create an emergency deck if we don't have one yet
+                        Console.WriteLine("Creating emergency deck for hole cards");
+                        _emergencyDeck = new Models.Deck();
+                        _emergencyDeck.Shuffle();
+                        _currentDeckId = "emergency-local-deck";
+                        
+                        // Recursively call this method now that we have an emergency deck
+                        await DealCardsToPlayersAsync();
+                        return;
+                    }
+                    else if (_currentDeckId != "emergency-local-deck")
+                    {
+                        // Use the existing emergency deck
+                        _currentDeckId = "emergency-local-deck";
+                        await DealCardsToPlayersAsync();
+                        return;
+                    }
+                }
+                
+                // Small delay between successful deals
                 await Task.Delay(50);
             }
         }
