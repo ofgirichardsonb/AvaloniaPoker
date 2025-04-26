@@ -19,7 +19,7 @@ namespace PokerGame.Core.Game
         /// <param name="communityCards">The 3-5 community cards</param>
         /// <param name="playerId">Optional player ID to associate with the hand</param>
         /// <returns>The best 5-card hand for the player</returns>
-        public static Hand EvaluateBestHand(List<Card> holeCards, List<Card> communityCards, string playerId = "")
+        public static Hand EvaluateBestHand(List<Card> holeCards, List<Card> communityCards, string playerId = "", Logger? logger = null)
         {
             // Combine the hole cards and community cards
             var allCards = new List<Card>();
@@ -42,7 +42,7 @@ namespace PokerGame.Core.Game
                 }
             }
             
-            Logger.Log($"Best hand for player {playerId}: {bestHand?.Description}");
+            logger?.Log($"Best hand for player {playerId}: {bestHand?.Description}");
             
             // Return the best hand (should never be null if inputs are valid)
             return bestHand!;

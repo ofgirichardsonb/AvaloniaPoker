@@ -67,7 +67,7 @@ namespace PokerGame.Core.Microservices
         private readonly List<Player> _players = new List<Player>();
         private readonly List<Card> _communityCards = new List<Card>();
         private readonly Random _random = new Random();
-        private GameState _gameState = GameState.NotStarted;
+        private GameState _gameState = GameState.Setup;
         private int _currentDealerIndex = 0;
         private int _currentPlayerIndex = 0;
         private int _pot = 0;
@@ -246,7 +246,7 @@ namespace PokerGame.Core.Microservices
         private void StartHand()
         {
             // Reset the game state
-            _gameState = GameState.NotStarted;
+            _gameState = GameState.Setup;
             _pot = 0;
             _communityCards.Clear();
             
@@ -768,7 +768,7 @@ namespace PokerGame.Core.Microservices
             foreach (var player in activePlayers)
             {
                 // Evaluate the player's best hand
-                var bestHand = Game.HandEvaluator.EvaluateBestHand(player.HoleCards, _communityCards, player.Id);
+                var bestHand = Game.HandEvaluator.EvaluateBestHand(player.HoleCards, _communityCards, player.Id, Logger);
                 
                 // Add to the list of hands for determining the winner
                 playerHands.Add(bestHand);

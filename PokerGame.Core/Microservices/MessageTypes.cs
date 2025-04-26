@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using PokerGame.Core.Game;
 using PokerGame.Core.Models;
 
 namespace PokerGame.Core.Microservices
@@ -287,6 +288,8 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         [JsonPropertyName("winnerIds")]
         public List<string> WinnerIds { get; set; } = new List<string>();
+
+        public GameState State { get; set; }
     }
     
     /// <summary>
@@ -328,7 +331,12 @@ namespace PokerGame.Core.Microservices
         /// Gets or sets the player's hole cards (only sent to the specific player)
         /// </summary>
         public List<Card> HoleCards { get; set; } = new List<Card>();
-        
+
+        public string Id { get; set; }
+        public bool IsDealer { get; set; }
+        public bool IsActive { get; set; }
+        public int TotalBet { get; set; }
+
         /// <summary>
         /// Creates a PlayerInfo from a Player model
         /// </summary>

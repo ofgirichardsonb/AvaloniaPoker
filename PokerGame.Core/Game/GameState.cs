@@ -38,6 +38,8 @@ namespace PokerGame.Core.Game
         /// <summary>
         /// The hand is complete
         /// </summary>
-        HandComplete
+        HandComplete,
+        Showdown,
+        Complete
     }
 }

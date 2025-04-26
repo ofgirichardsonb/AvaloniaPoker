@@ -411,7 +411,7 @@ namespace PokerGame.Core.Game
             if (activePlayers.Count == 1)
             {
                 Player winner = activePlayers[0];
-                winner.AddChips(_pot);
+                winner.AwardChips(_pot);
                 _ui.ShowMessage($"{winner.Name} wins {_pot} chips.");
             }
             else
@@ -437,7 +437,7 @@ namespace PokerGame.Core.Game
                 int winAmount = _pot / winners.Count;
                 foreach (var winner in winners)
                 {
-                    winner.AddChips(winAmount);
+                    winner.AwardChips(winAmount);
                     _ui.ShowMessage($"{winner.Name} wins {winAmount} chips with {winner.CurrentHand}.");
                 }
             }
