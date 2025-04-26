@@ -371,8 +371,27 @@ namespace PokerGame.Core.Microservices
                 
                 if (_cardDeckServiceId == null)
                 {
-                    Console.WriteLine("Card deck service still not available");
-                    return;
+                    Console.WriteLine("ERROR: Card deck service still not available");
+                    
+                    // Enhanced error diagnostics
+                    Console.WriteLine("Available services:");
+                    foreach (var service in _knownServices)
+                    {
+                        Console.WriteLine($"- {service.Value.ServiceName} (ID: {service.Key}, Type: {service.Value.ServiceType})");
+                    }
+                    
+                    // Look for services by direct type
+                    var deckServices = GetServicesOfType("CardDeck");
+                    if (deckServices.Count > 0)
+                    {
+                        _cardDeckServiceId = deckServices[0];
+                        Console.WriteLine($"Found card deck service via direct type search: {_cardDeckServiceId}");
+                    }
+                    else
+                    {
+                        Console.WriteLine("ERROR: No card deck services found by type. Aborting.");
+                        return;
+                    }
                 }
             }
                 
@@ -389,9 +408,22 @@ namespace PokerGame.Core.Microservices
             };
             
             var message = Message.Create(MessageType.DeckCreate, createPayload);
+            
+            // Log message sending details
+            Console.WriteLine($"Sending message type {message.Type} to {_cardDeckServiceId}");
             SendTo(message, _cardDeckServiceId);
             
-            // Small delay to let the deck be created
+            // Longer delay to ensure the deck is created
+            // This is important as microservices may need more time for processing
+            Console.WriteLine("Waiting for deck creation...");
+            await Task.Delay(1000);
+            
+            // Send a message to verify the deck was created
+            Console.WriteLine($"Requesting status for deck {_currentDeckId} after creation");
+            var statusMessage = Message.Create(MessageType.DeckStatus, new DeckStatusPayload { DeckId = _currentDeckId });
+            SendTo(statusMessage, _cardDeckServiceId);
+            
+            // Additional delay to ensure response
             await Task.Delay(500);
             
             Console.WriteLine($"Finished creating deck {_currentDeckId}");
