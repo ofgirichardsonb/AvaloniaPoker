@@ -46,7 +46,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo 3 | dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --microservices"
+args = "echo 3 | dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --microservices --curses"
 
 [deployment]
 run = ["sh", "-c", "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --curses"]

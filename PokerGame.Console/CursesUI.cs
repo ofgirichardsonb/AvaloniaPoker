@@ -41,9 +41,8 @@ namespace PokerGame.Console
                 
             try
             {
-                System.Console.WriteLine("Starting with enhanced UI...");
-                System.Console.WriteLine("Enhanced Console UI is active.");
-                System.Console.WriteLine("Using simplified console UI for now...");
+                // Initialize the enhanced UI with fancy box drawing
+                Initialize();
                 
                 // Get number of players and initialize game
                 System.Console.Write("Enter number of players (2-8): ");
@@ -184,12 +183,15 @@ namespace PokerGame.Console
         {
             try
             {
+                // Display a prompt box for the player's action
                 System.Console.WriteLine();
-                System.Console.WriteLine($"--- {player.Name}'s turn ---");
+                System.Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
+                System.Console.WriteLine($"║  {player.Name}'s turn".PadRight(57) + " ║");
+                System.Console.WriteLine("╠═════════════════════════════════════════════════════════╣");
                 
                 if (player.HoleCards.Count == 2)
                 {
-                    System.Console.WriteLine($"Your cards: {FormatCards(player.HoleCards)}");
+                    System.Console.WriteLine($"║  Your hole cards: {FormatCards(player.HoleCards)}".PadRight(57) + " ║");
                 }
                 
                 bool validAction = false;
@@ -199,22 +201,23 @@ namespace PokerGame.Console
                     bool canCheck = gameEngine.CurrentBet == 0 || player.CurrentBet == gameEngine.CurrentBet;
                     int callAmount = gameEngine.CurrentBet - player.CurrentBet;
                     
-                    System.Console.WriteLine("Available actions:");
-                    System.Console.WriteLine("F - Fold");
+                    System.Console.WriteLine("║  Available actions:".PadRight(57) + " ║");
+                    System.Console.WriteLine("║  ▸ F - Fold".PadRight(57) + " ║");
                     
                     if (canCheck)
-                        System.Console.WriteLine("C - Check");
+                        System.Console.WriteLine("║  ▸ C - Check".PadRight(57) + " ║");
                     else
-                        System.Console.WriteLine($"C - Call (${callAmount})");
+                        System.Console.WriteLine($"║  ▸ C - Call (${callAmount})".PadRight(57) + " ║");
                         
-                    System.Console.WriteLine("R - Raise");
-                    
-                    System.Console.Write("Enter action: ");
+                    System.Console.WriteLine("║  ▸ R - Raise".PadRight(57) + " ║");
+                    System.Console.WriteLine("╠═════════════════════════════════════════════════════════╣");
+                    System.Console.Write("║  Enter action: ");
                     string actionText = (System.Console.ReadLine() ?? "").ToUpper();
                     
                     if (actionText == "F")
                     {
                         // Fold
+                        System.Console.WriteLine("║  Folding hand...".PadRight(57) + " ║");
                         gameEngine.ProcessPlayerAction("fold");
                         validAction = true;
                     }
@@ -222,36 +225,46 @@ namespace PokerGame.Console
                     {
                         // Check or Call
                         if (canCheck)
+                        {
+                            System.Console.WriteLine("║  Checking...".PadRight(57) + " ║");
                             gameEngine.ProcessPlayerAction("check");
+                        }
                         else
+                        {
+                            System.Console.WriteLine($"║  Calling ${callAmount}...".PadRight(57) + " ║");
                             gameEngine.ProcessPlayerAction("call");
+                        }
                         validAction = true;
                     }
                     else if (actionText == "R")
                     {
                         // Raise - get the amount
-                        System.Console.Write("Enter raise amount: $");
+                        System.Console.Write("║  Enter raise amount: $");
                         string raiseInput = System.Console.ReadLine() ?? "";
                         
                         if (int.TryParse(raiseInput, out int raiseAmount) && raiseAmount > 0)
                         {
+                            System.Console.WriteLine($"║  Raising ${raiseAmount}...".PadRight(57) + " ║");
                             gameEngine.ProcessPlayerAction("raise", raiseAmount);
                             validAction = true;
                         }
                         else
                         {
-                            System.Console.WriteLine("Invalid amount! Try again.");
+                            System.Console.WriteLine("║  Invalid amount! Try again.".PadRight(57) + " ║");
                         }
                     }
                     else
                     {
-                        System.Console.WriteLine("Invalid action! Try again.");
+                        System.Console.WriteLine("║  Invalid action! Try again.".PadRight(57) + " ║");
                     }
                 }
+                
+                System.Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
             }
             catch (Exception ex)
             {
                 System.Console.WriteLine($"Error getting player action: {ex.Message}");
+                System.Console.WriteLine(ex.StackTrace);
             }
         }
         
@@ -262,40 +275,75 @@ namespace PokerGame.Console
         {
             try
             {
+                // Always clear the console first to avoid display issues
+                System.Console.Clear();
+                
+                try 
+                {
+                    // Try to set console colors for better visuals
+                    System.Console.BackgroundColor = ConsoleColor.Black;
+                    System.Console.ForegroundColor = ConsoleColor.Cyan;
+                }
+                catch { }
+                
+                // Display a fancy header with box-drawing characters
+                System.Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
+                System.Console.WriteLine("║        TEXAS HOLD'EM POKER (ENHANCED CONSOLE UI)        ║");
+                System.Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
+                
+                try 
+                {
+                    // Reset colors
+                    System.Console.ResetColor();
+                }
+                catch { }
+                
                 System.Console.WriteLine();
-                System.Console.WriteLine("=============================================");
-                System.Console.WriteLine($"CURRENT STATE: {gameEngine.State}");
+                
+                // Display game state with box drawing characters
+                System.Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
+                System.Console.WriteLine($"║  CURRENT STATE: {gameEngine.State,-40} ║");
+                System.Console.WriteLine("╠═════════════════════════════════════════════════════════╣");
                 
                 // Show community cards
                 string communityCardsText = gameEngine.CommunityCards.Count > 0 
                     ? FormatCards(gameEngine.CommunityCards) 
                     : "[None]";
-                System.Console.WriteLine($"Community Cards: {communityCardsText}");
+                System.Console.WriteLine($"║  Community Cards: {communityCardsText,-37} ║");
                 
-                // Show pot
-                System.Console.WriteLine($"Pot: ${gameEngine.Pot}");
+                // Show pot and current bet
+                System.Console.WriteLine($"║  Pot: ${gameEngine.Pot,-44} ║");
                 if (gameEngine.CurrentBet > 0)
                 {
-                    System.Console.WriteLine($"Current bet: ${gameEngine.CurrentBet}");
+                    System.Console.WriteLine($"║  Current bet: ${gameEngine.CurrentBet,-38} ║");
                 }
-                System.Console.WriteLine();
+                System.Console.WriteLine("║                                                         ║");
                 
                 // Show player info
-                System.Console.WriteLine("PLAYERS:");
+                System.Console.WriteLine("║  PLAYERS:                                               ║");
                 for (int i = 0; i < gameEngine.Players.Count; i++)
                 {
                     var player = gameEngine.Players[i];
                     string status = "";
                     if (player.HasFolded) status = " (Folded)";
                     else if (player.IsAllIn) status = " (All-In)";
+                    else if (gameEngine.CurrentPlayer == player) status = " ◄ ACTIVE";
                     
-                    System.Console.WriteLine($"- {player.Name}{status}: ${player.Chips} chips");
+                    string playerInfo = $"  - {player.Name}{status}: ${player.Chips} chips";
+                    if (player.CurrentBet > 0)
+                    {
+                        playerInfo += $" (Bet: ${player.CurrentBet})";
+                    }
+                    
+                    System.Console.WriteLine($"║{playerInfo,-57} ║");
                 }
-                System.Console.WriteLine("=============================================");
+                
+                System.Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
             }
             catch (Exception ex)
             {
                 System.Console.WriteLine($"Error updating game state: {ex.Message}");
+                System.Console.WriteLine(ex.StackTrace);
             }
         }
         
@@ -307,34 +355,50 @@ namespace PokerGame.Console
             try
             {
                 System.Console.WriteLine();
-                System.Console.WriteLine("*** HAND COMPLETE ***");
+                
+                // Display a fancy winner announcement box
+                System.Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
+                System.Console.WriteLine("║                    HAND COMPLETE                        ║");
+                System.Console.WriteLine("╠═════════════════════════════════════════════════════════╣");
                 
                 if (winners.Count == 1)
                 {
                     var winner = winners[0];
-                    System.Console.WriteLine($"{winner.Name} wins the pot!");
+                    System.Console.WriteLine($"║  {winner.Name} wins ${gameEngine.Pot}!".PadRight(57) + " ║");
+                    
                     if (winner.CurrentHand != null)
                     {
-                        System.Console.WriteLine($"Winning hand: {winner.CurrentHand.Rank}");
-                        System.Console.WriteLine($"Cards: {FormatCards(winner.CurrentHand.Cards)}");
+                        System.Console.WriteLine($"║  Winning hand: {winner.CurrentHand.Rank}".PadRight(57) + " ║");
+                        System.Console.WriteLine($"║  Cards: {FormatCards(winner.CurrentHand.Cards)}".PadRight(57) + " ║");
                     }
                 }
                 else
                 {
-                    System.Console.WriteLine("Split pot between: " + string.Join(", ", winners.Select(w => w.Name)));
+                    int splitAmount = gameEngine.Pot / winners.Count;
+                    System.Console.WriteLine($"║  Split pot (${splitAmount} each) between:".PadRight(57) + " ║");
+                    
+                    foreach (var winner in winners)
+                    {
+                        System.Console.WriteLine($"║  - {winner.Name}".PadRight(57) + " ║");
+                    }
+                    
                     var firstWinner = winners[0];
                     if (firstWinner.CurrentHand != null)
                     {
-                        System.Console.WriteLine($"Winning hand: {firstWinner.CurrentHand.Rank}");
+                        System.Console.WriteLine($"║  Winning hand: {firstWinner.CurrentHand.Rank}".PadRight(57) + " ║");
                     }
                 }
                 
-                System.Console.WriteLine("Press Enter to continue...");
+                System.Console.WriteLine("║                                                         ║");
+                System.Console.WriteLine("║  Press Enter to continue...                             ║");
+                System.Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
+                
                 System.Console.ReadLine();
             }
             catch (Exception ex)
             {
                 System.Console.WriteLine($"Error showing winner: {ex.Message}");
+                System.Console.WriteLine(ex.StackTrace);
             }
         }
         

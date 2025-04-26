@@ -18,8 +18,34 @@ namespace PokerGame.Console
         public static void StartMicroservices(string[] args, bool useCursesUi = false)
         {
             System.Console.WriteLine("Starting poker game with microservices architecture...");
+            
+            // Ensure we explicitly pass the enhanced UI flag
             if (useCursesUi)
             {
+                System.Console.WriteLine("Enhanced UI (curses) explicitly enabled via command line");
+                // Make sure --curses is in the args array
+                bool hasCursesFlag = false;
+                foreach (var arg in args)
+                {
+                    if (arg.Equals("--curses", StringComparison.OrdinalIgnoreCase) || 
+                        arg.Equals("-c", StringComparison.OrdinalIgnoreCase))
+                    {
+                        hasCursesFlag = true;
+                        break;
+                    }
+                }
+                
+                if (!hasCursesFlag)
+                {
+                    // Add the curses flag to the args array
+                    var newArgs = new string[args.Length + 1];
+                    Array.Copy(args, newArgs, args.Length);
+                    newArgs[args.Length] = "--curses";
+                    args = newArgs;
+                    
+                    System.Console.WriteLine("Added --curses flag to arguments");
+                }
+                
                 System.Console.WriteLine("Using enhanced curses UI...");
             }
             

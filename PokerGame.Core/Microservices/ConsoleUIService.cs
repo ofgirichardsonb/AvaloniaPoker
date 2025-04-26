@@ -57,35 +57,54 @@ namespace PokerGame.Core.Microservices
         {
             base.Start();
             
+            // Log the current state of the UI flag
+            Console.WriteLine($"ConsoleUIService starting with enhanced UI flag: {_useEnhancedUI}");
+            
             // Initialize enhanced UI if requested - doing this here ensures proper initialization order
             if (_useEnhancedUI && _enhancedUiInstance == null)
             {
                 try
                 {
                     Console.WriteLine("Initializing Enhanced UI in Start method...");
+                    
+                    // Use detailed diagnostics during initialization
+                    Console.WriteLine("Enhanced UI initialization process:");
+                    Console.WriteLine("1. Looking for CursesUI type");
+                    
                     // Create CursesUI instance via reflection to avoid direct dependency
                     var cursesUIType = Type.GetType("PokerGame.Console.CursesUI, PokerGame.Console");
+                    Console.WriteLine($"   Found CursesUI type: {(cursesUIType != null ? "YES" : "NO")}");
+                    
                     if (cursesUIType != null)
                     {
+                        Console.WriteLine("2. Creating instance of CursesUI");
                         _enhancedUiInstance = Activator.CreateInstance(cursesUIType);
-                        Console.WriteLine("Successfully created Enhanced Console UI instance");
+                        Console.WriteLine("   Successfully created Enhanced Console UI instance");
                         
                         // Call Initialize method
+                        Console.WriteLine("3. Looking for Initialize method");
                         var initMethod = cursesUIType.GetMethod("Initialize");
+                        Console.WriteLine($"   Found Initialize method: {(initMethod != null ? "YES" : "NO")}");
+                        
                         if (initMethod != null)
                         {
+                            Console.WriteLine("4. Calling Initialize method");
                             initMethod.Invoke(_enhancedUiInstance, null);
-                            Console.WriteLine("Successfully initialized Enhanced Console UI");
+                            Console.WriteLine("   Successfully initialized Enhanced Console UI");
+                            
+                            // Force a Console.Clear() to clean the display after initialization
+                            Console.Clear();
+                            Console.WriteLine("★★★ ENHANCED UI ACTIVE ★★★");
                         }
                         else
                         {
-                            Console.WriteLine("Could not find Initialize method on CursesUI");
+                            Console.WriteLine("   ERROR: Could not find Initialize method on CursesUI");
                             _useEnhancedUI = false;
                         }
                     }
                     else
                     {
-                        Console.WriteLine("Enhanced UI requested but CursesUI class not found");
+                        Console.WriteLine("   ERROR: Enhanced UI requested but CursesUI class not found");
                         _useEnhancedUI = false;
                     }
                 }
@@ -96,6 +115,9 @@ namespace PokerGame.Core.Microservices
                     _useEnhancedUI = false;
                 }
             }
+            
+            // Provide clear indication whether enhanced UI is active
+            Console.WriteLine($"►► Console UI service using enhanced UI: {_useEnhancedUI} ◄◄");
             
             // Start the input processing task
             Task.Run(ProcessUserInputAsync);
@@ -348,9 +370,37 @@ namespace PokerGame.Core.Microservices
         {
             Console.Clear();
             
+            // Create a more visible debug message about the UI mode
+            Console.WriteLine("==== POKER GAME UI INITIALIZATION ====");
+            Console.WriteLine($"Enhanced UI flag: {_useEnhancedUI}");
+            Console.WriteLine($"Enhanced UI instance exists: {_enhancedUiInstance != null}");
+            Console.WriteLine("====================================");
+            
             if (_useEnhancedUI)
             {
-                Console.WriteLine("Starting enhanced Console UI for poker game...");
+                try 
+                {
+                    // Try to set console colors for better visuals
+                    Console.BackgroundColor = ConsoleColor.Black;
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error setting console colors: {ex.Message}");
+                }
+                
+                // Draw a fancy header with box-drawing characters
+                Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
+                Console.WriteLine("║       TEXAS HOLD'EM POKER - ENHANCED CONSOLE UI         ║");
+                Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
+                
+                try 
+                {
+                    // Reset colors
+                    Console.ResetColor();
+                }
+                catch { }
+                
                 Console.WriteLine("Enhanced UI in microservices mode is ready!");
             }
             else
@@ -360,6 +410,10 @@ namespace PokerGame.Core.Microservices
                 Console.WriteLine("===============================================");
                 Console.WriteLine();
             }
+            
+            // Force the enhanced UI to true to ensure box-drawing characters are used
+            // This is a fallback in case the flag isn't properly passed from command line
+            _useEnhancedUI = true;
             
             // Wait for the game engine to be available
             while (_gameEngineServiceId == null)
@@ -489,12 +543,20 @@ namespace PokerGame.Core.Microservices
         private void DisplayGameState()
         {
             if (_latestGameState == null)
+            {
+                Console.WriteLine("[DEBUG] DisplayGameState called but _latestGameState is null");
                 return;
+            }
                 
             if (_useEnhancedUI)
             {
+                Console.WriteLine("[DEBUG] Using enhanced UI for game state display");
                 DisplayEnhancedGameState();
                 return;
+            }
+            else
+            {
+                Console.WriteLine("[DEBUG] Using standard UI for game state display");
             }
             
             Console.WriteLine();
@@ -538,6 +600,15 @@ namespace PokerGame.Core.Microservices
             {
                 try
                 {
+                    // Always clear the console first to avoid display issues
+                    Console.Clear();
+                    
+                    // Display a fancy header at the top
+                    Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
+                    Console.WriteLine("║        TEXAS HOLD'EM POKER (ENHANCED CONSOLE UI)        ║");
+                    Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
+                    Console.WriteLine();
+                    
                     // Create a local game state for the CursesUI to display
                     var gameEngine = CreateLocalGameEngineFromState();
                     
@@ -548,35 +619,41 @@ namespace PokerGame.Core.Microservices
                         updateMethod.Invoke(_enhancedUiInstance, new[] { gameEngine });
                         return; // Success, early return
                     }
+                    else
+                    {
+                        Console.WriteLine("ERROR: UpdateGameState method not found in CursesUI");
+                    }
                 }
                 catch (Exception ex)
                 {
                     // If anything fails, fall back to text UI
                     Console.WriteLine($"Error in enhanced UI: {ex.Message}");
+                    Console.WriteLine(ex.StackTrace);
                 }
             }
             
-            // Fallback to match CursesUI format for consistency
+            // Fallback to a prettier text UI with box drawing characters
             Console.WriteLine();
-            Console.WriteLine("=============================================");
-            Console.WriteLine($"CURRENT STATE: {_latestGameState?.CurrentState}");
+            Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
+            Console.WriteLine($"║  CURRENT STATE: {_latestGameState?.CurrentState,-40} ║");
+            Console.WriteLine("╠═════════════════════════════════════════════════════════╣");
             
             // Show community cards
             string communityCardsText = _latestGameState?.CommunityCards?.Count > 0 
                 ? CardListToString(_latestGameState.CommunityCards) 
                 : "[None]";
-            Console.WriteLine($"Community Cards: {communityCardsText}");
+            Console.WriteLine($"║  Community Cards: {communityCardsText,-37} ║");
             
             // Show pot and current bet
-            Console.WriteLine($"Pot: ${_latestGameState?.Pot}");
+            Console.WriteLine($"║  Pot: ${_latestGameState?.Pot,-44} ║");
             if (_latestGameState?.CurrentBet > 0)
             {
-                Console.WriteLine($"Current bet: ${_latestGameState.CurrentBet}");
+                Console.WriteLine($"║  Current bet: ${_latestGameState.CurrentBet,-38} ║");
             }
-            Console.WriteLine();
+            Console.WriteLine("║                                                         ║");
             
             // Show player information
-            Console.WriteLine("PLAYERS:");
+            Console.WriteLine("║  PLAYERS:                                               ║");
             if (_latestGameState?.Players != null)
             {
                 foreach (var player in _latestGameState.Players)
@@ -585,11 +662,12 @@ namespace PokerGame.Core.Microservices
                     if (player.HasFolded) status = " (Folded)";
                     else if (player.IsAllIn) status = " (All-In)";
                     
-                    Console.WriteLine($"- {player.Name}{status}: ${player.Chips} chips");
+                    string playerInfo = $"  - {player.Name}{status}: ${player.Chips} chips";
+                    Console.WriteLine($"║{playerInfo,-57} ║");
                 }
             }
             
-            Console.WriteLine("=============================================");
+            Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
         }
         
         /// <summary>
@@ -754,29 +832,57 @@ namespace PokerGame.Core.Microservices
         /// <param name="player">The player taking action</param>
         private void DisplayActionPrompt(PlayerInfo player)
         {
-            Console.WriteLine();
-            Console.WriteLine($"=== {player.Name}'s turn ===");
-            
-            // Show player's hole cards
-            Console.WriteLine($"Your hole cards: {CardListToString(player.HoleCards)}");
-            
-            // Show available actions
-            Console.WriteLine("Available actions:");
-            
+            // Calculate can check once for use in all parts of this method
             bool canCheck = _latestGameState != null && player.CurrentBet == _latestGameState.CurrentBet;
             int callAmount = _latestGameState != null ? _latestGameState.CurrentBet - player.CurrentBet : 0;
-            
-            if (canCheck)
-                Console.WriteLine("- Check (C)");
-            else
-                Console.WriteLine($"- Call {callAmount} (C)");
-                
-            Console.WriteLine("- Fold (F)");
-            
             int minRaise = _latestGameState != null ? _latestGameState.CurrentBet + 10 : 10;
-            Console.WriteLine($"- Raise (R) (Minimum raise: {minRaise})");
             
-            Console.Write("Enter your action: ");
+            if (_useEnhancedUI)
+            {
+                // Enhanced UI action prompt
+                Console.WriteLine("\n╔═════════════════════════════════════════════════════════╗");
+                Console.WriteLine($"║  ★ {player.Name}'s turn ★                               ║");
+                Console.WriteLine("╠═════════════════════════════════════════════════════════╣");
+                
+                // Show player's hole cards with colored symbols if possible
+                Console.WriteLine($"║  Your hole cards: {CardListToString(player.HoleCards),-40} ║");
+                
+                // Show available actions
+                Console.WriteLine("║  Available actions:                                     ║");
+                
+                if (canCheck)
+                    Console.WriteLine("║  - Check (C)                                            ║");
+                else
+                    Console.WriteLine($"║  - Call {callAmount} (C)                                    ║");
+                    
+                Console.WriteLine("║  - Fold (F)                                             ║");
+                Console.WriteLine($"║  - Raise (R) (Minimum raise: {minRaise,-5})                   ║");
+                
+                Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
+                Console.Write("Enter your action: ");
+            }
+            else
+            {
+                // Standard UI action prompt
+                Console.WriteLine();
+                Console.WriteLine($"=== {player.Name}'s turn ===");
+                
+                // Show player's hole cards
+                Console.WriteLine($"Your hole cards: {CardListToString(player.HoleCards)}");
+                
+                // Show available actions
+                Console.WriteLine("Available actions:");
+                
+                if (canCheck)
+                    Console.WriteLine("- Check (C)");
+                else
+                    Console.WriteLine($"- Call {callAmount} (C)");
+                    
+                Console.WriteLine("- Fold (F)");
+                Console.WriteLine($"- Raise (R) (Minimum raise: {minRaise})");
+                
+                Console.Write("Enter your action: ");
+            }
             
             // For automated testing in microservice mode, automatically use a reasonable action
             // This will prevent the "Invalid action" messages from continuously being displayed
