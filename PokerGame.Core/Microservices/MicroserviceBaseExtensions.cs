@@ -52,75 +52,151 @@ namespace PokerGame.Core.Microservices
         /// <param name="message">The message to send</param>
         /// <param name="receiverId">The ID of the receiving service</param>
         /// <param name="timeoutMs">Timeout in milliseconds for the acknowledgment</param>
+        /// <param name="maxRetries">Maximum number of retries if acknowledgment not received</param>
+        /// <param name="useExponentialBackoff">Whether to use exponential backoff between retries</param>
         /// <returns>A task representing the acknowledgment status</returns>
         public static async Task<bool> SendWithAcknowledgmentAsync(
             this MicroserviceBase service, 
             Message message, 
             string receiverId,
-            int timeoutMs = 5000)
+            int timeoutMs = 5000,
+            int maxRetries = 3,
+            bool useExponentialBackoff = true)
         {
-            Console.WriteLine($"Sending message type {message.Type} to {receiverId} with acknowledgment");
+            // Ensure message has sender ID set
+            message.SenderId = service.ServiceId;
             
-            // Create a temporary message broker for this operation with specific ports
-            // Use high port numbers to avoid conflicts
-            int brokerPublishPort = 25560 + new Random().Next(10);  // Random offset to avoid port conflicts
-            int brokerSubscribePort = 25570 + new Random().Next(10);
-            
-            using var messageBroker = new MicroserviceMessageBroker(service, brokerPublishPort, brokerSubscribePort);
-            messageBroker.Start();
-            
-            try
+            // Make sure the message has an ID
+            if (string.IsNullOrEmpty(message.MessageId))
             {
-                // Set up acknowledgment tracking
-                var ackRequested = message.Type.ToString();
-                var ackReceived = new TaskCompletionSource<bool>();
+                message.MessageId = Guid.NewGuid().ToString();
+            }
+            
+            // Initialize retry variables
+            int retryCount = 0;
+            bool success = false;
+            
+            // Log what we're doing initially
+            Console.WriteLine($"[{service.ServiceId}] Sending message {message.Type} to {receiverId} with acknowledgment (timeout: {timeoutMs}ms, max retries: {maxRetries})");
+            
+            // Try until we succeed or run out of retries
+            while (!success && retryCount <= maxRetries)
+            {
+                // Log retry information if this isn't the first attempt
+                if (retryCount > 0)
+                {
+                    Console.WriteLine($"[{service.ServiceId}] Retry attempt {retryCount}/{maxRetries} for message {message.Type} to {receiverId}");
+                }
                 
-                // Define the acknowledgment pattern - what message type confirms receipt
-                MessageType expectedAckType = GetAcknowledgmentType(message.Type);
-                
-                // Register a handler for the acknowledgment message
-                messageBroker.RegisterMessageHandler(expectedAckType, async (ackMessage) => {
-                    // Verify this is an acknowledgment for our specific message
-                    if (ackMessage.InResponseTo == message.MessageId)
+                try
+                {
+                    // Create a temporary message broker for this operation with specific ports
+                    // Use high port numbers to avoid conflicts with a bit more randomness on retries
+                    int brokerPublishPort = 25560 + new Random().Next(100) + (retryCount * 10);  
+                    int brokerSubscribePort = 25570 + new Random().Next(100) + (retryCount * 10);
+                    
+                    using var messageBroker = new MicroserviceMessageBroker(service, brokerPublishPort, brokerSubscribePort);
+                    messageBroker.Start();
+                    
+                    // Set up acknowledgment tracking
+                    var ackReceived = new TaskCompletionSource<bool>();
+                    
+                    // Define the acknowledgment pattern - what message type confirms receipt
+                    MessageType expectedAckType = GetAcknowledgmentType(message.Type);
+                    
+                    // Register a handler for the acknowledgment message
+                    messageBroker.RegisterMessageHandler(expectedAckType, async (ackMessage) => {
+                        // Verify this is an acknowledgment for our specific message
+                        if (ackMessage.InResponseTo == message.MessageId)
+                        {
+                            Console.WriteLine($"Received acknowledgment for message {message.MessageId}");
+                            ackReceived.TrySetResult(true);
+                        }
+                        await Task.CompletedTask;
+                    });
+                    
+                    // Send the message
+                    messageBroker.SendTo(message, receiverId);
+                    
+                    // Wait for acknowledgment or timeout
+                    var timeoutTask = Task.Delay(timeoutMs);
+                    var completedTask = await Task.WhenAny(ackReceived.Task, timeoutTask);
+                    
+                    // Check if we got acknowledgment or timed out
+                    if (completedTask == ackReceived.Task)
                     {
-                        Console.WriteLine($"Received acknowledgment for message {message.MessageId}");
-                        ackReceived.TrySetResult(true);
+                        // We got the acknowledgment
+                        success = await ackReceived.Task;
+                        if (success)
+                        {
+                            // Log success
+                            Console.WriteLine($"[{service.ServiceId}] Message {message.Type} to {receiverId} acknowledged successfully" + 
+                                            (retryCount > 0 ? $" after {retryCount} retries" : ""));
+                            return true;
+                        }
                     }
-                    await Task.CompletedTask;
-                });
-                
-                // Make sure the message has a unique ID for tracking
-                if (string.IsNullOrEmpty(message.MessageId))
-                {
-                    message.MessageId = Guid.NewGuid().ToString();
+                    else
+                    {
+                        // Timed out waiting for acknowledgment
+                        Console.WriteLine($"Timed out waiting for acknowledgment of message {message.MessageId}");
+                    }
+                    
+                    // Cleanup the message broker
+                    messageBroker.Stop();
+                    
+                    // If we're here, the message wasn't acknowledged
+                    retryCount++;
+                    
+                    // Exit if we've exceeded max retries
+                    if (retryCount > maxRetries)
+                    {
+                        break;
+                    }
+                    
+                    // Calculate delay before next retry
+                    int delayMs;
+                    if (useExponentialBackoff)
+                    {
+                        // Exponential backoff with jitter (max 10 seconds)
+                        delayMs = Math.Min(1000 * (int)Math.Pow(2, retryCount - 1), 10000);
+                        delayMs += new Random().Next(-delayMs / 4, delayMs / 4); // Add jitter
+                    }
+                    else
+                    {
+                        // Linear backoff (500ms per retry)
+                        delayMs = 500 * retryCount;
+                    }
+                    
+                    Console.WriteLine($"[{service.ServiceId}] Message {message.Type} not acknowledged, waiting {delayMs}ms before retry");
+                    await Task.Delay(delayMs);
                 }
-                
-                // Send the message
-                messageBroker.SendTo(message, receiverId);
-                
-                // Wait for acknowledgment or timeout
-                var timeoutTask = Task.Delay(timeoutMs);
-                var completedTask = await Task.WhenAny(ackReceived.Task, timeoutTask);
-                
-                // Check if we got acknowledgment or timed out
-                if (completedTask == ackReceived.Task)
+                catch (Exception ex)
                 {
-                    // We got the acknowledgment
-                    return await ackReceived.Task;
-                }
-                else
-                {
-                    // Timed out waiting for acknowledgment
-                    Console.WriteLine($"Timed out waiting for acknowledgment of message {message.MessageId}");
-                    return false;
+                    // Log detailed exception info
+                    Console.WriteLine($"[{service.ServiceId}] Error in SendWithAcknowledgmentAsync: {ex.Message}");
+                    if (ex.InnerException != null)
+                    {
+                        Console.WriteLine($"[{service.ServiceId}] Inner exception: {ex.InnerException.Message}");
+                    }
+                    
+                    // Increment retry counter
+                    retryCount++;
+                    
+                    // Exit if we've exceeded max retries
+                    if (retryCount > maxRetries)
+                    {
+                        break;
+                    }
+                    
+                    // Simple backoff for exceptions (shorter than the normal backoff)
+                    int delayMs = 250 * retryCount;
+                    await Task.Delay(delayMs);
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in SendWithAcknowledgmentAsync: {ex.Message}");
-                Console.WriteLine(ex.StackTrace);
-                return false;
-            }
+            
+            // If we get here, we failed after all retries
+            Console.WriteLine($"[{service.ServiceId}] Failed to get acknowledgment for message {message.Type} to {receiverId} after {maxRetries} retries");
+            return false;
         }
         
         /// <summary>

@@ -75,8 +75,23 @@ namespace PokerGame.Core.Microservices
                 }
                 finally
                 {
-                    // Dispose the timer
-                    _cleanupTimer?.Dispose();
+                    try
+                    {
+                        // Dispose the timer
+                        _cleanupTimer?.Dispose();
+                        
+                        // Force immediate process exit to avoid hanging
+                        if (!Environment.HasShutdownStarted)
+                        {
+                            Console.WriteLine("Cleanup completed, exiting immediately");
+                            Environment.Exit(0);
+                        }
+                    }
+                    catch
+                    {
+                        // Last resort if exit fails
+                        Environment.FailFast("Forcing immediate shutdown after NetMQ cleanup");
+                    }
                 }
             }
         }

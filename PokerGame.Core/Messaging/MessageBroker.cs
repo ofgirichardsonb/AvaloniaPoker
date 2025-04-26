@@ -173,21 +173,52 @@ namespace PokerGame.Core.Messaging
             // Send the message
             SendMessage(message);
             
-            // Wait for acknowledgment with timeout
-            var timeoutTask = Task.Delay(timeoutMs);
-            var completedTask = await Task.WhenAny(pendingMessage.CompletionSource.Task, timeoutTask);
+            // Implement retry logic for reliability
+            bool acknowledged = false;
+            int retryCount = 0;
+            int maxRetries = 3; // Maximum number of retries
             
-            if (completedTask == timeoutTask)
+            while (!acknowledged && retryCount <= maxRetries)
             {
-                // Timed out waiting for acknowledgment
-                Console.WriteLine($"Message {message.MessageId} ({message.Type}) timed out waiting for acknowledgment");
-                _pendingMessages.TryRemove(message.MessageId, out _);
-                return false;
+                // Wait for acknowledgment with timeout
+                var timeoutTask = Task.Delay(timeoutMs);
+                var completedTask = await Task.WhenAny(pendingMessage.CompletionSource.Task, timeoutTask);
+                
+                if (completedTask == timeoutTask)
+                {
+                    // Timed out waiting for acknowledgment
+                    retryCount++;
+                    Console.WriteLine($"Message {message.MessageId} ({message.Type}) timed out waiting for acknowledgment. Retry {retryCount}/{maxRetries}");
+                    
+                    if (retryCount <= maxRetries)
+                    {
+                        // Resend the message
+                        pendingMessage.CompletionSource = new TaskCompletionSource<bool>();
+                        pendingMessage.RetryCount = retryCount;
+                        pendingMessage.SentTime = DateTime.UtcNow;
+                        
+                        Console.WriteLine($"Retrying message {message.MessageId} ({message.Type})");
+                        SendMessage(message);
+                    }
+                    else
+                    {
+                        // Maximum retries reached
+                        Console.WriteLine($"Maximum retries reached for message {message.MessageId} ({message.Type})");
+                        _pendingMessages.TryRemove(message.MessageId, out _);
+                        return false;
+                    }
+                }
+                else
+                {
+                    // Acknowledgment received
+                    acknowledged = true;
+                    Console.WriteLine($"Message {message.MessageId} ({message.Type}) acknowledged successfully after {retryCount} retries");
+                }
             }
             
-            // Acknowledgment received
+            // Cleanup
             _pendingMessages.TryRemove(message.MessageId, out _);
-            return true;
+            return acknowledged;
         }
         
         /// <summary>

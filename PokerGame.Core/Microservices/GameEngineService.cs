@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Linq;
 using PokerGame.Core.Game;
 using PokerGame.Core.Models;
+using PokerGame.Core.Messaging;
 
 namespace PokerGame.Core.Microservices
 {
@@ -17,6 +18,7 @@ namespace PokerGame.Core.Microservices
         private readonly MicroserviceUI _microserviceUI;
         private string? _cardDeckServiceId;
         private string _currentDeckId = string.Empty;
+        private Models.Deck? _emergencyDeck;
         
         // Dictionary to keep track of known services and their capabilities
         private readonly Dictionary<string, ServiceRegistrationPayload> _knownServices = new Dictionary<string, ServiceRegistrationPayload>();
@@ -494,14 +496,21 @@ namespace PokerGame.Core.Microservices
                 var message = Message.Create(MessageType.DeckCreate, createPayload);
                 message.MessageId = Guid.NewGuid().ToString(); // Ensure unique message ID
                 
-                // Use our new extension method to send with acknowledgment
+                // Use our enhanced extension method to send with acknowledgment
                 Console.WriteLine($"Sending DeckCreate message to {_cardDeckServiceId} with reliable delivery");
-                bool ackReceived = await this.SendWithAcknowledgmentAsync(message, _cardDeckServiceId, 5000);
+                // Use exponential backoff and 5 retries for critical deck creation
+                bool ackReceived = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
+                    this, 
+                    message, 
+                    _cardDeckServiceId, 
+                    timeoutMs: 5000,
+                    maxRetries: 5,
+                    useExponentialBackoff: true);
                 
                 if (!ackReceived)
                 {
-                    Console.WriteLine("Failed to receive acknowledgment for deck creation. Will retry...");
-                    await Task.Delay(500);
+                    Console.WriteLine("Failed to receive acknowledgment for deck creation with all retries. Will try again...");
+                    await Task.Delay(1000); // Longer delay between major retry cycles
                     continue;
                 }
                 
@@ -518,9 +527,16 @@ namespace PokerGame.Core.Microservices
             if (!deckCreationSuccessful)
             {
                 Console.WriteLine($"ERROR: Failed to create deck after {maxRetries} attempts");
+                
                 // Create an emergency local deck in case the service is completely unavailable
                 _currentDeckId = "emergency-local-deck";
                 Console.WriteLine("Created emergency local deck as fallback");
+                
+                // Create and store the actual emergency deck in our service
+                _emergencyDeck = new Models.Deck();
+                _emergencyDeck.Shuffle();
+                
+                Console.WriteLine($"Emergency deck created with {_emergencyDeck.CardsRemaining} cards");
             }
             
             Console.WriteLine($"Finished deck creation process");
@@ -547,12 +563,30 @@ namespace PokerGame.Core.Microservices
             
             Console.WriteLine($"Shuffling deck {_currentDeckId} with reliable messaging");
             
-            // Use our reliable messaging system
-            bool ackReceived = await this.SendWithAcknowledgmentAsync(message, _cardDeckServiceId, 3000);
+            // Use our enhanced reliable messaging system with fully qualified namespace
+            bool ackReceived = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
+                this, 
+                message, 
+                _cardDeckServiceId, 
+                timeoutMs: 3000,
+                maxRetries: 3,
+                useExponentialBackoff: true);
             
             if (!ackReceived)
             {
-                Console.WriteLine("Warning: Did not receive shuffle confirmation, but continuing anyway");
+                Console.WriteLine("Warning: Did not receive shuffle confirmation after retries");
+                
+                // If using emergency deck, just re-shuffle it locally
+                if (_currentDeckId == "emergency-local-deck" && _emergencyDeck != null)
+                {
+                    Console.WriteLine("Re-shuffling emergency deck locally");
+                    _emergencyDeck.Shuffle();
+                    Console.WriteLine("Emergency deck shuffled");
+                }
+                else
+                {
+                    Console.WriteLine("Continuing without shuffle confirmation");
+                }
             }
             else
             {
@@ -565,6 +599,47 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         private async Task DealCardsToPlayersAsync()
         {
+            // Check if we need to use the emergency deck
+            if (_currentDeckId == "emergency-local-deck" && _emergencyDeck != null)
+            {
+                Console.WriteLine("Using emergency deck to deal cards to players");
+                
+                // Deal 2 cards to each player directly from emergency deck
+                foreach (var player in _gameEngine.Players)
+                {
+                    if (player.HoleCards.Count < 2)
+                    {
+                        List<Card> cards = _emergencyDeck.DealCards(2);
+                        player.HoleCards.AddRange(cards);
+                        Console.WriteLine($"Dealt 2 cards to {player.Name} from emergency deck: {cards[0]} {cards[1]}");
+                    }
+                }
+                
+                // Notify that all players have hole cards
+                if (_gameEngine.Players.All(p => p.HoleCards.Count == 2))
+                {
+                    Console.WriteLine("All players have hole cards from emergency deck, transitioning to PreFlop");
+                    
+                    // Force state transition
+                    if (_gameEngine.State != GameState.PreFlop)
+                    {
+                        try
+                        {
+                            typeof(PokerGameEngine).GetField("_gameState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                                ?.SetValue(_gameEngine, GameState.PreFlop);
+                            Console.WriteLine($"Game state after force: {_gameEngine.State}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error forcing state change: {ex.Message}");
+                        }
+                    }
+                }
+                
+                return;
+            }
+            
+            // Normal operation with card deck service
             if (_cardDeckServiceId == null || string.IsNullOrEmpty(_currentDeckId))
             {
                 Console.WriteLine("Card deck service not available or no deck ID");
@@ -595,6 +670,32 @@ namespace PokerGame.Core.Microservices
         /// <param name="count">Number of cards to deal</param>
         private async Task DealCommunityCardsAsync(int count)
         {
+            // Check if we need to use the emergency deck
+            if (_currentDeckId == "emergency-local-deck" && _emergencyDeck != null)
+            {
+                Console.WriteLine($"Using emergency deck to deal {count} community cards");
+                
+                // Burn card if needed (for flop, turn, or river)
+                if (count == 3 || count == 1)
+                {
+                    _emergencyDeck.DealCard(); // Burn a card
+                    Console.WriteLine("Burned a card from emergency deck");
+                }
+                
+                // Deal community cards directly from emergency deck
+                List<Card> cards = _emergencyDeck.DealCards(count);
+                foreach (var card in cards)
+                {
+                    _gameEngine.AddCommunityCard(card);
+                    Console.WriteLine($"Added community card from emergency deck: {card}");
+                }
+                
+                // Broadcast updated game state
+                BroadcastGameState();
+                return;
+            }
+            
+            // Normal operation with card deck service
             if (_cardDeckServiceId == null || string.IsNullOrEmpty(_currentDeckId))
             {
                 Console.WriteLine("Card deck service not available or no deck ID");
@@ -612,7 +713,7 @@ namespace PokerGame.Core.Microservices
                 await BurnCardAsync();
             }
             
-            // Request cards from the deck service
+            // Request cards from the deck service with reliable delivery
             var dealPayload = new DeckDealPayload
             {
                 DeckId = _currentDeckId,
@@ -620,7 +721,31 @@ namespace PokerGame.Core.Microservices
             };
             
             var message = Message.Create(MessageType.DeckDeal, dealPayload);
-            SendTo(message, _cardDeckServiceId);
+            message.MessageId = Guid.NewGuid().ToString();
+            
+            // Use reliable messaging with acknowledgment with fully qualified namespace
+            bool ackReceived = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
+                this, 
+                message, 
+                _cardDeckServiceId, 
+                timeoutMs: 3000,
+                maxRetries: 2,
+                useExponentialBackoff: true);
+                
+            if (!ackReceived)
+            {
+                Console.WriteLine($"Warning: Failed to get acknowledgment for dealing {count} community cards");
+                
+                // Fall back to emergency deck if available
+                if (_emergencyDeck != null && _currentDeckId != "emergency-local-deck")
+                {
+                    Console.WriteLine("Switching to emergency deck for community cards due to communication failure");
+                    _currentDeckId = "emergency-local-deck";
+                    
+                    // Recursively call this method now that we're using the emergency deck
+                    await DealCommunityCardsAsync(count);
+                }
+            }
         }
         
         /// <summary>
@@ -628,6 +753,15 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         private async Task BurnCardAsync()
         {
+            // Check if we need to use the emergency deck
+            if (_currentDeckId == "emergency-local-deck" && _emergencyDeck != null)
+            {
+                Console.WriteLine("Burning a card from emergency deck");
+                _emergencyDeck.DealCard(); // Just deal and discard a card
+                return;
+            }
+            
+            // Normal operation with card deck service
             if (_cardDeckServiceId == null || string.IsNullOrEmpty(_currentDeckId))
             {
                 Console.WriteLine("Card deck service not available or no deck ID");
@@ -641,10 +775,37 @@ namespace PokerGame.Core.Microservices
             };
             
             var message = Message.Create(MessageType.DeckBurn, burnPayload);
-            SendTo(message, _cardDeckServiceId);
+            message.MessageId = Guid.NewGuid().ToString();
             
-            // Small delay to let the burn complete
-            await Task.Delay(50);
+            // Use reliable messaging with acknowledgment with fully qualified namespace
+            bool ackReceived = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
+                this, 
+                message, 
+                _cardDeckServiceId, 
+                timeoutMs: 2000,
+                maxRetries: 2,
+                useExponentialBackoff: false);
+                
+            if (!ackReceived)
+            {
+                Console.WriteLine("Warning: Failed to get acknowledgment for burn card operation");
+                
+                // Fall back to emergency deck if available
+                if (_emergencyDeck != null && _currentDeckId != "emergency-local-deck")
+                {
+                    Console.WriteLine("Switching to emergency deck due to burn card communication failure");
+                    _currentDeckId = "emergency-local-deck";
+                    
+                    // Recursively call this method now that we're using the emergency deck
+                    await BurnCardAsync();
+                    return;
+                }
+            }
+            else
+            {
+                // Small delay to let the burn operation complete
+                await Task.Delay(50);
+            }
         }
         
         /// <summary>
