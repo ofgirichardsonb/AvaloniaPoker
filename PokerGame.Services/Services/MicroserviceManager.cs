@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using PokerGame.Core.Microservices;
-using MessageBroker;
+using PokerGame.Core.Messaging;
 
 namespace PokerGame.Services
 {

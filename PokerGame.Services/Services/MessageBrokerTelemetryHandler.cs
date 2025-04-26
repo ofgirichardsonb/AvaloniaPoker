@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using MessageBroker;
+using PokerGame.Core.Messaging;
+using PokerGame.Core.Telemetry;
 
 namespace PokerGame.Services
 {
@@ -10,14 +11,14 @@ namespace PokerGame.Services
     /// </summary>
     public class MessageBrokerTelemetryHandler
     {
-        private readonly TelemetryService _telemetryService;
+        private readonly PokerGame.Core.Telemetry.TelemetryService _telemetryService;
         private readonly Dictionary<string, Stopwatch> _messageTimers = new Dictionary<string, Stopwatch>();
         
         /// <summary>
         /// Creates a new instance of the MessageBrokerTelemetryHandler
         /// </summary>
         /// <param name="telemetryService">The telemetry service to use</param>
-        public MessageBrokerTelemetryHandler(TelemetryService telemetryService)
+        public MessageBrokerTelemetryHandler(PokerGame.Core.Telemetry.TelemetryService telemetryService)
         {
             _telemetryService = telemetryService;
         }

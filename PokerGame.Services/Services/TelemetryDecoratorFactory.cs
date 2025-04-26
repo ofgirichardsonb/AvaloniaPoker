@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using PokerGame.Core.Microservices;
 using PokerGame.Abstractions;
-using MessageBroker;
+using PokerGame.Core.Messaging;
 using IGameEngineService = PokerGame.Services.IGameEngineService;
 
 namespace PokerGame.Services
@@ -94,6 +94,14 @@ namespace PokerGame.Services
         /// <param name="brokerManager">The broker manager instance</param>
         public static void RegisterBrokerTelemetry(BrokerManager brokerManager)
         {
+            // Since we can't directly cast between the different TelemetryService types,
+            // we'll pass the Core.Telemetry.TelemetryService directly
+            var coreTelemetryService = PokerGame.Core.Telemetry.TelemetryService.Instance;
+            var telemetryHandler = new MessageBrokerTelemetryHandler(coreTelemetryService);
+            
+            // Set the telemetry handler on the broker manager
+            brokerManager.SetTelemetryHandler(telemetryHandler);
+            
             // Enable telemetry for the broker
             brokerManager.InitializeTelemetry();
         }

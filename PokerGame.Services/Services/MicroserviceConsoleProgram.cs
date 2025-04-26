@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using PokerGame.Core.Microservices;
-using MessageBroker;
+using PokerGame.Core.Messaging;
 
 namespace PokerGame.Services
 {

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using PokerGame.Core.Game;
 using PokerGame.Core.Interfaces;
 using PokerGame.Services;
-using MessageBroker;
+using PokerGame.Core.Messaging;
 
 namespace PokerGame.Console
 {
