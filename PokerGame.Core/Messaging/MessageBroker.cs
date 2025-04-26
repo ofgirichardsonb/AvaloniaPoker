@@ -159,76 +159,99 @@ namespace PokerGame.Core.Messaging
                 message.MessageId = Guid.NewGuid().ToString();
             }
             
-            // Log before sending
-            Console.WriteLine($"[{_brokerId}] Sending message {message.Type} to {message.TargetServiceId ?? "broadcast"} with acknowledgment (timeout: {timeoutMs}ms)");
-            
-            // Check if message is already in pending messages (cleanup any old entries)
-            if (_pendingMessages.TryGetValue(message.MessageId, out _))
+            // Ensure message has sender ID set (crucial for acknowledgment routing)
+            if (string.IsNullOrEmpty(message.SenderServiceId))
             {
-                Console.WriteLine($"[{_brokerId}] WARNING: Message {message.MessageId} already exists in pending messages. Removing old entry.");
-                _pendingMessages.TryRemove(message.MessageId, out _);
+                message.SenderServiceId = _brokerId;
+                Console.WriteLine($"WARNING: Message {message.MessageId} had no sender ID. Setting to broker ID: {_brokerId}");
             }
             
-            // Add tracking for this message
-            var pendingMessage = new PendingMessage
+            // Log before sending
+            Console.WriteLine($"[{_brokerId}] Sending message {message.Type} from {message.SenderServiceId} to {message.TargetServiceId ?? "broadcast"} with acknowledgment (timeout: {timeoutMs}ms)");
+            
+            // Ensure reliable message delivery with retry logic
+            try
             {
-                Message = message,
-                CompletionSource = new TaskCompletionSource<bool>(),
-                SentTime = DateTime.UtcNow,
-                RetryCount = 0
-            };
-            
-            _pendingMessages.TryAdd(message.MessageId, pendingMessage);
-            
-            // Send the message
-            SendMessage(message);
-            
-            // Implement retry logic for reliability
-            bool acknowledged = false;
-            int retryCount = 0;
-            int maxRetries = 3; // Maximum number of retries
-            
-            while (!acknowledged && retryCount <= maxRetries)
-            {
-                // Wait for acknowledgment with timeout
-                var timeoutTask = Task.Delay(timeoutMs);
-                var completedTask = await Task.WhenAny(pendingMessage.CompletionSource.Task, timeoutTask);
-                
-                if (completedTask == timeoutTask)
+                // Check if message is already in pending messages (cleanup any old entries)
+                if (_pendingMessages.TryGetValue(message.MessageId, out _))
                 {
-                    // Timed out waiting for acknowledgment
-                    retryCount++;
-                    Console.WriteLine($"Message {message.MessageId} ({message.Type}) timed out waiting for acknowledgment. Retry {retryCount}/{maxRetries}");
+                    Console.WriteLine($"[{_brokerId}] WARNING: Message {message.MessageId} already exists in pending messages. Removing old entry.");
+                    _pendingMessages.TryRemove(message.MessageId, out _);
+                }
+                
+                // Add tracking for this message
+                var pendingMessage = new PendingMessage
+                {
+                    Message = message,
+                    CompletionSource = new TaskCompletionSource<bool>(),
+                    SentTime = DateTime.UtcNow,
+                    RetryCount = 0
+                };
+                
+                _pendingMessages.TryAdd(message.MessageId, pendingMessage);
+                
+                // Send the message
+                SendMessage(message);
+                
+                // Implement retry logic for reliability
+                bool acknowledged = false;
+                int retryCount = 0;
+                int maxRetries = 3; // Maximum number of retries
+                
+                while (!acknowledged && retryCount <= maxRetries)
+                {
+                    // Wait for acknowledgment with timeout
+                    var timeoutTask = Task.Delay(timeoutMs);
+                    var completedTask = await Task.WhenAny(pendingMessage.CompletionSource.Task, timeoutTask);
                     
-                    if (retryCount <= maxRetries)
+                    if (completedTask == timeoutTask)
                     {
-                        // Resend the message
-                        pendingMessage.CompletionSource = new TaskCompletionSource<bool>();
-                        pendingMessage.RetryCount = retryCount;
-                        pendingMessage.SentTime = DateTime.UtcNow;
+                        // Timed out waiting for acknowledgment
+                        retryCount++;
+                        Console.WriteLine($"Message {message.MessageId} ({message.Type}) timed out waiting for acknowledgment. Retry {retryCount}/{maxRetries}");
                         
-                        Console.WriteLine($"Retrying message {message.MessageId} ({message.Type})");
-                        SendMessage(message);
+                        if (retryCount <= maxRetries)
+                        {
+                            // Resend the message
+                            pendingMessage.CompletionSource = new TaskCompletionSource<bool>();
+                            pendingMessage.RetryCount = retryCount;
+                            pendingMessage.SentTime = DateTime.UtcNow;
+                            
+                            Console.WriteLine($"Retrying message {message.MessageId} ({message.Type})");
+                            SendMessage(message);
+                        }
+                        else
+                        {
+                            // Maximum retries reached
+                            Console.WriteLine($"Maximum retries reached for message {message.MessageId} ({message.Type})");
+                            _pendingMessages.TryRemove(message.MessageId, out _);
+                            return false;
+                        }
                     }
                     else
                     {
-                        // Maximum retries reached
-                        Console.WriteLine($"Maximum retries reached for message {message.MessageId} ({message.Type})");
-                        _pendingMessages.TryRemove(message.MessageId, out _);
-                        return false;
+                        // Acknowledgment received
+                        acknowledged = true;
+                        Console.WriteLine($"Message {message.MessageId} ({message.Type}) acknowledged successfully after {retryCount} retries");
                     }
                 }
-                else
-                {
-                    // Acknowledgment received
-                    acknowledged = true;
-                    Console.WriteLine($"Message {message.MessageId} ({message.Type}) acknowledged successfully after {retryCount} retries");
-                }
+                
+                // Cleanup
+                _pendingMessages.TryRemove(message.MessageId, out _);
+                return acknowledged;
             }
-            
-            // Cleanup
-            _pendingMessages.TryRemove(message.MessageId, out _);
-            return acknowledged;
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ERROR in SendWithAcknowledgmentAsync: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+                }
+                
+                // Cleanup on error
+                _pendingMessages.TryRemove(message.MessageId, out _);
+                return false;
+            }
         }
         
         /// <summary>
@@ -305,20 +328,54 @@ namespace PokerGame.Core.Messaging
         {
             try
             {
-                var frame = _subscriber?.ReceiveFrameString();
-                if (string.IsNullOrEmpty(frame)) return;
+                // Safely receive the message
+                if (_subscriber == null)
+                {
+                    Console.WriteLine("WARNING: Subscriber is null in OnMessageReceived");
+                    return;
+                }
                 
-                var message = MessageEnvelope.Deserialize(frame);
+                var frame = _subscriber.ReceiveFrameString();
+                if (string.IsNullOrEmpty(frame)) 
+                {
+                    Console.WriteLine("WARNING: Received empty frame");
+                    return;
+                }
+                
+                // Safely deserialize the message with detailed error logging
+                MessageEnvelope? message;
+                try 
+                {
+                    message = MessageEnvelope.Deserialize(frame);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"ERROR: Failed to deserialize message: {ex.Message}");
+                    Console.WriteLine($"Failed message content: {frame}");
+                    return;
+                }
+                
                 if (message == null) 
                 {
                     Console.WriteLine("WARNING: Received null message after deserialization");
                     return;
                 }
                 
+                // Log all received messages for debugging
+                Console.WriteLine($"RECEIVED RAW: Message ID: {message.MessageId}, Type: {message.Type}, From: {message.SenderServiceId}, To: {message.TargetServiceId ?? "broadcast"}");
+                
+                // Validate required message fields
+                if (string.IsNullOrEmpty(message.MessageId))
+                {
+                    Console.WriteLine("WARNING: Received message with empty MessageId");
+                    return;
+                }
+                
                 // If this is an acknowledgment, process it
                 if (message.Type == "Ack")
                 {
-                    Console.WriteLine($"Received ACK message with ID {message.MessageId}, for original message: {message.Payload as string}");
+                    string originalMsgId = message.Payload as string ?? "unknown";
+                    Console.WriteLine($"Received ACK message with ID {message.MessageId}, for original message: {originalMsgId}");
                     ProcessAcknowledgment(message);
                     return;
                 }
@@ -394,6 +451,13 @@ namespace PokerGame.Core.Messaging
         /// <param name="originalMessage">The message being acknowledged</param>
         private void SendAcknowledgment(MessageEnvelope originalMessage)
         {
+            // Skip if sender ID is missing or invalid
+            if (string.IsNullOrEmpty(originalMessage.SenderServiceId))
+            {
+                Console.WriteLine($"WARNING: Cannot send acknowledgment for message {originalMessage.MessageId} - sender ID is missing");
+                return;
+            }
+            
             // Create acknowledgment message
             var ackMessage = new MessageEnvelope
             {
@@ -404,6 +468,9 @@ namespace PokerGame.Core.Messaging
                 Payload = originalMessage.MessageId, // Reference to the original message
                 Timestamp = DateTime.UtcNow
             };
+            
+            // Enhanced logging for ack messages
+            Console.WriteLine($"Sending acknowledgment for message {originalMessage.MessageId} to {originalMessage.SenderServiceId}");
             
             SendMessage(ackMessage);
         }
