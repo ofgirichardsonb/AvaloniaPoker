@@ -55,38 +55,81 @@ stop_all_services() {
 start_all_services() {
     echo "Starting all services..."
     
+    # First, clear any existing PID files
+    rm -f .gameengine.pid .carddeck.pid .consoleui.pid
+    
+    # Use a consistent offset for all services to ensure proper communication
+    local offset=100
+    
     # Start the Game Engine service first
-    launch_service "gameengine" $CONSOLE_PORT_OFFSET ""
+    launch_service "gameengine" $offset ""
+    echo "Waiting for game engine to initialize..."
     sleep 3
     
     # Start the Card Deck service second
-    launch_service "carddeck" $((CONSOLE_PORT_OFFSET + 10)) ""
+    launch_service "carddeck" $offset ""
+    echo "Waiting for card deck service to initialize..."
     sleep 3
     
     # Start the Console UI service last
-    launch_service "consoleui" $((CONSOLE_PORT_OFFSET + 20)) "--enhanced-ui"
+    launch_service "consoleui" $offset "--enhanced-ui"
     
     echo "All services started. Poker game should be running."
+    echo "Use stop command to terminate all services when done."
 }
 
 # Start in verbose mode with more debugging information
 start_verbose() {
     echo "Starting all services in verbose mode..."
-    launch_service "gameengine" $CONSOLE_PORT_OFFSET "--verbose"
+    
+    # First, clear any existing PID files
+    rm -f .gameengine.pid .carddeck.pid .consoleui.pid
+    
+    # Use a consistent offset for all verbose mode services
+    local verbose_offset=150
+    
+    # Start the Game Engine service first with verbose logging
+    launch_service "gameengine" $verbose_offset "--verbose"
+    echo "Waiting for game engine to initialize..."
     sleep 3
-    launch_service "carddeck" $((CONSOLE_PORT_OFFSET + 10)) "--verbose"
+    
+    # Start the Card Deck service with verbose logging
+    launch_service "carddeck" $verbose_offset "--verbose"
+    echo "Waiting for card deck service to initialize..."
     sleep 3
-    launch_service "consoleui" $((CONSOLE_PORT_OFFSET + 20)) "--enhanced-ui --verbose"
+    
+    # Start the Console UI service with enhanced UI and verbose logging
+    launch_service "consoleui" $verbose_offset "--enhanced-ui --verbose"
+    
+    echo "All services started in verbose mode."
+    echo "Check logs for detailed information about service operation."
 }
 
 # Start with emergency deck mode for better reliability
 start_emergency() {
     echo "Starting in emergency deck mode (more reliable)..."
-    launch_service "gameengine" $CONSOLE_PORT_OFFSET ""
-    sleep 2
-    launch_service "carddeck" $((CONSOLE_PORT_OFFSET + 10)) "--emergency-deck"
-    sleep 2
-    launch_service "consoleui" $((CONSOLE_PORT_OFFSET + 20)) "--enhanced-ui"
+    
+    # First, clear any existing PID files
+    rm -f .gameengine.pid .carddeck.pid .consoleui.pid
+    
+    # Use a fixed port offset for all emergency mode services to ensure they can communicate
+    local emergency_offset=50
+    
+    # Start the Game Engine service first
+    launch_service "gameengine" $emergency_offset ""
+    echo "Waiting for game engine to initialize..."
+    sleep 3
+    
+    # Start the Card Deck service with emergency deck mode
+    launch_service "carddeck" $emergency_offset "--emergency-deck"
+    echo "Waiting for card deck service to initialize..."
+    sleep 3
+    
+    # Start the Console UI service last, with enhanced UI
+    launch_service "consoleui" $emergency_offset "--enhanced-ui"
+    
+    echo "All services should now be running in emergency mode"
+    echo "Game should be accessible through the console UI"
 }
 
 # Main script execution
@@ -109,17 +152,28 @@ case "$1" in
         start_emergency
         ;;
     start-engine)
-        launch_service "gameengine" $CONSOLE_PORT_OFFSET ""
+        # Clear any existing PID file
+        rm -f .gameengine.pid
+        # Use port offset 200 for individual engine service
+        launch_service "gameengine" 200 ""
         ;;
     start-deck)
-        launch_service "carddeck" $((CONSOLE_PORT_OFFSET + 10)) ""
+        # Clear any existing PID file
+        rm -f .carddeck.pid
+        # Use port offset 200 for individual card deck service
+        launch_service "carddeck" 200 ""
         ;;
     start-ui)
-        launch_service "consoleui" $((CONSOLE_PORT_OFFSET + 20)) "--enhanced-ui"
+        # Clear any existing PID file
+        rm -f .consoleui.pid
+        # Use port offset 200 for individual UI service
+        launch_service "consoleui" 200 "--enhanced-ui"
         ;;
     curses)
+        # Clear any existing PID file
+        rm -f .consoleui.pid
         # Start the Console UI service with curses interface
-        launch_service "consoleui" $((CONSOLE_PORT_OFFSET + 20)) "--curses"
+        launch_service "consoleui" 200 "--curses"
         ;;
     *)
         echo "Usage: $0 {start|stop|restart|verbose|emergency|start-engine|start-deck|start-ui|curses}"
