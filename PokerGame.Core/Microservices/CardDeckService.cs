@@ -655,28 +655,43 @@ namespace PokerGame.Core.Microservices
         /// <returns>The burned card, or null if the deck is empty</returns>
         private Card? BurnCard(string deckId, bool faceUp)
         {
-            if (_decks.TryGetValue(deckId, out var deck))
+            try
             {
-                // Ensure a burn pile exists for this deck
-                if (!_burnPiles.ContainsKey(deckId))
+                if (_decks.TryGetValue(deckId, out var deck))
                 {
-                    _burnPiles[deckId] = new List<Card>();
-                    Console.WriteLine($"Created new burn pile for deck: {deckId}");
+                    // Ensure a burn pile exists for this deck
+                    if (!_burnPiles.ContainsKey(deckId))
+                    {
+                        _burnPiles[deckId] = new List<Card>();
+                        Console.WriteLine($"Created new burn pile for deck: {deckId}");
+                    }
+                    
+                    var burnPile = _burnPiles[deckId];
+                    
+                    try
+                    {
+                        var card = deck.DealCard();
+                        burnPile.Add(card);
+                        Console.WriteLine($"Burned card from deck: {deckId} (Face up: {faceUp}, Card: {(faceUp ? card.ToString() : "Hidden")})");
+                        return card;
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        // Handle the case when the deck is empty
+                        Console.WriteLine($"Failed to burn card: {ex.Message}");
+                        return null;
+                    }
                 }
-                
-                var burnPile = _burnPiles[deckId];
-                
-                var card = deck.DealCard();
-                if (card != null)
+                else
                 {
-                    burnPile.Add(card);
-                    Console.WriteLine($"Burned card from deck: {deckId} (Face up: {faceUp}, Card: {(faceUp ? card.ToString() : "Hidden")})");
+                    Console.WriteLine($"Cannot burn card - Deck not found: {deckId}");
+                    return null;
                 }
-                return card;
             }
-            else
+            catch (Exception ex)
             {
-                throw new Exception($"Deck not found: {deckId}");
+                Console.WriteLine($"Exception in BurnCard method: {ex.Message}");
+                return null;
             }
         }
         
