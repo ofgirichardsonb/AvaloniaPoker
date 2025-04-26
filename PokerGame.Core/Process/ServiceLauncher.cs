@@ -19,33 +19,12 @@ namespace PokerGame.Core.Process
         /// <param name="args">Command line arguments</param>
         public static async Task<int> RunAsync(string[] args)
         {
-            // Create the root command and options
+            // Create the root command
             var rootCommand = new RootCommand("PokerGame Service Launcher");
             
-            // Add global options
-            var portOffsetOption = new Option<int>(
-                new[] { "--port-offset", "-p" },
-                description: "Port offset for all services",
-                getDefaultValue: () => -1);
-            rootCommand.AddOption(portOffsetOption);
-            
-            var verboseOption = new Option<bool>(
-                new[] { "--verbose", "-v" },
-                description: "Enable verbose logging",
-                getDefaultValue: () => false);
-            rootCommand.AddOption(verboseOption);
-            
-            var cursesOption = new Option<bool>(
-                new[] { "--curses", "-c" },
-                description: "Use curses UI for console client",
-                getDefaultValue: () => false);
-            rootCommand.AddOption(cursesOption);
-            
-            var enhancedUiOption = new Option<bool>(
-                new[] { "--enhanced-ui", "-e" },
-                description: "Use enhanced UI for console client",
-                getDefaultValue: () => false);
-            rootCommand.AddOption(enhancedUiOption);
+            // NOTE: We don't add global options to the root command
+            // because System.CommandLine beta4 has issues with global options being inherited by subcommands.
+            // Instead, we define separate option instances for each command.
             
             // Add commands
             var startAllCommand = new Command("start-all", "Start all services (services host and console client)");
@@ -69,21 +48,103 @@ namespace PokerGame.Core.Process
             var statusCommand = new Command("status", "Show the status of all services");
             rootCommand.AddCommand(statusCommand);
             
+            // Create one set of options for each subcommand to avoid sharing
+            // This is required in beta4 of System.CommandLine
+            
+            // StartAll command options
+            var startAllPortOffsetOption = new Option<int>(
+                name: "--port-offset",
+                description: "Port offset for all services",
+                getDefaultValue: () => -1);
+            startAllPortOffsetOption.AddAlias("-p");
+            
+            var startAllVerboseOption = new Option<bool>(
+                name: "--verbose",
+                description: "Enable verbose logging",
+                getDefaultValue: () => false);
+            startAllVerboseOption.AddAlias("-v");
+            
+            var startAllCursesOption = new Option<bool>(
+                name: "--curses",
+                description: "Use curses UI for console client",
+                getDefaultValue: () => false);
+            startAllCursesOption.AddAlias("-c");
+            
+            var startAllEnhancedUiOption = new Option<bool>(
+                name: "--enhanced-ui",
+                description: "Use enhanced UI for console client",
+                getDefaultValue: () => false);
+            startAllEnhancedUiOption.AddAlias("-e");
+            
+            // Add options to the startAll command
+            startAllCommand.AddOption(startAllPortOffsetOption);
+            startAllCommand.AddOption(startAllVerboseOption);
+            startAllCommand.AddOption(startAllCursesOption);
+            startAllCommand.AddOption(startAllEnhancedUiOption);
+            
+            // StartServices command options
+            var startServicesPortOffsetOption = new Option<int>(
+                name: "--port-offset",
+                description: "Port offset for all services",
+                getDefaultValue: () => -1);
+            startServicesPortOffsetOption.AddAlias("-p");
+            
+            var startServicesVerboseOption = new Option<bool>(
+                name: "--verbose",
+                description: "Enable verbose logging",
+                getDefaultValue: () => false);
+            startServicesVerboseOption.AddAlias("-v");
+            
+            // Add options to the startServices command
+            startServicesCommand.AddOption(startServicesPortOffsetOption);
+            startServicesCommand.AddOption(startServicesVerboseOption);
+            
+            // StartClient command options
+            var startClientPortOffsetOption = new Option<int>(
+                name: "--port-offset",
+                description: "Port offset for all services",
+                getDefaultValue: () => -1);
+            startClientPortOffsetOption.AddAlias("-p");
+            
+            var startClientVerboseOption = new Option<bool>(
+                name: "--verbose",
+                description: "Enable verbose logging",
+                getDefaultValue: () => false);
+            startClientVerboseOption.AddAlias("-v");
+            
+            var startClientCursesOption = new Option<bool>(
+                name: "--curses",
+                description: "Use curses UI for console client",
+                getDefaultValue: () => false);
+            startClientCursesOption.AddAlias("-c");
+            
+            var startClientEnhancedUiOption = new Option<bool>(
+                name: "--enhanced-ui",
+                description: "Use enhanced UI for console client",
+                getDefaultValue: () => false);
+            startClientEnhancedUiOption.AddAlias("-e");
+            
+            // Add options to the startClient command
+            startClientCommand.AddOption(startClientPortOffsetOption);
+            startClientCommand.AddOption(startClientVerboseOption);
+            startClientCommand.AddOption(startClientCursesOption);
+            startClientCommand.AddOption(startClientEnhancedUiOption);
+            
             // Set handlers for each command
-            startAllCommand.SetHandler((portOffset, verbose, curses) =>
+            startAllCommand.SetHandler((portOffset, verbose, curses, enhancedUi) =>
             {
-                return StartAllAsync(portOffset, verbose, curses);
-            }, portOffsetOption, verboseOption, cursesOption);
+                return StartAllAsync(portOffset, verbose, curses, enhancedUi);
+            }, startAllPortOffsetOption, startAllVerboseOption, startAllCursesOption, startAllEnhancedUiOption);
             
             startServicesCommand.SetHandler((portOffset, verbose) =>
             {
                 return StartServicesAsync(portOffset, verbose);
-            }, portOffsetOption, verboseOption);
+            }, startServicesPortOffsetOption, startServicesVerboseOption);
             
-            startClientCommand.SetHandler((portOffset, verbose, curses) =>
+            startClientCommand.SetHandler((portOffset, verbose, curses, enhancedUi) =>
             {
-                return StartClientAsync(portOffset, verbose, curses);
-            }, portOffsetOption, verboseOption, cursesOption);
+                return StartClientAsync(portOffset, verbose, curses, enhancedUi);
+            }, startClientPortOffsetOption, startClientVerboseOption, startClientCursesOption, startClientEnhancedUiOption);
             
             stopAllCommand.SetHandler(() =>
             {
@@ -112,23 +173,26 @@ namespace PokerGame.Core.Process
         /// <summary>
         /// Start all services
         /// </summary>
-        private static Task<int> StartAllAsync(int portOffset, bool verbose, bool curses)
+        private static Task<int> StartAllAsync(int portOffset, bool verbose, bool curses, bool enhancedUi = false)
         {
             try
             {
                 InitializeCoordinator();
                 
+                // If both curses and enhancedUi are specified, prioritize curses
+                bool useCurses = curses || (!curses && !enhancedUi); // Default to curses if neither is specified
+                
                 if (portOffset < 0)
                 {
                     // Let the coordinator generate a random port offset
-                    int offset = _coordinator!.StartAllServices(curses, verbose);
+                    int offset = _coordinator!.StartAllServices(useCurses, verbose);
                     if (offset < 0)
                     {
                         Console.WriteLine("Failed to start services");
                         return Task.FromResult(1);
                     }
                     
-                    Console.WriteLine($"All services started with port offset {offset}");
+                    Console.WriteLine($"All services started with port offset {offset} using {(useCurses ? "curses" : "enhanced")} UI");
                 }
                 else
                 {
@@ -143,7 +207,7 @@ namespace PokerGame.Core.Process
                     // Give services time to start up
                     Thread.Sleep(3000);
                     
-                    int clientPid = _coordinator.StartConsoleClient(portOffset, curses, verbose);
+                    int clientPid = _coordinator.StartConsoleClient(portOffset, useCurses, verbose);
                     if (clientPid < 0)
                     {
                         Console.WriteLine("Failed to start console client");
@@ -151,7 +215,7 @@ namespace PokerGame.Core.Process
                         return Task.FromResult(1);
                     }
                     
-                    Console.WriteLine($"All services started with port offset {portOffset}");
+                    Console.WriteLine($"All services started with port offset {portOffset} using {(useCurses ? "curses" : "enhanced")} UI");
                 }
                 
                 // Keep running until Ctrl+C
@@ -197,7 +261,7 @@ namespace PokerGame.Core.Process
         /// <summary>
         /// Start only the console client
         /// </summary>
-        private static Task<int> StartClientAsync(int portOffset, bool verbose, bool curses)
+        private static Task<int> StartClientAsync(int portOffset, bool verbose, bool curses, bool enhancedUi = false)
         {
             try
             {
@@ -209,14 +273,17 @@ namespace PokerGame.Core.Process
                     return Task.FromResult(1);
                 }
                 
-                int clientPid = _coordinator!.StartConsoleClient(portOffset, curses, verbose);
+                // If both curses and enhancedUi are specified, prioritize curses
+                bool useCurses = curses || (!curses && !enhancedUi); // Default to curses if neither is specified
+                
+                int clientPid = _coordinator!.StartConsoleClient(portOffset, useCurses, verbose);
                 if (clientPid < 0)
                 {
                     Console.WriteLine("Failed to start console client");
                     return Task.FromResult(1);
                 }
                 
-                Console.WriteLine($"Console client started with port offset {portOffset}");
+                Console.WriteLine($"Console client started with port offset {portOffset} using {(useCurses ? "curses" : "enhanced")} UI");
                 
                 // Client doesn't need to keep running, it has its own process
                 return Task.FromResult(0);

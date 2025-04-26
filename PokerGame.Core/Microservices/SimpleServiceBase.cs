@@ -74,11 +74,18 @@ namespace PokerGame.Core.Microservices
             _publisherPort = publisherPort;
             _subscriberPort = subscriberPort;
             _verbose = verbose;
-            _executionContext = executionContext ?? new PokerGame.Core.Messaging.ExecutionContext();
+            
+            // If no execution context is provided, create one from the current thread
+            _executionContext = executionContext ?? PokerGame.Core.Messaging.ExecutionContext.FromCurrentThread();
+            
+            // Use the cancellation token source from the execution context, or create a new one
             _cancellationTokenSource = _executionContext.CancellationTokenSource ?? new CancellationTokenSource();
+            
+            // Create a logger with a shortened service ID for more readable log entries
             _logger = new Logger($"{serviceType}_{_serviceId.Substring(0, 8)}", verbose);
             
             _logger.Log($"Created {_serviceType} service '{_serviceName}' with ID {_serviceId}");
+            _logger.Log($"Using execution context: ThreadId={_executionContext.ThreadId}, IsTest={_executionContext.IsTestContext}");
         }
         
         /// <summary>
@@ -95,24 +102,13 @@ namespace PokerGame.Core.Microservices
                 
                 _logger.Log($"Starting {_serviceType} service '{_serviceName}'...");
                 
-                // Create and start the message broker
+                // Create and start the message broker with our execution context
                 _messageBroker = new SimpleMessageBroker(_serviceId, _publisherPort, _subscriberPort, _executionContext, _verbose);
                 _messageBroker.MessageReceived += OnMessageReceived;
                 _messageBroker.Start();
                 
-                // Start the background task using the execution context if available
-                if (_executionContext.TaskScheduler != null)
-                {
-                    _backgroundTask = Task.Factory.StartNew(
-                        () => BackgroundLoop(_cancellationTokenSource.Token),
-                        _cancellationTokenSource.Token,
-                        TaskCreationOptions.LongRunning,
-                        _executionContext.TaskScheduler);
-                }
-                else
-                {
-                    _backgroundTask = Task.Run(() => BackgroundLoop(_cancellationTokenSource.Token));
-                }
+                // Start the background task with appropriate thread management based on the execution context
+                StartBackgroundTask();
                 
                 // Register the service
                 RegisterService();
@@ -123,6 +119,62 @@ namespace PokerGame.Core.Microservices
             {
                 _logger.LogError($"Error starting {_serviceType} service '{_serviceName}'", ex);
                 throw;
+            }
+        }
+        
+        /// <summary>
+        /// Starts the background processing task based on the execution context settings
+        /// </summary>
+        private void StartBackgroundTask()
+        {
+            try
+            {
+                CancellationToken token = _cancellationTokenSource.Token;
+                
+                // If we have a SynchronizationContext and ThreadId in our ExecutionContext,
+                // try to use the specified thread for our background processing
+                if (_executionContext.SynchronizationContext != null && _executionContext.ThreadId.HasValue)
+                {
+                    _logger.Log($"Starting background task on thread {_executionContext.ThreadId.Value} using SynchronizationContext");
+                    
+                    // Use the SynchronizationContext to post the background loop to the appropriate thread
+                    _executionContext.SynchronizationContext.Post(_ => {
+                        // Verify we're on the expected thread
+                        if (_executionContext.ThreadId.Value == Thread.CurrentThread.ManagedThreadId)
+                        {
+                            _logger.Log($"Successfully started background task on thread {Thread.CurrentThread.ManagedThreadId}");
+                            BackgroundLoop(token);
+                        }
+                        else
+                        {
+                            _logger.LogError($"Thread mismatch: Expected {_executionContext.ThreadId.Value}, got {Thread.CurrentThread.ManagedThreadId}");
+                            // Fallback to Task.Run
+                            _backgroundTask = Task.Run(() => BackgroundLoop(token), token);
+                        }
+                    }, null);
+                }
+                // If we have a TaskScheduler, use it to schedule our background task
+                else if (_executionContext.TaskScheduler != null)
+                {
+                    _logger.Log("Starting background task using TaskScheduler");
+                    _backgroundTask = Task.Factory.StartNew(
+                        () => BackgroundLoop(token),
+                        token,
+                        TaskCreationOptions.LongRunning,
+                        _executionContext.TaskScheduler);
+                }
+                // Default to standard Task.Run
+                else
+                {
+                    _logger.Log("Starting background task using Task.Run");
+                    _backgroundTask = Task.Run(() => BackgroundLoop(token), token);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error starting background task", ex);
+                // Fallback to simple task
+                _backgroundTask = Task.Run(() => BackgroundLoop(_cancellationTokenSource.Token));
             }
         }
         

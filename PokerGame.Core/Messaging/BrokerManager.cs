@@ -71,20 +71,63 @@ namespace PokerGame.Core.Messaging
                 // Store the execution context
                 _executionContext = executionContext ?? new ExecutionContext();
                 
-                // Create the central broker if it doesn't exist
-                if (_centralBroker == null)
-                {
-                    _centralBroker = new CentralMessageBroker(_executionContext);
-                }
-                
-                // Start the central broker
-                _centralBroker.Start();
+                // The central broker is now explicitly created by calling StartCentralBroker
                 
                 // Set started flag
                 _isStarted = true;
                 
                 // Log completion
                 _telemetryService.TrackEvent("BrokerManagerStarted");
+            }
+        }
+        
+        /// <summary>
+        /// Starts the central message broker on the specified port
+        /// </summary>
+        /// <param name="port">The port for the central broker to listen on</param>
+        /// <param name="executionContext">The execution context to use</param>
+        /// <param name="verbose">Whether to enable verbose logging</param>
+        /// <returns>The created and started central message broker</returns>
+        public CentralMessageBroker StartCentralBroker(int port, ExecutionContext? executionContext = null, bool verbose = false)
+        {
+            lock (_startLock)
+            {
+                // Make sure the broker manager is started
+                if (!_isStarted)
+                {
+                    Start(executionContext);
+                }
+                
+                // Use the specified or stored execution context
+                var context = executionContext ?? _executionContext;
+                
+                if (context == null)
+                {
+                    context = new ExecutionContext();
+                    _executionContext = context;
+                }
+                
+                // Create the central broker if it doesn't exist
+                if (_centralBroker == null)
+                {
+                    _centralBroker = new CentralMessageBroker(context, port, verbose);
+                    _centralBroker.Start();
+                    
+                    // Set telemetry handler if available
+                    if (_telemetryHandler != null)
+                    {
+                        _centralBroker.SetTelemetryHandler(_telemetryHandler);
+                    }
+                    
+                    // Log central broker start
+                    _telemetryService.TrackEvent("CentralMessageBrokerStarted", new Dictionary<string, string>
+                    {
+                        ["Port"] = port.ToString(),
+                        ["Verbose"] = verbose.ToString()
+                    });
+                }
+                
+                return _centralBroker;
             }
         }
         

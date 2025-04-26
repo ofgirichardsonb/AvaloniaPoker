@@ -98,9 +98,9 @@ namespace PokerGame.Services
         }
         
         /// <summary>
-        /// Creates and registers a SimpleServiceBase service with a dedicated execution context
+        /// Creates and registers a microservice with a dedicated execution context
         /// </summary>
-        /// <typeparam name="T">Type of service to create, must extend SimpleServiceBase</typeparam>
+        /// <typeparam name="T">Type of service to create, must extend MicroserviceBase</typeparam>
         /// <param name="serviceName">Name of the service</param>
         /// <param name="serviceType">Type of the service</param>
         /// <param name="publisherPort">Publisher port for the service</param>
@@ -114,24 +114,65 @@ namespace PokerGame.Services
             int publisherPort,
             int subscriberPort,
             bool verbose = false,
-            params object[] constructorArgs) where T : SimpleServiceBase
+            params object[] constructorArgs) where T : MicroserviceBase
         {
             // Create a service-specific execution context from the broker manager's context
             var executionContext = _brokerManager.CreateServiceExecutionContext();
             
-            // Prepare the constructor parameters
-            var parameters = new List<object>(constructorArgs);
-            parameters.InsertRange(0, new object[] { serviceName, serviceType, publisherPort, subscriberPort });
-            parameters.Add(executionContext);
-            parameters.Add(verbose);
-            
-            // Create the service instance using reflection
-            var instance = (T)Activator.CreateInstance(typeof(T), parameters.ToArray());
-            
-            // Register the service
-            RegisterService(instance);
-            
-            return instance;
+            try
+            {
+                // MicroserviceBase constructor expects:
+                // (string serviceType, string serviceName, int publisherPort, int subscriberPort, [int heartbeatIntervalMs = 5000])
+                // followed by any additional parameters
+                
+                // Prepare the base constructor parameters - note serviceName and serviceType are reversed from our method params
+                var parameters = new List<object>();
+                parameters.Add(serviceType);       // serviceType first
+                parameters.Add(serviceName);       // then serviceName
+                parameters.Add(publisherPort);     // then publisherPort
+                parameters.Add(subscriberPort);    // then subscriberPort
+                
+                // Add any additional constructor arguments
+                if (constructorArgs != null && constructorArgs.Length > 0)
+                {
+                    parameters.AddRange(constructorArgs);
+                }
+                
+                // Create the service instance using reflection
+                var instance = (T)Activator.CreateInstance(typeof(T), parameters.ToArray());
+                
+                if (instance == null)
+                {
+                    throw new InvalidOperationException($"Failed to create instance of {typeof(T).Name}");
+                }
+                
+                // Register the service
+                RegisterService(instance);
+                
+                // Log the creation with telemetry
+                _telemetryService.TrackEvent("ServiceCreatedWithExecutionContext", new Dictionary<string, string>
+                {
+                    ["ServiceType"] = serviceType,
+                    ["ServiceName"] = serviceName,
+                    ["PublisherPort"] = publisherPort.ToString(),
+                    ["SubscriberPort"] = subscriberPort.ToString(),
+                    ["ServiceId"] = instance.ServiceId
+                });
+                
+                return instance;
+            }
+            catch (Exception ex)
+            {
+                _telemetryService.TrackException(ex, new Dictionary<string, string>
+                {
+                    ["ServiceType"] = serviceType,
+                    ["ServiceName"] = serviceName,
+                    ["Operation"] = "CreateServiceWithExecutionContext"
+                });
+                
+                Console.WriteLine($"Error creating service {serviceName}: {ex.Message}");
+                throw;
+            }
         }
         
         /// <summary>

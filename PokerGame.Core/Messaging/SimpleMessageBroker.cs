@@ -57,11 +57,18 @@ namespace PokerGame.Core.Messaging
             _publisherPort = publisherPort;
             _subscriberPort = subscriberPort;
             _verbose = verbose;
-            _executionContext = executionContext ?? new PokerGame.Core.Messaging.ExecutionContext();
+            
+            // If no execution context is provided, create one from the current thread
+            _executionContext = executionContext ?? PokerGame.Core.Messaging.ExecutionContext.FromCurrentThread();
+            
+            // Use the cancellation token source from the execution context, or create a new one
             _cancellationTokenSource = _executionContext.CancellationTokenSource ?? new CancellationTokenSource();
+            
+            // Create a logger with a unique name based on the service ID
             _logger = new Logger($"{serviceId}_MessageBroker", verbose);
             
             _logger.Log($"Created SimpleMessageBroker for service {serviceId} with publisher={publisherPort}, subscriber={subscriberPort}");
+            _logger.Log($"Using execution context: ThreadId={_executionContext.ThreadId}, IsTest={_executionContext.IsTestContext}");
         }
 
         /// <summary>
@@ -76,21 +83,23 @@ namespace PokerGame.Core.Messaging
                     throw new ObjectDisposedException(nameof(SimpleMessageBroker));
                 }
                 
+                _logger.Log("Starting SimpleMessageBroker...");
+                
                 // Start publisher socket
                 _publisherSocket = new PublisherSocket();
                 _publisherSocket.Options.SendHighWatermark = 1000;
                 _publisherSocket.Bind($"tcp://0.0.0.0:{_publisherPort}");
+                _logger.Log($"Publisher socket bound to port {_publisherPort}");
                 
                 // Start subscriber socket
                 _subscriberSocket = new SubscriberSocket();
                 _subscriberSocket.Options.ReceiveHighWatermark = 1000;
                 _subscriberSocket.Connect($"tcp://localhost:{_subscriberPort}");
                 _subscriberSocket.SubscribeToAnyTopic();
+                _logger.Log($"Subscriber socket connected to port {_subscriberPort}");
                 
-                // Start processing tasks
-                _publisherTask = Task.Run(() => PublisherLoop(_cancellationTokenSource.Token));
-                _subscriberTask = Task.Run(() => SubscriberLoop(_cancellationTokenSource.Token));
-                _processingTask = Task.Run(() => MessageProcessingLoop(_cancellationTokenSource.Token));
+                // Start processing tasks based on the execution context
+                StartTasks();
                 
                 _logger.Log("SimpleMessageBroker started successfully");
             }
@@ -99,6 +108,47 @@ namespace PokerGame.Core.Messaging
                 _logger.Log($"Error starting SimpleMessageBroker: {ex.Message}");
                 // Re-throw the exception to let the caller handle it
                 throw;
+            }
+        }
+        
+        /// <summary>
+        /// Starts the broker's processing tasks using the execution context if available
+        /// </summary>
+        private void StartTasks()
+        {
+            var token = _cancellationTokenSource.Token;
+            
+            // If we have a TaskScheduler in our execution context, use it
+            if (_executionContext.TaskScheduler != null)
+            {
+                _logger.Log("Starting broker tasks using execution context's TaskScheduler");
+                
+                _publisherTask = Task.Factory.StartNew(
+                    () => PublisherLoop(token),
+                    token,
+                    TaskCreationOptions.LongRunning,
+                    _executionContext.TaskScheduler);
+                    
+                _subscriberTask = Task.Factory.StartNew(
+                    () => SubscriberLoop(token),
+                    token,
+                    TaskCreationOptions.LongRunning,
+                    _executionContext.TaskScheduler);
+                    
+                _processingTask = Task.Factory.StartNew(
+                    () => MessageProcessingLoop(token),
+                    token,
+                    TaskCreationOptions.LongRunning,
+                    _executionContext.TaskScheduler);
+            }
+            // Otherwise fall back to standard Task.Run
+            else
+            {
+                _logger.Log("Starting broker tasks using standard Task.Run");
+                
+                _publisherTask = Task.Run(() => PublisherLoop(token), token);
+                _subscriberTask = Task.Run(() => SubscriberLoop(token), token);
+                _processingTask = Task.Run(() => MessageProcessingLoop(token), token);
             }
         }
 

@@ -25,16 +25,32 @@ namespace PokerGame.Core.Messaging
         private readonly object _startLock = new object();
         private object? _telemetryHandler;
         
+        private readonly int _port;
+        private readonly bool _verbose;
+        
         /// <summary>
         /// Creates a new central message broker
         /// </summary>
         /// <param name="executionContext">The execution context to use</param>
         public CentralMessageBroker(ExecutionContext executionContext)
+            : this(executionContext, 25555, false)
+        {
+        }
+        
+        /// <summary>
+        /// Creates a new central message broker with specified port and verbosity
+        /// </summary>
+        /// <param name="executionContext">The execution context to use</param>
+        /// <param name="port">The port number to use for communication</param>
+        /// <param name="verbose">Whether to enable verbose logging</param>
+        public CentralMessageBroker(ExecutionContext executionContext, int port, bool verbose = false)
         {
             _executionContext = executionContext ?? new ExecutionContext();
             _cancellationTokenSource = _executionContext.CancellationTokenSource ?? new CancellationTokenSource();
-            _logger = new Logger("CentralMessageBroker", true);
-            _logger.Log("Central message broker created");
+            _port = port;
+            _verbose = verbose;
+            _logger = new Logger("CentralMessageBroker", _verbose);
+            _logger.Log($"Central message broker created on port {_port}");
         }
         
         /// <summary>

@@ -161,15 +161,25 @@ namespace PokerGame.Services
 
             try
             {
-                // Initialize the broker manager
+                // Create a main execution context that will be used by all services
+                var mainExecutionContext = new PokerGame.Core.Messaging.ExecutionContext();
+                Console.WriteLine($"Created main execution context with thread ID: {mainExecutionContext.ThreadId}");
+                
+                // Initialize the broker manager with our execution context
                 _brokerManager = BrokerManager.Instance;
-                _brokerManager.Start();
+                _brokerManager.Start(mainExecutionContext);
+                
+                // Initialize and start the CentralMessageBroker
+                Console.WriteLine("Starting CentralMessageBroker...");
+                var centralBrokerPort = 25555 + portOffset;
+                _brokerManager.StartCentralBroker(centralBrokerPort, mainExecutionContext, verbose);
+                Console.WriteLine($"CentralMessageBroker started on port {centralBrokerPort}");
 
                 // Initialize telemetry for the broker
                 TelemetryDecoratorFactory.RegisterBrokerTelemetry(_brokerManager);
 
-                // Initialize the microservice manager
-                _microserviceManager = new MicroserviceManager(portOffset);
+                // Initialize the microservice manager with our context
+                _microserviceManager = new MicroserviceManager(portOffset, mainExecutionContext);
 
                 // Determine which services to run
                 bool runGameEngine = gameEngine || allServices;
@@ -185,9 +195,15 @@ namespace PokerGame.Services
                         int subscriberPort = 25557 + portOffset;
                         Console.WriteLine($"Starting Game Engine Service (publisher: {publisherPort}, subscriber: {subscriberPort})...");
                         
-                        var gameEngineService = new GameEngineService(publisherPort, subscriberPort);
-                        var decoratedService = _microserviceManager.RegisterService(gameEngineService);
-                        Console.WriteLine($"Game Engine Service started with ID: {decoratedService.ServiceId}");
+                        // Create the service with an execution context
+                        var gameEngineService = _microserviceManager.CreateServiceWithExecutionContext<GameEngineService>(
+                            "Poker Game Engine", 
+                            "GameEngine", 
+                            publisherPort, 
+                            subscriberPort, 
+                            verbose);
+                            
+                        Console.WriteLine($"Game Engine Service started with ID: {gameEngineService.ServiceId}");
                     }
                     catch (Exception ex)
                     {
@@ -205,9 +221,16 @@ namespace PokerGame.Services
                         int subscriberPort = 25556 + portOffset; // Connect to Game Engine's publisher port
                         Console.WriteLine($"Starting Card Deck Service (publisher: {publisherPort}, subscriber: {subscriberPort})...");
                         
-                        var cardDeckService = new CardDeckService(publisherPort, subscriberPort);
-                        var decoratedService = _microserviceManager.RegisterService(cardDeckService);
-                        Console.WriteLine($"Card Deck Service started with ID: {decoratedService.ServiceId}");
+                        // Create the service with an execution context
+                        var cardDeckService = _microserviceManager.CreateServiceWithExecutionContext<CardDeckService>(
+                            "Card Deck Service", 
+                            "CardDeck", 
+                            publisherPort, 
+                            subscriberPort, 
+                            verbose,
+                            false);  // useEmergencyDeckMode parameter
+                            
+                        Console.WriteLine($"Card Deck Service started with ID: {cardDeckService.ServiceId}");
                     }
                     catch (Exception ex)
                     {
