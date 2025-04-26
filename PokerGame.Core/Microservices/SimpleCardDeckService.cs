@@ -44,6 +44,36 @@ namespace PokerGame.Core.Microservices
                     HandleDeckShuffle(message);
                     break;
                     
+                case SimpleMessageType.StartHand:
+                    // Handle deck creation by extracting a deck ID from the message
+                    HandleDeckCreate(message, $"deck-{Guid.NewGuid().ToString("N").Substring(0, 8)}");
+                    break;
+                
+                // Add DeckCreate message type handling
+                case SimpleMessageType.DeckCreate:
+                    try
+                    {
+                        // First try to extract SimpleDeckCreatePayload
+                        var simpleDeckCreatePayload = message.GetPayload<SimpleDeckCreatePayload>();
+                        if (simpleDeckCreatePayload != null)
+                        {
+                            Logger.Log($"Handling DeckCreate message with SimpleDeckCreatePayload, DeckId: {simpleDeckCreatePayload.DeckId}");
+                            HandleDeckCreate(message, simpleDeckCreatePayload.DeckId);
+                        }
+                        else
+                        {
+                            // Fallback to regular handling
+                            HandleDeckCreate(message);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError($"Error extracting SimpleDeckCreatePayload: {ex.Message}", ex);
+                        // Fallback to regular handling
+                        HandleDeckCreate(message);
+                    }
+                    break;
+                    
                 default:
                     // Let the base class handle other message types
                     break;
@@ -163,6 +193,88 @@ namespace PokerGame.Core.Microservices
         }
         
         /// <summary>
+        /// Handles a deck create message
+        /// </summary>
+        /// <param name="message">The message to handle</param>
+        /// <param name="deckId">The ID of the deck to create (or use from payload if available)</param>
+        private void HandleDeckCreate(SimpleMessage message, string deckId = null)
+        {
+            try
+            {
+                Logger.Log($"Handling deck creation request with message ID: {message.MessageId}");
+                
+                // Try to extract deckId from payload if not provided
+                if (string.IsNullOrEmpty(deckId))
+                {
+                    // Try to extract from various payload types
+                    try {
+                        // For direct DeckCreate messages
+                        try 
+                        {
+                            var createPayload = message.GetPayload<SimpleDeckCreatePayload>();
+                            if (createPayload != null && !string.IsNullOrEmpty(createPayload.DeckId))
+                            {
+                                deckId = createPayload.DeckId;
+                                Logger.Log($"Extracted deck ID {deckId} from SimpleDeckCreatePayload");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogError("Failed to extract payload as SimpleDeckCreatePayload", ex);
+                            // Fallback to default deck ID
+                            deckId = $"deck-{Guid.NewGuid().ToString("N").Substring(0, 8)}";
+                            Logger.Log($"Using generated deck ID: {deckId}");
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // Payload wasn't of the expected type, use a generated ID
+                        deckId = $"deck-{Guid.NewGuid().ToString("N").Substring(0, 8)}";
+                    }
+                }
+                
+                // Create the deck
+                if (_decks.ContainsKey(deckId))
+                {
+                    Logger.Log($"Deck with ID {deckId} already exists, resetting it");
+                    _decks[deckId].Initialize();
+                    _decks[deckId].Shuffle();
+                }
+                else
+                {
+                    var deck = CreateDeck(deckId);
+                    _decks[deckId] = deck;
+                    Logger.Log($"Created new deck with ID: {deckId}");
+                }
+                
+                // Create a response payload
+                var responsePayload = new SimpleDeckCreateResponsePayload
+                {
+                    DeckId = deckId,
+                    Success = true,
+                    RemainingCards = _decks[deckId].RemainingCards
+                };
+                
+                // Send an acknowledgment for the original message
+                var ackMessage = SimpleMessage.CreateAcknowledgment(message);
+                ackMessage.SenderId = ServiceId;
+                PublishMessage(ackMessage);
+                Logger.Log($"Sent acknowledgment for message: {message.MessageId}");
+                
+                // Send a specific response - use DeckCreate response type
+                var response = SimpleMessage.CreateResponse(message, SimpleMessageType.DeckCreate, responsePayload);
+                response.SenderId = ServiceId;
+                PublishMessage(response);
+                Logger.Log($"Sent deck create response for deck: {deckId}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Error handling deck create message", ex);
+                SendErrorResponse(message, $"Error creating deck: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
         /// Sends an error response for a message
         /// </summary>
         /// <param name="originalMessage">The original message</param>
@@ -240,6 +352,48 @@ namespace PokerGame.Core.Microservices
     /// Payload for deck shuffle response messages
     /// </summary>
     public class DeckShuffleResponsePayload
+    {
+        /// <summary>
+        /// Gets or sets the ID of the deck
+        /// </summary>
+        [JsonPropertyName("deckId")]
+        public string DeckId { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets whether the operation was successful
+        /// </summary>
+        [JsonPropertyName("success")]
+        public bool Success { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the number of remaining cards in the deck
+        /// </summary>
+        [JsonPropertyName("remainingCards")]
+        public int RemainingCards { get; set; }
+    }
+    
+    /// <summary>
+    /// Payload for deck create messages in the simplified service architecture
+    /// </summary>
+    public class SimpleDeckCreatePayload
+    {
+        /// <summary>
+        /// Gets or sets the ID of the deck to create
+        /// </summary>
+        [JsonPropertyName("deckId")]
+        public string DeckId { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets whether to shuffle the deck after creation
+        /// </summary>
+        [JsonPropertyName("shuffle")]
+        public bool Shuffle { get; set; } = true;
+    }
+    
+    /// <summary>
+    /// Payload for deck create response messages in the simplified service architecture
+    /// </summary>
+    public class SimpleDeckCreateResponsePayload
     {
         /// <summary>
         /// Gets or sets the ID of the deck

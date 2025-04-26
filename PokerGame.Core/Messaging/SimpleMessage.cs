@@ -21,6 +21,7 @@ namespace PokerGame.Core.Messaging
         PlayerAction,
         CardDeal,
         DeckShuffle,
+        DeckCreate,     // Added to support deck creation messages
         StartHand,
         EndHand,
         

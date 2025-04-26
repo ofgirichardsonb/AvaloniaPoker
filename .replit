@@ -52,6 +52,10 @@ args = "poker_verbose_test"
 task = "workflow.run"
 args = "poker_standard_test"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test_fixed_poker"
+
 [[workflows.workflow]]
 name = "PokerGame"
 author = "agent"
@@ -131,6 +135,14 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "./launch-services.sh start"
+
+[[workflows.workflow]]
+name = "test_fixed_poker"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --microservices --verbose --debug"
 
 [deployment]
 run = ["sh", "-c", "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --curses"]

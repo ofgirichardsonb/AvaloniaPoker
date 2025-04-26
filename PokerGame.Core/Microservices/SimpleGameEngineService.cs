@@ -6,6 +6,7 @@ using System.Threading;
 using PokerGame.Core.Messaging;
 using PokerGame.Core.Models;
 using PokerGame.Core.Game;
+using PokerGame.Core.Microservices; // Added for access to SimpleDeckCreatePayload
 
 namespace PokerGame.Core.Microservices
 {
@@ -165,8 +166,10 @@ namespace PokerGame.Core.Microservices
                 Logger.Log($"Creating deck through card deck service {_cardDeckServiceId}...");
                 
                 var deckId = Guid.NewGuid().ToString();
-                var payload = new DeckShufflePayload { DeckId = deckId };
-                var message = SimpleMessage.Create(SimpleMessageType.DeckShuffle, payload);
+                
+                // Use DeckCreate message type and appropriate payload
+                var payload = new SimpleDeckCreatePayload { DeckId = deckId, Shuffle = true };
+                var message = SimpleMessage.Create(SimpleMessageType.DeckCreate, payload);
                 message.ReceiverId = _cardDeckServiceId;
                 
                 PublishMessage(message);
