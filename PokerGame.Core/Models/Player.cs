@@ -202,6 +202,12 @@ namespace PokerGame.Core.Models
         }
         
         /// <summary>
+        /// Gets or sets the player's current best hand (calculated during evaluation)
+        /// </summary>
+        [JsonIgnore]
+        public PokerGame.Core.Models.Hand? CurrentHand { get; set; }
+
+        /// <summary>
         /// Returns a string representation of the player
         /// </summary>
         /// <returns>A string representation of the player</returns>

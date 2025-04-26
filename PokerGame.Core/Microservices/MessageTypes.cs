@@ -289,7 +289,7 @@ namespace PokerGame.Core.Microservices
         [JsonPropertyName("winnerIds")]
         public List<string> WinnerIds { get; set; } = new List<string>();
 
-        public GameState State { get; set; }
+
     }
     
     /// <summary>

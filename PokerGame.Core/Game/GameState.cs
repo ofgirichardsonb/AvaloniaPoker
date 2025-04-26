@@ -6,6 +6,11 @@ namespace PokerGame.Core.Game
     public enum GameState
     {
         /// <summary>
+        /// The game has not started yet
+        /// </summary>
+        NotStarted,
+        
+        /// <summary>
         /// The game is being set up
         /// </summary>
         Setup,
@@ -36,10 +41,18 @@ namespace PokerGame.Core.Game
         River,
         
         /// <summary>
+        /// The showdown phase where players reveal their hands
+        /// </summary>
+        Showdown,
+        
+        /// <summary>
         /// The hand is complete
         /// </summary>
         HandComplete,
-        Showdown,
+        
+        /// <summary>
+        /// The game is complete
+        /// </summary>
         Complete
     }
 }

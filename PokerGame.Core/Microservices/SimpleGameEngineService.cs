@@ -326,7 +326,7 @@ namespace PokerGame.Core.Microservices
                 // Create the game state payload
                 var gameStatePayload = new GameStatePayload
                 {
-                    State = _gameState,
+                    CurrentState = _gameState,
                     Pot = _pot,
                     CommunityCards = _communityCards.ToList(),
                     Players = _players.Select(p => new PlayerInfo
