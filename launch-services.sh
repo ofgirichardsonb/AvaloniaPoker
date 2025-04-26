@@ -1,9 +1,15 @@
 #!/bin/bash
 
-# Advanced script to launch the poker game services in separate processes
+# DEPRECATED: This script is maintained for backward compatibility
+# Please use the new poker-services.sh script for improved process management
 # This script follows the new services-first architecture where:
 # 1. Services are launched separately in PokerGame.Services
 # 2. The console UI is a client that connects to those services
+
+echo "WARNING: This script is deprecated. Please use poker-services.sh instead."
+echo "For equivalent functionality, use: poker-services.sh <command> [options]"
+echo "Continuing with legacy script for compatibility..."
+echo ""
 
 CONSOLE_PORT_OFFSET=10 # Make sure each instance gets separate ports
 

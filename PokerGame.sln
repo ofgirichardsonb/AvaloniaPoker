@@ -16,6 +16,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PokerGame.Services", "Poker
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PokerGame.Abstractions", "PokerGame.Abstractions\PokerGame.Abstractions.csproj", "{593D35E8-513C-47BF-8B0F-58B106E1C467}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PokerGame.Launcher", "PokerGame.Launcher\PokerGame.Launcher.csproj", "{0FADBC34-F0B5-428A-BFFA-117A7C5B104F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -49,6 +51,10 @@ Global
 		{593D35E8-513C-47BF-8B0F-58B106E1C467}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{593D35E8-513C-47BF-8B0F-58B106E1C467}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{593D35E8-513C-47BF-8B0F-58B106E1C467}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0FADBC34-F0B5-428A-BFFA-117A7C5B104F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0FADBC34-F0B5-428A-BFFA-117A7C5B104F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0FADBC34-F0B5-428A-BFFA-117A7C5B104F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0FADBC34-F0B5-428A-BFFA-117A7C5B104F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{77E7A354-3B80-4A9A-93E8-D5B9C8DD9C16} = {78DE7A7A-3572-4FDD-AF79-B5C4C1E69950}

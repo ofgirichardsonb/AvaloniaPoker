@@ -30,7 +30,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --curses"
+args = "./poker-services.sh start-client --port-offset=200 --curses"
 
 [[workflows.workflow]]
 name = "poker_curses"
@@ -38,7 +38,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "./launch-services.sh curses"
+args = "./poker-services.sh curses --port-offset=200"
 
 [[workflows.workflow]]
 name = "clean_poker_test"
@@ -46,10 +46,10 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --microservices --port-offset 5000 --verbose"
+args = "./poker-services.sh services-and-curses --port-offset=5000 --verbose"
 
 [deployment]
-run = ["sh", "-c", "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --curses"]
+run = ["sh", "-c", "./poker-services.sh start-client --port-offset=200 --curses"]
 
 [[ports]]
 localPort = 5570
