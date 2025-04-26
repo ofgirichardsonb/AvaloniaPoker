@@ -147,3 +147,9 @@ coverage*.info
 
 # macOS
 .DS_Store
+
+*.log
+tools/
+backup/
+attached_assets/
+workflow_input.txt
