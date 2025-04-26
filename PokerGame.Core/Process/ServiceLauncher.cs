@@ -24,22 +24,28 @@ namespace PokerGame.Core.Process
             
             // Add global options
             var portOffsetOption = new Option<int>(
-                "--port-offset",
+                new[] { "--port-offset", "-p" },
                 description: "Port offset for all services",
                 getDefaultValue: () => -1);
             rootCommand.AddOption(portOffsetOption);
             
             var verboseOption = new Option<bool>(
-                "--verbose",
+                new[] { "--verbose", "-v" },
                 description: "Enable verbose logging",
                 getDefaultValue: () => false);
             rootCommand.AddOption(verboseOption);
             
             var cursesOption = new Option<bool>(
-                "--curses",
+                new[] { "--curses", "-c" },
                 description: "Use curses UI for console client",
                 getDefaultValue: () => false);
             rootCommand.AddOption(cursesOption);
+            
+            var enhancedUiOption = new Option<bool>(
+                new[] { "--enhanced-ui", "-e" },
+                description: "Use enhanced UI for console client",
+                getDefaultValue: () => false);
+            rootCommand.AddOption(enhancedUiOption);
             
             // Add commands
             var startAllCommand = new Command("start-all", "Start all services (services host and console client)");

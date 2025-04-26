@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 
 namespace PokerGame.Core.Process
 {
@@ -44,6 +45,9 @@ namespace PokerGame.Core.Process
         /// </summary>
         private ProcessManager()
         {
+            // Load configuration from appsettings.json if it exists
+            LoadConfiguration();
+            
             // Register for process exit to ensure cleanup happens
             AppDomain.CurrentDomain.ProcessExit += (s, e) => 
             {
@@ -53,6 +57,106 @@ namespace PokerGame.Core.Process
 
             // Start the monitoring task
             _monitoringTask = Task.Run(MonitorProcessesAsync);
+        }
+        
+        /// <summary>
+        /// Loads configuration from appsettings.json
+        /// </summary>
+        private void LoadConfiguration()
+        {
+            try
+            {
+                // Look for appsettings.json in the current directory and parent directories
+                string? configPath = FindConfigFile("appsettings.json");
+                
+                if (configPath != null)
+                {
+                    Console.WriteLine($"Loading configuration from: {configPath}");
+                    
+                    // Build configuration
+                    var config = new ConfigurationBuilder()
+                        .AddJsonFile(configPath, optional: false, reloadOnChange: true)
+                        .Build();
+                    
+                    // Get ProcessManager settings
+                    var processManagerSection = config.GetSection("ProcessManager");
+                    
+                    // Get DotNetPath setting from config
+                    string? configuredDotNetPath = processManagerSection.GetValue<string>("DotNetPath");
+                    if (!string.IsNullOrEmpty(configuredDotNetPath))
+                    {
+                        _dotnetPath = configuredDotNetPath;
+                        Console.WriteLine($"Using dotnet path from configuration: {_dotnetPath}");
+                    }
+                    else
+                    {
+                        Console.WriteLine("DotNetPath not found in configuration.");
+                    }
+                    
+                    // Check if we should auto-detect the path
+                    bool autoDetect = processManagerSection.GetValue<bool>("AutoDetectDotNetPath");
+                    if (autoDetect)
+                    {
+                        Console.WriteLine("Auto-detection of dotnet path is enabled.");
+                        InitializeDotNetPath();
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("appsettings.json not found, using default configuration.");
+                    InitializeDotNetPath();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading configuration: {ex.Message}");
+                
+                // Fall back to auto-detection
+                InitializeDotNetPath();
+            }
+        }
+        
+        /// <summary>
+        /// Finds the appsettings.json file by searching in the current and parent directories
+        /// </summary>
+        private string? FindConfigFile(string fileName)
+        {
+            // Start with the current directory
+            string directory = AppDomain.CurrentDomain.BaseDirectory;
+            
+            // Check if the file exists in this directory
+            string configPath = Path.Combine(directory, fileName);
+            if (File.Exists(configPath))
+                return configPath;
+                
+            // Keep going up directories
+            while (!string.IsNullOrEmpty(directory))
+            {
+                // Check in the current directory
+                configPath = Path.Combine(directory, fileName);
+                if (File.Exists(configPath))
+                    return configPath;
+                    
+                // Check in a nested Config folder
+                configPath = Path.Combine(directory, "Config", fileName);
+                if (File.Exists(configPath))
+                    return configPath;
+                
+                // Also check in PokerGame.Launcher subdirectory
+                configPath = Path.Combine(directory, "PokerGame.Launcher", fileName);
+                if (File.Exists(configPath))
+                    return configPath;
+                
+                // Go up one directory
+                var parent = Directory.GetParent(directory);
+                if (parent == null)
+                    break;
+                    
+                directory = parent.FullName;
+            }
+            
+            // Not found
+            return null;
         }
 
         /// <summary>
@@ -148,6 +252,85 @@ namespace PokerGame.Core.Process
             }
         }
 
+        // Configurable paths
+        private string _dotnetPath = "dotnet";
+        
+        /// <summary>
+        /// Gets or sets the path to the dotnet executable
+        /// </summary>
+        public string DotNetPath 
+        {
+            get => _dotnetPath;
+            set => _dotnetPath = !string.IsNullOrEmpty(value) ? value : "dotnet";
+        }
+        
+        /// <summary>
+        /// Initializes the dotnet path by detecting it from the environment
+        /// </summary>
+        public void InitializeDotNetPath()
+        {
+            try
+            {
+                // Try to find dotnet executable using the 'which' command (Linux/macOS)
+                var process = new System.Diagnostics.Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "which",
+                        Arguments = "dotnet",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true
+                    }
+                };
+                
+                process.Start();
+                string path = process.StandardOutput.ReadToEnd().Trim();
+                process.WaitForExit();
+                
+                // If we found a path, use it
+                if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
+                {
+                    _dotnetPath = path;
+                    Console.WriteLine($"Located dotnet at: {_dotnetPath}");
+                    return;
+                }
+                
+                // If 'which' failed, try 'where' command (Windows)
+                process = new System.Diagnostics.Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "where",
+                        Arguments = "dotnet",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true
+                    }
+                };
+                
+                process.Start();
+                path = process.StandardOutput.ReadToEnd().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+                process.WaitForExit();
+                
+                // If we found a path, use it
+                if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
+                {
+                    _dotnetPath = path;
+                    Console.WriteLine($"Located dotnet at: {_dotnetPath}");
+                    return;
+                }
+                
+                // If we get here, we couldn't find dotnet - use the default
+                Console.WriteLine("Could not locate dotnet executable. Using default 'dotnet' command, which requires it to be in PATH.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error detecting dotnet path: {ex.Message}");
+                Console.WriteLine("Using default 'dotnet' command, which requires it to be in PATH.");
+            }
+        }
+        
         /// <summary>
         /// Starts the services host process
         /// </summary>
@@ -161,7 +344,7 @@ namespace PokerGame.Core.Process
                 arguments += " --verbose";
                 
             return StartProcess(
-                "dotnet", 
+                _dotnetPath, 
                 $"run --project PokerGame.Services/PokerGame.Services.csproj -- {arguments}",
                 "ServicesHost");
         }
@@ -186,7 +369,7 @@ namespace PokerGame.Core.Process
                 arguments += " --verbose";
                 
             return StartProcess(
-                "dotnet", 
+                _dotnetPath, 
                 $"run --project PokerGame.Console/PokerGame.Console.csproj -- {arguments}",
                 useCurses ? "CursesUI" : "ConsoleUI");
         }

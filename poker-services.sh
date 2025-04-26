@@ -18,13 +18,35 @@ build_launcher() {
 
 # Function to run the launcher with the given arguments
 run_launcher() {
-    local args="$@"
+    local command="$1"
+    shift  # Remove command from arguments
+    local args=""
+    
+    # Process additional arguments (e.g., --port-offset, --verbose)
+    for arg in "$@"; do
+        if [[ "$arg" == "--port-offset="* ]]; then
+            # Extract the port offset value
+            port_offset="${arg#*=}"
+            args="$args --port-offset $port_offset"
+        elif [[ "$arg" == "--verbose" ]]; then
+            args="$args --verbose"
+        elif [[ "$arg" == "--curses" ]]; then
+            args="$args --curses"
+        elif [[ "$arg" == "--enhanced-ui" ]]; then
+            args="$args --enhanced-ui"
+        else
+            args="$args $arg"
+        fi
+    done
     
     # Build the launcher first
     build_launcher
     
-    # Run the launcher with the specified arguments
-    dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --no-build -- $args
+    # Print the command to be executed
+    echo "Executing: dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --no-build -- $command $args"
+    
+    # Run the launcher with the specified command and processed arguments
+    dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --no-build -- $command $args
     
     return $?
 }
