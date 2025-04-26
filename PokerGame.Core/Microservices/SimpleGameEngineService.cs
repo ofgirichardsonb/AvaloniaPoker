@@ -5,21 +5,58 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using PokerGame.Core.Messaging;
 using PokerGame.Core.Models;
+using PokerGame.Core.Game;
 
 namespace PokerGame.Core.Microservices
 {
     /// <summary>
-    /// Game state for a poker hand
+    /// Action types for poker player actions
     /// </summary>
-    public enum GameState
+    public enum PokerPlayerActionType
     {
-        NotStarted,
-        PreFlop,
-        Flop,
-        Turn,
-        River,
-        Showdown,
-        Complete
+        /// <summary>
+        /// Player folds their hand
+        /// </summary>
+        Fold,
+        
+        /// <summary>
+        /// Player checks (passes without betting)
+        /// </summary>
+        Check,
+        
+        /// <summary>
+        /// Player calls the current bet
+        /// </summary>
+        Call,
+        
+        /// <summary>
+        /// Player raises the bet
+        /// </summary>
+        Raise
+    }
+    
+    /// <summary>
+    /// Payload for poker player action messages
+    /// </summary>
+    public class PokerPlayerActionPayload
+    {
+        /// <summary>
+        /// Gets or sets the ID of the player taking the action
+        /// </summary>
+        [JsonPropertyName("playerId")]
+        public string PlayerId { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the action type
+        /// </summary>
+        [JsonPropertyName("action")]
+        public PokerPlayerActionType Action { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the bet amount (for call/raise actions)
+        /// </summary>
+        [JsonPropertyName("amount")]
+        public int Amount { get; set; }
     }
     
     /// <summary>
