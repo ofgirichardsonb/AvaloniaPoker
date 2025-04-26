@@ -1,0 +1,467 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using NetMQ;
+using NetMQ.Sockets;
+
+namespace MessageBroker
+{
+    /// <summary>
+    /// A client that connects to the central message broker
+    /// </summary>
+    public class BrokerClient : IDisposable
+    {
+        private readonly BrokerLogger _logger = BrokerLogger.Instance;
+        private readonly string _clientId;
+        private readonly string _clientName;
+        private readonly string _clientType;
+        private readonly List<string> _capabilities;
+        private readonly string _brokerAddress;
+        private readonly int _brokerPort;
+        
+        private DealerSocket? _socket;
+        private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+        private Task? _receiveTask;
+        
+        private readonly ConcurrentDictionary<string, TaskCompletionSource<BrokerMessage>> _pendingRequests = new ConcurrentDictionary<string, TaskCompletionSource<BrokerMessage>>();
+        private readonly ConcurrentDictionary<string, ServiceRegistrationPayload> _knownServices = new ConcurrentDictionary<string, ServiceRegistrationPayload>();
+        
+        // Event for received messages
+        public event EventHandler<BrokerMessage>? MessageReceived;
+        
+        /// <summary>
+        /// Gets the unique identifier for this client
+        /// </summary>
+        public string ClientId => _clientId;
+        
+        /// <summary>
+        /// Gets the name of this client
+        /// </summary>
+        public string ClientName => _clientName;
+        
+        /// <summary>
+        /// Gets the type of this client
+        /// </summary>
+        public string ClientType => _clientType;
+        
+        /// <summary>
+        /// Gets the capabilities of this client
+        /// </summary>
+        public IReadOnlyList<string> Capabilities => _capabilities.AsReadOnly();
+        
+        /// <summary>
+        /// Gets the broker address that this client is connected to
+        /// </summary>
+        public string BrokerAddress => _brokerAddress;
+        
+        /// <summary>
+        /// Gets the broker port that this client is connected to
+        /// </summary>
+        public int BrokerPort => _brokerPort;
+        
+        /// <summary>
+        /// Gets a value indicating whether this client is connected to the broker
+        /// </summary>
+        public bool IsConnected => _socket != null && !_socket.IsDisposed;
+        
+        /// <summary>
+        /// Creates a new instance of the broker client
+        /// </summary>
+        /// <param name="clientName">The name of the client</param>
+        /// <param name="clientType">The type of the client</param>
+        /// <param name="capabilities">The capabilities of the client</param>
+        /// <param name="brokerAddress">The address of the broker</param>
+        /// <param name="brokerPort">The port of the broker</param>
+        public BrokerClient(
+            string clientName,
+            string clientType,
+            List<string>? capabilities = null,
+            string brokerAddress = "localhost",
+            int brokerPort = 5570)
+        {
+            _clientId = $"{clientType}-{Guid.NewGuid()}";
+            _clientName = clientName;
+            _clientType = clientType;
+            _capabilities = capabilities ?? new List<string>();
+            _brokerAddress = brokerAddress;
+            _brokerPort = brokerPort;
+            
+            _logger.Info("BrokerClient", $"Creating client with ID {_clientId} ({_clientName}, {_clientType})");
+        }
+        
+        /// <summary>
+        /// Connects to the broker
+        /// </summary>
+        public void Connect()
+        {
+            try
+            {
+                _logger.Info("BrokerClient", $"Connecting to broker at {_brokerAddress}:{_brokerPort}");
+                
+                // Create and configure socket
+                _socket = new DealerSocket();
+                _socket.Options.Identity = System.Text.Encoding.UTF8.GetBytes(_clientId);
+                _socket.Connect($"tcp://{_brokerAddress}:{_brokerPort}");
+                
+                // Start receiving messages
+                _receiveTask = Task.Run(ReceiveMessagesAsync);
+                
+                // Register with the broker
+                RegisterWithBroker();
+                
+                _logger.Info("BrokerClient", "Connected to broker successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("BrokerClient", "Error connecting to broker", ex);
+                throw;
+            }
+        }
+        
+        /// <summary>
+        /// Registers this client with the broker
+        /// </summary>
+        private void RegisterWithBroker()
+        {
+            try
+            {
+                var registration = new ServiceRegistrationPayload
+                {
+                    ServiceId = _clientId,
+                    ServiceName = _clientName,
+                    ServiceType = _clientType,
+                    Capabilities = new List<string>(_capabilities)
+                };
+                
+                var message = BrokerMessage.Create(BrokerMessageType.ServiceRegistration, registration);
+                message.SenderId = _clientId;
+                message.RequiresAcknowledgment = true;
+                
+                _logger.Info("BrokerClient", $"Registering with broker as {_clientId} ({_clientName}, {_clientType})");
+                SendMessageAsync(message).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("BrokerClient", "Error registering with broker", ex);
+            }
+        }
+        
+        /// <summary>
+        /// Receives messages from the broker asynchronously
+        /// </summary>
+        private async Task ReceiveMessagesAsync()
+        {
+            try
+            {
+                _logger.Debug("BrokerClient", "Starting message receive loop");
+                
+                while (!_cancellationTokenSource.Token.IsCancellationRequested && _socket != null && !_socket.IsDisposed)
+                {
+                    try
+                    {
+                        // Try to receive a message with a short timeout
+                        if (_socket.TryReceiveFrameString(TimeSpan.FromMilliseconds(100), out string? messageJson))
+                        {
+                            if (!string.IsNullOrEmpty(messageJson))
+                            {
+                                var message = BrokerMessage.FromJson(messageJson);
+                                if (message != null)
+                                {
+                                    ProcessReceivedMessage(message);
+                                }
+                            }
+                        }
+                    }
+                    catch (NetMQException ex)
+                    {
+                        _logger.Error("BrokerClient", "Error receiving message", ex);
+                        await Task.Delay(1000, _cancellationTokenSource.Token);
+                    }
+                    
+                    // Small delay to prevent CPU overuse
+                    await Task.Delay(5, _cancellationTokenSource.Token);
+                }
+                
+                _logger.Debug("BrokerClient", "Message receive loop terminated");
+            }
+            catch (TaskCanceledException)
+            {
+                // Normal during shutdown
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("BrokerClient", "Error in receive loop", ex);
+            }
+        }
+        
+        /// <summary>
+        /// Processes a received message
+        /// </summary>
+        /// <param name="message">The message to process</param>
+        private void ProcessReceivedMessage(BrokerMessage message)
+        {
+            try
+            {
+                _logger.Debug("BrokerClient", $"Received message: Type={message.Type}, ID={message.MessageId}, From={message.SenderId}, To={message.ReceiverId}");
+                
+                // Check if this is a response to a pending request
+                if (!string.IsNullOrEmpty(message.InResponseTo) && _pendingRequests.TryRemove(message.InResponseTo, out var tcs))
+                {
+                    _logger.Debug("BrokerClient", $"Completing pending request: {message.InResponseTo}");
+                    tcs.SetResult(message);
+                    return;
+                }
+                
+                // Handle system messages
+                if (HandleSystemMessage(message))
+                {
+                    return;
+                }
+                
+                // Notify subscribers about the received message
+                MessageReceived?.Invoke(this, message);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("BrokerClient", $"Error processing message: {message.MessageId}", ex);
+            }
+        }
+        
+        /// <summary>
+        /// Handles system messages from the broker
+        /// </summary>
+        /// <param name="message">The message to handle</param>
+        /// <returns>True if the message was handled, false otherwise</returns>
+        private bool HandleSystemMessage(BrokerMessage message)
+        {
+            switch (message.Type)
+            {
+                case BrokerMessageType.ServiceRegistration:
+                    var registration = message.GetPayload<ServiceRegistrationPayload>();
+                    if (registration != null)
+                    {
+                        _logger.Info("BrokerClient", $"Received service registration: {registration.ServiceId} ({registration.ServiceName}, {registration.ServiceType})");
+                        _knownServices[registration.ServiceId] = registration;
+                    }
+                    return true;
+                
+                case BrokerMessageType.Acknowledgment:
+                    _logger.Debug("BrokerClient", $"Received acknowledgment for message: {message.InResponseTo}");
+                    return true;
+                
+                case BrokerMessageType.Ping:
+                    _logger.Debug("BrokerClient", $"Received ping from {message.SenderId}");
+                    SendAcknowledgment(message);
+                    return true;
+                
+                case BrokerMessageType.Heartbeat:
+                    _logger.Trace("BrokerClient", $"Received heartbeat from {message.SenderId}");
+                    return true;
+                
+                default:
+                    return false;
+            }
+        }
+        
+        /// <summary>
+        /// Sends a message to the broker asynchronously
+        /// </summary>
+        /// <param name="message">The message to send</param>
+        /// <returns>A task that completes when the message is sent</returns>
+        public async Task SendMessageAsync(BrokerMessage message)
+        {
+            try
+            {
+                if (_socket == null || _socket.IsDisposed)
+                {
+                    throw new InvalidOperationException("Not connected to broker");
+                }
+                
+                // Ensure sender ID is set
+                if (string.IsNullOrEmpty(message.SenderId))
+                {
+                    message.SenderId = _clientId;
+                }
+                
+                var messageJson = message.ToJson();
+                
+                _logger.Debug("BrokerClient", $"Sending message: Type={message.Type}, ID={message.MessageId}, To={message.ReceiverId}");
+                
+                // Send the message
+                _socket.SendFrame(messageJson);
+                
+                await Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("BrokerClient", $"Error sending message: {message.MessageId}", ex);
+                throw;
+            }
+        }
+        
+        /// <summary>
+        /// Sends a message and waits for a response
+        /// </summary>
+        /// <param name="message">The message to send</param>
+        /// <param name="timeout">The timeout for the request</param>
+        /// <returns>The response message</returns>
+        public async Task<BrokerMessage> SendRequestAsync(BrokerMessage message, TimeSpan? timeout = null)
+        {
+            timeout ??= TimeSpan.FromSeconds(30);
+            
+            try
+            {
+                // Create a task completion source for the response
+                var tcs = new TaskCompletionSource<BrokerMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _pendingRequests[message.MessageId] = tcs;
+                
+                // Send the message
+                await SendMessageAsync(message);
+                
+                // Wait for the response with timeout
+                using var cts = new CancellationTokenSource(timeout.Value);
+                using var registration = cts.Token.Register(() => tcs.TrySetException(new TimeoutException($"Request timed out after {timeout.Value.TotalSeconds} seconds")));
+                
+                return await tcs.Task;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("BrokerClient", $"Error sending request: {message.MessageId}", ex);
+                throw;
+            }
+            finally
+            {
+                // Remove from pending requests if still there
+                _pendingRequests.TryRemove(message.MessageId, out _);
+            }
+        }
+        
+        /// <summary>
+        /// Discovers services of the specified type
+        /// </summary>
+        /// <param name="serviceType">The type of service to discover</param>
+        /// <param name="capability">The capability to look for</param>
+        /// <returns>A list of matching service registrations</returns>
+        public async Task<List<ServiceRegistrationPayload>> DiscoverServicesAsync(string? serviceType = null, string? capability = null)
+        {
+            try
+            {
+                _logger.Info("BrokerClient", $"Discovering services: Type={serviceType}, Capability={capability}");
+                
+                var discoveryRequest = new ServiceDiscoveryPayload
+                {
+                    ServiceType = serviceType,
+                    Capability = capability
+                };
+                
+                var message = BrokerMessage.Create(BrokerMessageType.ServiceDiscovery, discoveryRequest);
+                message.SenderId = _clientId;
+                
+                var response = await SendRequestAsync(message);
+                
+                var services = response.GetPayload<List<ServiceRegistrationPayload>>() ?? new List<ServiceRegistrationPayload>();
+                
+                _logger.Info("BrokerClient", $"Discovered {services.Count} services");
+                
+                // Update known services
+                foreach (var service in services)
+                {
+                    _knownServices[service.ServiceId] = service;
+                }
+                
+                return services;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("BrokerClient", "Error discovering services", ex);
+                return new List<ServiceRegistrationPayload>();
+            }
+        }
+        
+        /// <summary>
+        /// Sends a ping to the specified service
+        /// </summary>
+        /// <param name="serviceId">The ID of the service to ping</param>
+        /// <param name="timeout">The timeout for the ping</param>
+        /// <returns>True if the ping was acknowledged, false otherwise</returns>
+        public async Task<bool> PingServiceAsync(string serviceId, TimeSpan? timeout = null)
+        {
+            timeout ??= TimeSpan.FromSeconds(5);
+            
+            try
+            {
+                _logger.Debug("BrokerClient", $"Pinging service: {serviceId}");
+                
+                var message = BrokerMessage.Create(BrokerMessageType.Ping);
+                message.SenderId = _clientId;
+                message.ReceiverId = serviceId;
+                
+                var response = await SendRequestAsync(message, timeout);
+                
+                return response.Type == BrokerMessageType.Acknowledgment;
+            }
+            catch (Exception)
+            {
+                _logger.Warning("BrokerClient", $"Ping to service {serviceId} failed");
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Sends an acknowledgment for a message
+        /// </summary>
+        /// <param name="originalMessage">The original message</param>
+        private void SendAcknowledgment(BrokerMessage originalMessage)
+        {
+            try
+            {
+                var ackMessage = originalMessage.CreateAcknowledgment();
+                SendMessageAsync(ackMessage).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("BrokerClient", $"Error sending acknowledgment for message: {originalMessage.MessageId}", ex);
+            }
+        }
+        
+        /// <summary>
+        /// Disposes the broker client and releases resources
+        /// </summary>
+        public void Dispose()
+        {
+            _logger.Info("BrokerClient", "Shutting down client...");
+            
+            // Signal cancellation
+            _cancellationTokenSource.Cancel();
+            
+            // Wait for the receive task to complete
+            if (_receiveTask != null)
+            {
+                try
+                {
+                    _receiveTask.Wait(1000);
+                }
+                catch (AggregateException)
+                {
+                    // Ignore TaskCanceledException
+                }
+            }
+            
+            // Clean up resources
+            _socket?.Dispose();
+            _cancellationTokenSource.Dispose();
+            
+            // Complete any pending requests with an error
+            foreach (var request in _pendingRequests)
+            {
+                request.Value.TrySetException(new Exception("Client was disposed"));
+            }
+            
+            _pendingRequests.Clear();
+            
+            _logger.Info("BrokerClient", "Client shut down successfully");
+        }
+    }
+}
