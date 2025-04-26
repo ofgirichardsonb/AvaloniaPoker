@@ -2,7 +2,7 @@ modules = ["dotnet"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["dotnet-sdk_8"]
+packages = ["dotnet-sdk_8", "vim"]
 
 [workflows]
 runButton = "Project"
@@ -39,6 +39,10 @@ args = "poker_multi_verbose"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "poker_curses"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "poker_standard"
 
 [[workflows.workflow]]
 name = "PokerGame"
@@ -95,6 +99,14 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "./launch-services.sh curses"
+
+[[workflows.workflow]]
+name = "poker_standard"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "./launch-services.sh start"
 
 [deployment]
 run = ["sh", "-c", "dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --curses"]

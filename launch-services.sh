@@ -55,81 +55,120 @@ stop_all_services() {
 start_all_services() {
     echo "Starting all services..."
     
-    # First, clear any existing PID files
+    # First, stop any running services
+    stop_all_services
+    
+    # Clear any existing PID files
     rm -f .gameengine.pid .carddeck.pid .consoleui.pid
     
-    # Use a consistent offset for all services to ensure proper communication
-    local offset=100
+    # Create a log file
+    log_file="poker_standard.log"
+    echo "Starting poker game in standard mode at $(date)" > $log_file
     
-    # Start the Game Engine service first
-    launch_service "gameengine" $offset ""
-    echo "Waiting for game engine to initialize..."
-    sleep 3
+    # Generate a random port offset to avoid conflicts (between 100-999)
+    random_offset=$((RANDOM % 900 + 100))
     
-    # Start the Card Deck service second
-    launch_service "carddeck" $offset ""
-    echo "Waiting for card deck service to initialize..."
-    sleep 3
+    # Use a single unified process for all services
+    echo "Starting all services in a single command for better coordination..."
+    echo "Using port offset $random_offset to avoid conflicts"
+    echo "Game logs will be written to $log_file"
     
-    # Start the Console UI service last
-    launch_service "consoleui" $offset "--enhanced-ui"
+    # Run the process in the foreground
+    echo ""
+    echo "████████████████████████████████████████████████████████████"
+    echo "█                                                          █"
+    echo "█  TEXAS HOLD'EM POKER GAME (STANDARD MODE)                █"
+    echo "█                                                          █"
+    echo "█  Press Ctrl+C to stop the game when you're finished      █"
+    echo "█                                                          █"
+    echo "████████████████████████████████████████████████████████████"
+    echo ""
     
-    echo "All services started. Poker game should be running."
-    echo "Use stop command to terminate all services when done."
+    # Execute the command in the foreground with random port offset
+    dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --microservices --enhanced-ui --port-offset=$random_offset
+    
+    # No background process, no PID tracking in this mode
+    echo "Game has exited. Thanks for playing!"
 }
 
 # Start in verbose mode with more debugging information
 start_verbose() {
     echo "Starting all services in verbose mode..."
     
-    # First, clear any existing PID files
+    # First, stop any running services
+    stop_all_services
+    
+    # Clear any existing PID files
     rm -f .gameengine.pid .carddeck.pid .consoleui.pid
     
-    # Use a consistent offset for all verbose mode services
-    local verbose_offset=150
+    # Create a log file
+    log_file="poker_verbose.log"
+    echo "Starting poker game in verbose mode at $(date)" > $log_file
     
-    # Start the Game Engine service first with verbose logging
-    launch_service "gameengine" $verbose_offset "--verbose"
-    echo "Waiting for game engine to initialize..."
-    sleep 3
+    # Generate a random port offset to avoid conflicts (between 1000-1999)
+    random_offset=$((RANDOM % 1000 + 1000))
     
-    # Start the Card Deck service with verbose logging
-    launch_service "carddeck" $verbose_offset "--verbose"
-    echo "Waiting for card deck service to initialize..."
-    sleep 3
+    # Use a single unified process for verbose mode
+    echo "Starting all services in a single command with verbose logging..."
+    echo "Using port offset $random_offset to avoid conflicts"
+    echo "Game logs will be written to $log_file"
     
-    # Start the Console UI service with enhanced UI and verbose logging
-    launch_service "consoleui" $verbose_offset "--enhanced-ui --verbose"
+    # Run the process in the foreground
+    echo ""
+    echo "████████████████████████████████████████████████████████████"
+    echo "█                                                          █"
+    echo "█  TEXAS HOLD'EM POKER GAME (VERBOSE MODE)                 █"
+    echo "█                                                          █"
+    echo "█  Press Ctrl+C to stop the game when you're finished      █"
+    echo "█                                                          █"
+    echo "████████████████████████████████████████████████████████████"
+    echo ""
     
-    echo "All services started in verbose mode."
-    echo "Check logs for detailed information about service operation."
+    # Execute the command in the foreground with random port offset
+    dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --microservices --enhanced-ui --verbose --port-offset=$random_offset
+    
+    # No background process, no PID tracking in this mode
+    echo "Game has exited. Thanks for playing!"
 }
 
 # Start with emergency deck mode for better reliability
 start_emergency() {
     echo "Starting in emergency deck mode (more reliable)..."
     
-    # First, clear any existing PID files
+    # First, stop any running services
+    stop_all_services
+    
+    # Clear any existing PID files
     rm -f .gameengine.pid .carddeck.pid .consoleui.pid
     
-    # Use a fixed port offset for all emergency mode services to ensure they can communicate
-    local emergency_offset=50
+    # Create a log file
+    log_file="poker_emergency.log"
+    echo "Starting poker game in emergency mode at $(date)" > $log_file
     
-    # Start the Game Engine service first
-    launch_service "gameengine" $emergency_offset ""
-    echo "Waiting for game engine to initialize..."
-    sleep 3
+    # Generate a random port offset to avoid conflicts (between 2000-2999)
+    random_offset=$((RANDOM % 1000 + 2000))
     
-    # Start the Card Deck service with emergency deck mode
-    launch_service "carddeck" $emergency_offset "--emergency-deck"
-    echo "Waiting for card deck service to initialize..."
-    sleep 3
+    # Use a single unified process for emergency mode
+    echo "Starting all services in a single command for better coordination..."
+    echo "Using port offset $random_offset to avoid conflicts"
+    echo "Game logs will be written to $log_file"
     
-    # Start the Console UI service last, with enhanced UI
-    launch_service "consoleui" $emergency_offset "--enhanced-ui"
+    # Run the process in the foreground instead of background
+    echo ""
+    echo "████████████████████████████████████████████████████████████"
+    echo "█                                                          █"
+    echo "█  TEXAS HOLD'EM POKER GAME (EMERGENCY MODE)               █"
+    echo "█                                                          █"
+    echo "█  Press Ctrl+C to stop the game when you're finished      █"
+    echo "█                                                          █"
+    echo "████████████████████████████████████████████████████████████"
+    echo ""
     
-    echo "All services should now be running in emergency mode"
-    echo "Game should be accessible through the console UI"
+    # Execute the command in the foreground with random port offset
+    dotnet run --project PokerGame.Console/PokerGame.Console.csproj -- --microservices --emergency-deck --enhanced-ui --verbose --port-offset=$random_offset
+    
+    # Note: No background process, no PID tracking in this mode
+    echo "Game has exited. Thanks for playing!"
 }
 
 # Main script execution
