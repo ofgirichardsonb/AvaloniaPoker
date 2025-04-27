@@ -276,9 +276,29 @@ namespace PokerGame.Core.Microservices
                         }
                         else
                         {
-                            // If socket is null, exit the loop
-                            Console.WriteLine("Subscriber socket is null, stopping critical message handler");
-                            break;
+                            // If socket is null, attempt to recreate it instead of exiting
+                            Console.WriteLine("Subscriber socket is null, attempting to reconnect...");
+                            try
+                            {
+                                // Create a new subscriber socket
+                                _subscriberSocket = new NetMQ.Sockets.SubscriberSocket();
+                                _subscriberSocket.Options.ReceiveHighWatermark = 1000;
+                                _subscriberSocket.Connect($"tcp://localhost:{_subscriberPort}");
+                                _subscriberSocket.SubscribeToAnyTopic();
+                                
+                                Console.WriteLine("Successfully recreated subscriber socket in critical message handler");
+                                
+                                // Add a small delay to ensure the socket is ready
+                                await Task.Delay(100, token);
+                                continue;
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Failed to recreate subscriber socket: {ex.Message}");
+                                // Wait before trying again
+                                await Task.Delay(500, token);
+                                continue;
+                            }
                         }
                         
                         // Check for cancellation

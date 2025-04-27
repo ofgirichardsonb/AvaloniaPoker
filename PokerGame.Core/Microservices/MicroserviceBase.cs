@@ -451,11 +451,48 @@ namespace PokerGame.Core.Microservices
                         break;
                     }
                     
-                    // Make sure we still have valid sockets before trying to use them
+                    // Make sure we still have valid sockets before trying to use them - attempt to reconnect if needed
                     if (_subscriberSocket == null || _publisherSocket == null)
                     {
-                        Console.WriteLine("Socket(s) no longer available, terminating message loop");
-                        break;
+                        Console.WriteLine("Socket(s) no longer available, attempting to reconnect...");
+                        try
+                        {
+                            // Try to recreate the publisher socket if necessary
+                            if (_publisherSocket == null)
+                            {
+                                Console.WriteLine($"Attempting to recreate publisher socket on port {_publisherPort}...");
+                                _publisherSocket = new PublisherSocket();
+                                _publisherSocket.Options.SendHighWatermark = 1000;
+                                _publisherSocket.Bind($"tcp://127.0.0.1:{_publisherPort}");
+                                Console.WriteLine("Publisher socket recreated successfully");
+                            }
+                            
+                            // Try to recreate the subscriber socket if necessary
+                            if (_subscriberSocket == null)
+                            {
+                                Console.WriteLine($"Attempting to recreate subscriber socket on port {_subscriberPort}...");
+                                _subscriberSocket = new SubscriberSocket();
+                                _subscriberSocket.Options.ReceiveHighWatermark = 1000;
+                                _subscriberSocket.Connect($"tcp://localhost:{_subscriberPort}");
+                                _subscriberSocket.SubscribeToAnyTopic();
+                                Console.WriteLine("Subscriber socket recreated successfully");
+                            }
+                            
+                            // Give the sockets a moment to fully initialize
+                            await Task.Delay(100, token);
+                            Console.WriteLine("Socket reconnection successful, continuing message loop");
+                            
+                            // Skip to the next iteration to immediately use the new sockets
+                            continue;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Failed to recreate sockets: {ex.Message}");
+                            
+                            // Wait a bit longer before retrying to avoid rapid failures
+                            await Task.Delay(1000, token);
+                            continue;
+                        }
                     }
                     
                     // Check for incoming messages with a very short timeout to avoid blocking

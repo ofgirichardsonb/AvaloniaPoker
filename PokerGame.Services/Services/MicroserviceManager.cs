@@ -139,7 +139,25 @@ namespace PokerGame.Services
                     
                     Console.WriteLine($"Attempting to create {typeof(T).Name} with ExecutionContext constructor");
                     Console.WriteLine($"Constructor parameters: ExecutionContext + {(constructorArgs != null ? constructorArgs.Length : 0)} additional args");
-                    instance = (T)Activator.CreateInstance(typeof(T), ecParameters.ToArray());
+                    
+                    try {
+                        // Try ExecutionContext plus verbose constructor first
+                        if (verbose)
+                        {
+                            ecParameters.Add(verbose);
+                            Console.WriteLine($"Adding verbose parameter to ExecutionContext constructor");
+                        }
+                        instance = (T)Activator.CreateInstance(typeof(T), ecParameters.ToArray());
+                    }
+                    catch (Exception ecWithVerboseEx)
+                    {
+                        Console.WriteLine($"ExecutionContext with verbose constructor failed: {ecWithVerboseEx.Message}. Trying basic ExecutionContext constructor.");
+                        // Try just basic ExecutionContext constructor
+                        ecParameters.Clear();
+                        ecParameters.Add(executionContext);
+                        instance = (T)Activator.CreateInstance(typeof(T), ecParameters.ToArray());
+                    }
+                    
                     Console.WriteLine($"Successfully created {typeof(T).Name} with ExecutionContext constructor");
                 }
                 catch (Exception ex)
@@ -189,9 +207,33 @@ namespace PokerGame.Services
                             Console.WriteLine($"Standard parameter constructor failed: {standardEx.Message}");
                             Console.WriteLine("Trying alternate constructor with ports-only");
                             
-                            // Some services may just need the port parameters
-                            instance = (T)Activator.CreateInstance(typeof(T), publisherPort, subscriberPort);
-                            Console.WriteLine($"Successfully created {typeof(T).Name} with ports-only constructor");
+                            try 
+                            {
+                                // Some services may just need the port parameters
+                                instance = (T)Activator.CreateInstance(typeof(T), publisherPort, subscriberPort);
+                                Console.WriteLine($"Successfully created {typeof(T).Name} with ports-only constructor");
+                            }
+                            catch (Exception portsOnlyEx)
+                            {
+                                // If that fails, try with string service name, string service type (name first, type second - opposite order)
+                                Console.WriteLine($"Ports-only constructor failed: {portsOnlyEx.Message}");
+                                Console.WriteLine($"Trying constructor with service name and type in reverse order");
+                                
+                                var reverseParameters = new List<object>();
+                                reverseParameters.Add(serviceName);      // serviceName first
+                                reverseParameters.Add(serviceType);      // then serviceType 
+                                reverseParameters.Add(publisherPort);    // then publisherPort
+                                reverseParameters.Add(subscriberPort);   // then subscriberPort
+                                
+                                // Add verbose if available
+                                if (verbose)
+                                {
+                                    reverseParameters.Add(verbose);
+                                }
+                                
+                                instance = (T)Activator.CreateInstance(typeof(T), reverseParameters.ToArray());
+                                Console.WriteLine($"Successfully created {typeof(T).Name} with reversed name/type parameters");
+                            }
                         }
                     }
                     catch (Exception ex)

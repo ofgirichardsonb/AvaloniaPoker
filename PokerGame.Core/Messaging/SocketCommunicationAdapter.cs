@@ -86,6 +86,33 @@ namespace PokerGame.Core.Messaging
                 
                 _logger.Log("Starting socket communication adapter...");
                 
+                // Initialize sockets
+                InitializeSockets();
+                
+                // Start processing tasks based on the execution context
+                StartTasks();
+                
+                _logger.Log("Socket communication adapter started successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log($"Error starting socket communication adapter: {ex.Message}");
+                // Re-throw the exception to let the caller handle it
+                throw;
+            }
+        }
+        
+        /// <summary>
+        /// Initializes the publisher and subscriber sockets
+        /// </summary>
+        private void InitializeSockets()
+        {
+            try
+            {
+                // Clean up any existing sockets
+                _publisherSocket?.Dispose();
+                _subscriberSocket?.Dispose();
+                
                 // Start publisher socket
                 _publisherSocket = new PublisherSocket();
                 _publisherSocket.Options.SendHighWatermark = 1000;
@@ -98,17 +125,31 @@ namespace PokerGame.Core.Messaging
                 _subscriberSocket.Connect($"tcp://localhost:{_subscriberPort}");
                 _subscriberSocket.SubscribeToAnyTopic();
                 _logger.Log($"Subscriber socket connected to port {_subscriberPort}");
-                
-                // Start processing tasks based on the execution context
-                StartTasks();
-                
-                _logger.Log("Socket communication adapter started successfully");
             }
             catch (Exception ex)
             {
-                _logger.Log($"Error starting socket communication adapter: {ex.Message}");
-                // Re-throw the exception to let the caller handle it
+                _logger.Log($"Error initializing sockets: {ex.Message}");
                 throw;
+            }
+        }
+        
+        /// <summary>
+        /// Attempts to reconnect sockets if they become unavailable
+        /// </summary>
+        /// <returns>True if sockets were successfully reconnected</returns>
+        private bool ReconnectSockets()
+        {
+            try
+            {
+                _logger.Log("Attempting to reconnect sockets...");
+                InitializeSockets();
+                _logger.Log("Socket reconnection successful");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Log($"Socket reconnection failed: {ex.Message}");
+                return false;
             }
         }
         
@@ -215,15 +256,38 @@ namespace PokerGame.Core.Messaging
         {
             try
             {
+                int errorCount = 0;
+                int maxErrors = 3;
+                
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     try
                     {
+                        // Check if publisher socket is null or disposed
+                        if (_publisherSocket == null)
+                        {
+                            _logger.Log("Publisher socket is null, attempting to reconnect...");
+                            if (ReconnectSockets())
+                            {
+                                errorCount = 0;
+                                continue;
+                            }
+                            else
+                            {
+                                // If reconnection failed, wait longer
+                                Thread.Sleep(500);
+                                continue;
+                            }
+                        }
+                        
                         // Try to dequeue a message
                         if (_messageQueue.TryDequeue(out string json))
                         {
                             // Publish the message
                             _publisherSocket.SendFrame(json);
+                            
+                            // Successful send, reset error count
+                            errorCount = 0;
                             
                             if (_verbose)
                             {
@@ -234,6 +298,52 @@ namespace PokerGame.Core.Messaging
                         {
                             // No messages to send, sleep for a short time
                             Thread.Sleep(10);
+                        }
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        _logger.Log("Publisher socket is disposed, attempting to reconnect...");
+                        if (ReconnectSockets())
+                        {
+                            errorCount = 0;
+                        }
+                        else
+                        {
+                            errorCount++;
+                            _logger.Log($"Failed to reconnect publisher socket. Error count: {errorCount}/{maxErrors}");
+                            
+                            // If we've failed multiple times, wait longer between attempts
+                            if (errorCount >= maxErrors)
+                            {
+                                _logger.Log("Publisher socket errors exceeded threshold, waiting longer before retry...");
+                                Thread.Sleep(2000);
+                                errorCount = 0;  // Reset error count after longer wait
+                            }
+                            else
+                            {
+                                Thread.Sleep(500);
+                            }
+                        }
+                    }
+                    catch (NetMQException nmqEx)
+                    {
+                        errorCount++;
+                        _logger.Log($"NetMQ error in publisher loop: {nmqEx.Message}. Error count: {errorCount}/{maxErrors}");
+                        
+                        // Try to reconnect on socket errors
+                        if (ReconnectSockets())
+                        {
+                            errorCount = 0;
+                        }
+                        else if (errorCount >= maxErrors)
+                        {
+                            _logger.Log("Publisher socket errors exceeded threshold, waiting longer before retry...");
+                            Thread.Sleep(2000);
+                            errorCount = 0;  // Reset error count after longer wait
+                        }
+                        else
+                        {
+                            Thread.Sleep(500);
                         }
                     }
                     catch (Exception ex)
@@ -254,13 +364,36 @@ namespace PokerGame.Core.Messaging
         {
             try
             {
+                int errorCount = 0;
+                int maxErrors = 3;
+                
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     try
                     {
+                        // Check if subscriber socket is null or disposed
+                        if (_subscriberSocket == null)
+                        {
+                            _logger.Log("Subscriber socket is null, attempting to reconnect...");
+                            if (ReconnectSockets())
+                            {
+                                errorCount = 0;
+                                continue;
+                            }
+                            else
+                            {
+                                // If reconnection failed, wait longer
+                                Thread.Sleep(500);
+                                continue;
+                            }
+                        }
+                        
                         // Check if there's a message available
                         if (_subscriberSocket.TryReceiveFrameString(TimeSpan.FromMilliseconds(100), out string json))
                         {
+                            // Successful receive, reset error count
+                            errorCount = 0;
+                            
                             // We received a message
                             if (!string.IsNullOrEmpty(json))
                             {
@@ -297,6 +430,52 @@ namespace PokerGame.Core.Messaging
                             }
                         }
                     }
+                    catch (ObjectDisposedException)
+                    {
+                        _logger.Log("Subscriber socket is disposed, attempting to reconnect...");
+                        if (ReconnectSockets())
+                        {
+                            errorCount = 0;
+                        }
+                        else
+                        {
+                            errorCount++;
+                            _logger.Log($"Failed to reconnect subscriber socket. Error count: {errorCount}/{maxErrors}");
+                            
+                            // If we've failed multiple times, wait longer between attempts
+                            if (errorCount >= maxErrors)
+                            {
+                                _logger.Log("Subscriber socket errors exceeded threshold, waiting longer before retry...");
+                                Thread.Sleep(2000);
+                                errorCount = 0;  // Reset error count after longer wait
+                            }
+                            else
+                            {
+                                Thread.Sleep(500);
+                            }
+                        }
+                    }
+                    catch (NetMQException nmqEx)
+                    {
+                        errorCount++;
+                        _logger.Log($"NetMQ error in subscriber loop: {nmqEx.Message}. Error count: {errorCount}/{maxErrors}");
+                        
+                        // Try to reconnect on socket errors
+                        if (ReconnectSockets())
+                        {
+                            errorCount = 0;
+                        }
+                        else if (errorCount >= maxErrors)
+                        {
+                            _logger.Log("Subscriber socket errors exceeded threshold, waiting longer before retry...");
+                            Thread.Sleep(2000);
+                            errorCount = 0;  // Reset error count after longer wait
+                        }
+                        else
+                        {
+                            Thread.Sleep(500);
+                        }
+                    }
                     catch (Exception ex)
                     {
                         _logger.Log($"Error in subscriber loop: {ex.Message}");
@@ -315,14 +494,100 @@ namespace PokerGame.Core.Messaging
         {
             try
             {
+                int errorCount = 0;
+                int maxErrors = 3;
+                bool socketErrorDetected = false;
+                
                 // This loop exists primarily to keep the NetMQ context alive
                 // and could be expanded for more complex processing if needed
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     try
                     {
-                        // Sleep to avoid busy waiting
-                        Thread.Sleep(100);
+                        // Check if sockets are null - this can indicate they're being recreated or have failed
+                        if (_subscriberSocket == null || _publisherSocket == null)
+                        {
+                            socketErrorDetected = true;
+                            _logger.Log("Socket error detected in message processing loop - at least one socket is null");
+                            
+                            // Try to reconnect the sockets
+                            if (ReconnectSockets())
+                            {
+                                _logger.Log("Sockets successfully reconnected in message processing loop");
+                                socketErrorDetected = false;
+                                errorCount = 0;
+                            }
+                            else
+                            {
+                                errorCount++;
+                                _logger.Log($"Failed to reconnect sockets in message processing loop. Error count: {errorCount}/{maxErrors}");
+                                
+                                // If we've tried too many times, wait longer
+                                if (errorCount >= maxErrors)
+                                {
+                                    _logger.Log("Socket errors exceeded threshold in message processing loop, waiting longer...");
+                                    Thread.Sleep(2000);
+                                    errorCount = 0;  // Reset error count after longer wait
+                                }
+                                else
+                                {
+                                    Thread.Sleep(500);
+                                }
+                                
+                                continue;
+                            }
+                        }
+                        
+                        // Normal processing when sockets are available
+                        if (!socketErrorDetected)
+                        {
+                            // Perform health check on sockets every 10 iterations
+                            if (errorCount % 10 == 0)
+                            {
+                                // This provides a health check without actually sending data
+                                if (_publisherSocket != null && _subscriberSocket != null)
+                                {
+                                    _logger.Log("Socket health check passed in message processing loop");
+                                }
+                            }
+                            
+                            // Sleep to avoid busy waiting
+                            Thread.Sleep(100);
+                        }
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        _logger.Log("Object disposed error in message processing loop - attempting to reconnect sockets");
+                        socketErrorDetected = true;
+                        
+                        // Try to reconnect
+                        if (ReconnectSockets())
+                        {
+                            socketErrorDetected = false;
+                            errorCount = 0;
+                        }
+                        else
+                        {
+                            errorCount++;
+                            Thread.Sleep(500);
+                        }
+                    }
+                    catch (NetMQException nmqEx)
+                    {
+                        _logger.Log($"NetMQ error in message processing loop: {nmqEx.Message}");
+                        socketErrorDetected = true;
+                        
+                        // Try to reconnect
+                        if (ReconnectSockets())
+                        {
+                            socketErrorDetected = false;
+                            errorCount = 0;
+                        }
+                        else
+                        {
+                            errorCount++;
+                            Thread.Sleep(500);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -330,6 +595,8 @@ namespace PokerGame.Core.Messaging
                         Thread.Sleep(100);
                     }
                 }
+                
+                _logger.Log("Message processing loop stopped due to cancellation token");
             }
             catch (Exception ex)
             {
