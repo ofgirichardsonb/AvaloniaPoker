@@ -1343,19 +1343,81 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
             
             try
             {
-                Console.WriteLine("Starting game engine service...");
+                Console.WriteLine("Starting game engine service with DIRECT DISCOVERY...");
                 
-                // There's no IsRunningMessageLoop property or StartMessageLoop method 
-                // in the MicroserviceBase class. Use the base Start() method instead.
-                base.Start();
+                // Use the base StartAsync method which does more thorough initialization
+                await base.StartAsync();
                 
                 // Set service state
                 IsRunning = true;
                 
                 Console.WriteLine("Game engine service started successfully");
                 
-                // No specific initialization tasks to await
-                await Task.CompletedTask;
+                // Broadcast our existence aggressively with a dedicated background task
+                Task.Run(async () => 
+                {
+                    // Wait a moment for everything to initialize
+                    await Task.Delay(1000);
+                    
+                    Console.WriteLine("Starting aggressive service broadcasting...");
+                    
+                    // Broadcast 10 times with increasing delays
+                    for (int i = 0; i < 10; i++)
+                    {
+                        try
+                        {
+                            // Broadcast on all standard port offsets
+                            foreach (int offset in ServiceConstants.Discovery.StandardPortOffsets)
+                            {
+                                try
+                                {
+                                    // Create special debug message that will be visible in logs
+                                    var debugMsg = Message.Create(MessageType.Debug, 
+                                        $"GameEngine broadcast on offset {offset}: LOOKING FOR CONSOLE UI SERVICES");
+                                    debugMsg.SenderId = _serviceId;
+                                    debugMsg.MessageId = Guid.NewGuid().ToString();
+                                    Console.WriteLine($"Broadcasting game engine availability on offset {offset}");
+                                    Broadcast(debugMsg);
+                                    
+                                    // Send service registration broadcast
+                                    PublishServiceRegistration();
+                                    
+                                    // Also directly attempt to contact any Console UI services
+                                    // First, look for Console UI services in our registry
+                                    var consoleServices = GetServicesOfType(ServiceConstants.ServiceTypes.ConsoleUI);
+                                    if (consoleServices.Count > 0)
+                                    {
+                                        Console.WriteLine($"Found {consoleServices.Count} Console UI services, sending direct registrations");
+                                        foreach (var consoleId in consoleServices)
+                                        {
+                                            // Send targeted registration directly to each console service
+                                            SendTargetedRegistrationTo(consoleId);
+                                            
+                                            // Also send a debug message to confirm the connection
+                                            var confirmMsg = Message.Create(MessageType.Debug, 
+                                                $"GameEngine direct connection to ConsoleUI {consoleId}");
+                                            confirmMsg.SenderId = _serviceId;
+                                            confirmMsg.ReceiverId = consoleId;
+                                            SendTo(confirmMsg, consoleId);
+                                        }
+                                    }
+                                }
+                                catch (Exception broadcastEx)
+                                {
+                                    Console.WriteLine($"Error in game engine broadcast on offset {offset}: {broadcastEx.Message}");
+                                }
+                            }
+                            
+                            // Wait with an increasing delay
+                            int delay = 500 + (i * 200);
+                            await Task.Delay(delay);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error in aggressive service broadcasting: {ex.Message}");
+                        }
+                    }
+                });
             }
             catch (Exception ex)
             {

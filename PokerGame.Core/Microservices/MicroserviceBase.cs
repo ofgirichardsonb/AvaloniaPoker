@@ -69,7 +69,25 @@ namespace PokerGame.Core.Microservices
             Messaging.ExecutionContext executionContext,
             int heartbeatIntervalMs = 5000)
         {
-            _serviceId = Guid.NewGuid().ToString();
+            // Assign static IDs based on service type for more reliable direct connections
+            if (serviceType == ServiceConstants.ServiceTypes.GameEngine)
+            {
+                _serviceId = ServiceConstants.StaticServiceIds.GameEngine;
+            }
+            else if (serviceType == ServiceConstants.ServiceTypes.CardDeck)
+            {
+                _serviceId = ServiceConstants.StaticServiceIds.CardDeck;
+            }
+            else if (serviceType == ServiceConstants.ServiceTypes.ConsoleUI)
+            {
+                _serviceId = ServiceConstants.StaticServiceIds.ConsoleUI;
+            }
+            else
+            {
+                // Fallback to dynamic ID for any new service types
+                _serviceId = Guid.NewGuid().ToString();
+            }
+            
             _serviceName = serviceName;
             _serviceType = serviceType;
             _heartbeatIntervalMs = heartbeatIntervalMs;
@@ -79,6 +97,7 @@ namespace PokerGame.Core.Microservices
             // Use the provided execution context to set up messaging
             // The broker will handle the actual communication
             Console.WriteLine($"Creating microservice {serviceName} ({serviceType}) with execution context");
+            Console.WriteLine($"Using STATIC SERVICE ID: {_serviceId}");
         }
         
         /// <summary>
@@ -96,7 +115,25 @@ namespace PokerGame.Core.Microservices
             int subscriberPort,
             int heartbeatIntervalMs = 5000)
         {
-            _serviceId = Guid.NewGuid().ToString();
+            // Assign static IDs based on service type for more reliable direct connections
+            if (serviceType == ServiceConstants.ServiceTypes.GameEngine)
+            {
+                _serviceId = ServiceConstants.StaticServiceIds.GameEngine;
+            }
+            else if (serviceType == ServiceConstants.ServiceTypes.CardDeck)
+            {
+                _serviceId = ServiceConstants.StaticServiceIds.CardDeck;
+            }
+            else if (serviceType == ServiceConstants.ServiceTypes.ConsoleUI)
+            {
+                _serviceId = ServiceConstants.StaticServiceIds.ConsoleUI;
+            }
+            else
+            {
+                // Fallback to dynamic ID for any new service types
+                _serviceId = Guid.NewGuid().ToString();
+            }
+            
             _serviceName = serviceName;
             _serviceType = serviceType;
             _heartbeatIntervalMs = heartbeatIntervalMs;
@@ -152,7 +189,7 @@ namespace PokerGame.Core.Microservices
             // Subscribe to all messages
             _subscriberSocket.Subscribe("");
             
-            Console.WriteLine($"{_serviceName} ({_serviceType}) started with ID: {_serviceId}");
+            Console.WriteLine($"{_serviceName} ({_serviceType}) started with STATIC ID: {_serviceId}");
         }
         
         /// <summary>

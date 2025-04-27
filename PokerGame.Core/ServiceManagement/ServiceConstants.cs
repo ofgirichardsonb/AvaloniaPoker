@@ -8,6 +8,26 @@ namespace PokerGame.Core.ServiceManagement
     public static class ServiceConstants
     {
         /// <summary>
+        /// Predefined service IDs for direct connection without discovery
+        /// </summary>
+        public static class StaticServiceIds
+        {
+            /// <summary>
+            /// Static ID for the Game Engine service
+            /// </summary>
+            public const string GameEngine = "static_game_engine_service";
+            
+            /// <summary>
+            /// Static ID for the Card Deck service
+            /// </summary>
+            public const string CardDeck = "static_card_deck_service";
+            
+            /// <summary>
+            /// Static ID for the Console UI service
+            /// </summary>
+            public const string ConsoleUI = "static_console_ui_service";
+        }
+        /// <summary>
         /// Base port constants for various services
         /// </summary>
         public static class Ports

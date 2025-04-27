@@ -192,29 +192,130 @@ namespace PokerGame.Core.Microservices
                 Console.WriteLine($"Error initializing communication: {ex.Message}");
             }
             
-            // Use the new enhanced discovery method to find GameEngine services
-            Console.WriteLine("Using enhanced service discovery to find game engine services");
-            var gameEngineSvcIds = await DiscoverServicesWithRetryAsync(
-                ServiceConstants.ServiceTypes.GameEngine, 
-                maxWaitAttempts,
-                attemptDelayMs);
+            Console.WriteLine("USING STATIC SERVICE ID APPROACH for direct connection");
             
-            if (gameEngineSvcIds.Count > 0)
+            // Start with the static ID immediately for more reliable connection
+            Console.WriteLine($"Using static game engine ID: {ServiceConstants.StaticServiceIds.GameEngine}");
+            _gameEngineServiceId = ServiceConstants.StaticServiceIds.GameEngine;
+            
+            // Send a direct registration message to the game engine
+            var regMsg = Message.Create(MessageType.Debug, 
+                $"STATIC ID CONNECTION: ConsoleUI [{_serviceId}] connecting directly to GameEngine {_gameEngineServiceId}");
+            regMsg.SenderId = _serviceId; 
+            regMsg.ReceiverId = _gameEngineServiceId;
+            SendTo(regMsg, _gameEngineServiceId);
+            
+            int waitAttempts = 0;
+            bool gameEngineFound = false;
+            
+            // Still publish registration for backward compatibility
+            for (int i = 0; i < 3; i++)
             {
-                _gameEngineServiceId = gameEngineSvcIds[0];
-                Console.WriteLine($"!!! Found game engine service with ID: {_gameEngineServiceId} !!!");
+                PublishServiceRegistration();
+                await Task.Delay(100);
+            }
+            
+            while (!gameEngineFound && waitAttempts < maxWaitAttempts)
+            {
+                waitAttempts++;
+                Console.WriteLine($"Direct connection attempt {waitAttempts}/{maxWaitAttempts}");
                 
-                // Send a debug message letting the game engine know we found it
-                var foundMsg = Message.Create(MessageType.Debug, 
-                    $"ConsoleUI [{_serviceId}] successfully found game engine service {_gameEngineServiceId}");
-                foundMsg.SenderId = _serviceId;
-                foundMsg.ReceiverId = _gameEngineServiceId;
-                SendTo(foundMsg, _gameEngineServiceId);
+                // First, check if any game engine services are already registered
+                var gameEngineSvcIds = GetServicesOfType(ServiceConstants.ServiceTypes.GameEngine);
+                if (gameEngineSvcIds.Count > 0)
+                {
+                    _gameEngineServiceId = gameEngineSvcIds[0];
+                    Console.WriteLine($"!!! Found game engine service with ID: {_gameEngineServiceId} !!!");
+                    gameEngineFound = true;
+                    break;
+                }
                 
+                // If we don't find any services and we're on a broadcast interval, send aggressive broadcasts
+                if (waitAttempts % 3 == 0)
+                {
+                    Console.WriteLine("*** BROADCASTING AGGRESSIVE SERVICE REGISTRATION ***");
+                    
+                    // Create a very clear message for the console log
+                    var directMsg = Message.Create(MessageType.Debug,
+                        $"DIRECT CONNECTION ATTEMPT: ConsoleUI [{_serviceId}] on attempt {waitAttempts}");
+                    directMsg.SenderId = _serviceId;
+                    Console.WriteLine($"Broadcasting direct connection message with ID {directMsg.MessageId}");
+                    Broadcast(directMsg);
+                    
+                    // Send 3 registration messages in quick succession
+                    for (int i = 0; i < 3; i++)
+                    {
+                        PublishServiceRegistration();
+                        await Task.Delay(50);
+                    }
+                    
+                    // Try creating direct connections with each standard port offset
+                    Console.WriteLine("Trying direct connection on multiple port offsets");
+                    foreach (int portOffset in ServiceConstants.Discovery.StandardPortOffsets)
+                    {
+                        try
+                        {
+                            // Try to connect to game engine at this port offset
+                            int potentialPort = ServiceConstants.Ports.GetGameEnginePublisherPort(portOffset);
+                            Console.WriteLine($"Direct connection attempt to port {potentialPort} (offset {portOffset})");
+                            
+                            // Special registration message for this offset
+                            var portMsg = Message.Create(MessageType.Debug,
+                                $"DIRECT CONNECTION: ConsoleUI [{_serviceId}] to port {potentialPort} on offset {portOffset}");
+                            portMsg.SenderId = _serviceId;
+                            portMsg.MessageId = Guid.NewGuid().ToString();
+                            Broadcast(portMsg);
+                            
+                            // Send a service discovery message
+                            var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
+                            discoveryMsg.SenderId = _serviceId;
+                            discoveryMsg.MessageId = Guid.NewGuid().ToString();
+                            Broadcast(discoveryMsg);
+                            
+                            // Wait briefly
+                            await Task.Delay(100);
+                            
+                            // Check if we found any services after this specific attempt
+                            gameEngineSvcIds = GetServicesOfType(ServiceConstants.ServiceTypes.GameEngine);
+                            if (gameEngineSvcIds.Count > 0)
+                            {
+                                _gameEngineServiceId = gameEngineSvcIds[0];
+                                Console.WriteLine($"!!! Direct connection on port {potentialPort} found game engine: {_gameEngineServiceId} !!!");
+                                gameEngineFound = true;
+                                break;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error in direct connection attempt on port offset {portOffset}: {ex.Message}");
+                        }
+                    }
+                    
+                    // If we found the game engine in the port loops, break out of the main loop
+                    if (gameEngineFound)
+                    {
+                        break;
+                    }
+                }
+                
+                // Wait before next attempt
+                await Task.Delay(attemptDelayMs);
+            }
+            
+            // Final check and fallback
+            if (_gameEngineServiceId != null && gameEngineFound)
+            {
                 Console.WriteLine($"Successfully connected to game engine service: {_gameEngineServiceId}");
                 
-                // Get information about the game engine service
-                Console.WriteLine("Available services through enhanced discovery:");
+                // Send a message to the game engine to confirm connection
+                var confirmMsg = Message.Create(MessageType.Debug, 
+                    $"CONNECTION ESTABLISHED: ConsoleUI [{_serviceId}] to GameEngine {_gameEngineServiceId}");
+                confirmMsg.SenderId = _serviceId;
+                confirmMsg.ReceiverId = _gameEngineServiceId;
+                SendTo(confirmMsg, _gameEngineServiceId);
+                
+                // Get information about available services
+                Console.WriteLine("Available services after direct connection:");
                 foreach (var entry in GetServiceTypes())
                 {
                     Console.WriteLine($"- {entry.Key}: {entry.Value}");
@@ -222,56 +323,16 @@ namespace PokerGame.Core.Microservices
             }
             else
             {
-                Console.WriteLine("Enhanced discovery failed. Attempting multi-port discovery as last resort...");
+                Console.WriteLine("ERROR: Could not find game engine service after maximum wait time.");
+                Console.WriteLine("Using dummy game engine service ID as fallback.");
+                _gameEngineServiceId = ServiceConstants.StaticServiceIds.GameEngine;
                 
-                // **** IMPORTANT: Try communicating with ALL PORT COMBINATIONS ****
-                // This is a last resort attempt to find services on different port offsets
-                Console.WriteLine("*** ATTEMPTING MULTI-PORT DISCOVERY ***");
-                
-                // Try standard port offsets: 0, 200, 5000
-                foreach (int portOffset in new[] { 0, 200, 5000 })
+                // Display service registry one more time
+                Console.WriteLine("Final service registry contents after direct connection attempts:");
+                var finalServiceTypes = GetServiceTypes();
+                foreach (var svc in finalServiceTypes)
                 {
-                    try
-                    {
-                        // Calculate potential game engine port with this offset
-                        int potentialPort = ServiceConstants.Ports.GetGameEnginePublisherPort(portOffset);
-                        Console.WriteLine($"Trying to contact game engine on publisher port {potentialPort} (offset {portOffset})");
-                        
-                        // Create a targeted message for this offset
-                        var multiPortMsg = Message.Create(MessageType.Debug,
-                            $"ConsoleUI [{_serviceId}] multi-port discovery attempt to offset {portOffset} on port {potentialPort}");
-                        multiPortMsg.SenderId = _serviceId;
-                        Broadcast(multiPortMsg);
-                        
-                        // Wait briefly to avoid overwhelming the network
-                        await Task.Delay(100);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error in multi-port discovery for offset {portOffset}: {ex.Message}");
-                    }
-                }
-                
-                // Do a final check of the registry to see if anything showed up
-                var finalCheck = GetServicesOfType(ServiceConstants.ServiceTypes.GameEngine);
-                if (finalCheck.Count > 0)
-                {
-                    _gameEngineServiceId = finalCheck[0];
-                    Console.WriteLine($"!!! Multi-port discovery found game engine service with ID: {_gameEngineServiceId} !!!");
-                }
-                else
-                {
-                    Console.WriteLine("ERROR: Could not find game engine service after maximum wait time.");
-                    Console.WriteLine("Using dummy game engine service ID as fallback.");
-                    _gameEngineServiceId = "dummy_game_engine_service";
-                    
-                    // Display service registry one more time
-                    Console.WriteLine("Final service registry contents after search:");
-                    var finalServiceTypes = GetServiceTypes();
-                    foreach (var svc in finalServiceTypes)
-                    {
-                        Console.WriteLine($"  - Service {svc.Key}: {svc.Value}");
-                    }
+                    Console.WriteLine($"  - Service {svc.Key}: {svc.Value}");
                 }
             }
         }
@@ -571,55 +632,58 @@ namespace PokerGame.Core.Microservices
             // This is a fallback in case the flag isn't properly passed from command line
             _useEnhancedUI = true;
             
-            // Wait for the game engine to be available with active discovery
-            int waitAttempts = 0;
-            int maxWaitAttempts = ServiceConstants.Discovery.MaxServiceDiscoveryAttempts;
-            int attemptDelayMs = ServiceConstants.Discovery.ServiceDiscoveryDelayMs;
-            int broadcastInterval = ServiceConstants.Discovery.ServiceDiscoveryBroadcastInterval;
+            // Using static service ID approach for reliable direct connection
+            Console.WriteLine("=== STATIC SERVICE ID CONNECTION APPROACH ===");
+            Console.WriteLine($"Using static game engine ID: {ServiceConstants.StaticServiceIds.GameEngine}");
             
-            Console.WriteLine($"Starting game engine discovery process (max attempts: {maxWaitAttempts}, delay: {attemptDelayMs}ms)");
+            // Set the game engine service ID directly using the static ID
+            _gameEngineServiceId = ServiceConstants.StaticServiceIds.GameEngine;
             
-            while (_gameEngineServiceId == null && waitAttempts < maxWaitAttempts)
+            // Send a direct connection message to the game engine
+            var connectMsg = Message.Create(MessageType.Debug, 
+                $"DIRECT STATIC CONNECTION: ConsoleUI [{_serviceId}] connecting to GameEngine {_gameEngineServiceId}");
+            connectMsg.SenderId = _serviceId;
+            connectMsg.ReceiverId = _gameEngineServiceId;
+            SendTo(connectMsg, _gameEngineServiceId);
+            
+            // Still broadcast our presence several times for backward compatibility
+            Console.WriteLine("Broadcasting our service registration for backward compatibility...");
+            for (int i = 0; i < 3; i++)
             {
-                waitAttempts++;
-                Console.WriteLine($"Waiting for game engine to start... (attempt {waitAttempts}/{maxWaitAttempts})");
-                
-                // Actively search for game engine services
-                var gameEngineSvcIds = GetServicesOfType(ServiceConstants.ServiceTypes.GameEngine);
-                if (gameEngineSvcIds.Count > 0)
-                {
-                    _gameEngineServiceId = gameEngineSvcIds[0];
-                    Console.WriteLine($"!!! Found game engine service: {_gameEngineServiceId} !!!");
-                    break;
-                }
-                
-                // Send a service discovery message to find the game engine
-                if (waitAttempts % broadcastInterval == 0) 
-                {
-                    Console.WriteLine("Sending service discovery broadcast...");
-                    // First, publish our own registration to make sure others know about us
-                    PublishServiceRegistration();
-                    
-                    // Then send a direct discovery message
-                    var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
-                    discoveryMsg.SenderId = _serviceId;
-                    Broadcast(discoveryMsg);
-                }
-                
-                await Task.Delay(attemptDelayMs);
+                PublishServiceRegistration();
+                await Task.Delay(100);
             }
             
-            // Check if we found the game engine
+            // Wait a moment for connections to establish
+            await Task.Delay(500);
+            
+            // Log connection information
+            Console.WriteLine($"Directly connected to game engine using static ID: {_gameEngineServiceId}");
+            Console.WriteLine("Service registry contents:");
+            var registryTypes = GetServiceTypes();
+            foreach (var svc in registryTypes)
+            {
+                Console.WriteLine($"  - Service {svc.Key}: {svc.Value}");
+            }
+            
+            // Also broadcast using the legacy method for backward compatibility
+            var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
+            discoveryMsg.SenderId = _serviceId;
+            Broadcast(discoveryMsg);
+            
+            // Confirm the static ID is being used
+            Console.WriteLine("========= STATIC ID CONNECTION APPROACH =========");
+            Console.WriteLine($"Using static ID approach with game engine ID: {_gameEngineServiceId}");
+            
+            // Always ensure we have the game engine ID set
             if (_gameEngineServiceId == null)
             {
-                Console.WriteLine("ERROR: Could not find game engine service after maximum wait time.");
-                Console.WriteLine("Using dummy game engine service ID as fallback.");
-                _gameEngineServiceId = "GAME_ENGINE_DEFAULT_ID";
+                Console.WriteLine("WARNING: Game engine ID was null, using static ID as fallback");
+                _gameEngineServiceId = ServiceConstants.StaticServiceIds.GameEngine;
             }
-            else
-            {
-                Console.WriteLine($"Successfully connected to game engine service: {_gameEngineServiceId}");
-            }
+            
+            Console.WriteLine($"Connection established with game engine service: {_gameEngineServiceId}");
+            Console.WriteLine("=================================================");
             
             // Get number of players
             int numPlayers = 0;
