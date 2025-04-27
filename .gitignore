@@ -153,3 +153,5 @@ tools/
 backup/
 attached_assets/
 workflow_input.txt
+
+appsettings.development.json
