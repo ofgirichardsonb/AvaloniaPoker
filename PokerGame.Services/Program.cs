@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using PokerGame.Core.Microservices;
 using PokerGame.Core.Messaging;
+using PokerGame.Core.ServiceManagement;
 using PokerGame.Core.Telemetry;
 using PokerGame.Abstractions;
 using Microsoft.ApplicationInsights;
@@ -171,7 +172,7 @@ namespace PokerGame.Services
                 
                 // Initialize and start the CentralMessageBroker
                 Console.WriteLine("Starting CentralMessageBroker...");
-                var centralBrokerPort = 25555 + portOffset;
+                var centralBrokerPort = ServiceConstants.Ports.GetCentralBrokerPort(portOffset);
                 _brokerManager.StartCentralBroker(centralBrokerPort, mainExecutionContext, verbose);
                 Console.WriteLine($"CentralMessageBroker started on port {centralBrokerPort}");
 
@@ -190,15 +191,15 @@ namespace PokerGame.Services
                 {
                     try
                     {
-                        // Calculate ports based on the Core's MicroserviceManager port scheme
-                        int publisherPort = 25556 + portOffset;
-                        int subscriberPort = 25557 + portOffset;
+                        // Get port numbers from constants for consistency
+                        int publisherPort = ServiceConstants.Ports.GetGameEnginePublisherPort(portOffset);
+                        int subscriberPort = ServiceConstants.Ports.GetGameEngineSubscriberPort(portOffset);
                         Console.WriteLine($"Starting Game Engine Service (publisher: {publisherPort}, subscriber: {subscriberPort})...");
                         
                         // Create the service with an execution context
                         var gameEngineService = _microserviceManager.CreateServiceWithExecutionContext<GameEngineService>(
                             "Poker Game Engine", 
-                            "GameEngine", 
+                            ServiceConstants.ServiceTypes.GameEngine, 
                             publisherPort, 
                             subscriberPort, 
                             verbose);
@@ -217,15 +218,15 @@ namespace PokerGame.Services
                 {
                     try
                     {
-                        // Calculate ports based on the Core's MicroserviceManager port scheme
-                        int publisherPort = 25559 + portOffset;
-                        int subscriberPort = 25556 + portOffset; // Connect to Game Engine's publisher port
+                        // Get port numbers from constants for consistency
+                        int publisherPort = ServiceConstants.Ports.GetCardDeckPublisherPort(portOffset);
+                        int subscriberPort = ServiceConstants.Ports.GetCardDeckSubscriberPort(portOffset);
                         Console.WriteLine($"Starting Card Deck Service (publisher: {publisherPort}, subscriber: {subscriberPort})...");
                         
                         // Create the service with an execution context
                         var cardDeckService = _microserviceManager.CreateServiceWithExecutionContext<CardDeckService>(
                             "Card Deck Service", 
-                            "CardDeck", 
+                            ServiceConstants.ServiceTypes.CardDeck, 
                             publisherPort, 
                             subscriberPort, 
                             verbose);  // Don't pass useEmergencyDeckMode parameter as it's optional with default value of false

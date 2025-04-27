@@ -6,6 +6,7 @@ using System.Linq;
 using PokerGame.Core.Game;
 using PokerGame.Core.Models;
 using PokerGame.Core.Messaging;
+using PokerGame.Core.ServiceManagement;
 using PokerGame.Abstractions;
 
 namespace PokerGame.Core.Microservices
@@ -34,12 +35,33 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         /// <param name="executionContext">The execution context to use</param>
         public GameEngineService(Messaging.ExecutionContext executionContext) 
-            : base("GameEngine", "Poker Game Engine", executionContext)
+            : base(ServiceConstants.ServiceTypes.GameEngine, "Poker Game Engine", executionContext)
         {
             // Initialize with null-check protection
             _microserviceUI = new MicroserviceUI(this);
             _gameEngine = new PokerGameEngine(_microserviceUI);
             _microserviceUI.SetGameEngine(_gameEngine);
+            Console.WriteLine($"GameEngineService created with execution context using service type: {ServiceConstants.ServiceTypes.GameEngine}");
+        }
+        
+        /// <summary>
+        /// Creates a new game engine service with an execution context and verbose flag
+        /// </summary>
+        /// <param name="executionContext">The execution context to use</param>
+        /// <param name="verbose">Whether to enable verbose logging</param>
+        public GameEngineService(Messaging.ExecutionContext executionContext, bool verbose) 
+            : base(ServiceConstants.ServiceTypes.GameEngine, "Poker Game Engine", executionContext)
+        {
+            // Initialize with null-check protection
+            _microserviceUI = new MicroserviceUI(this);
+            _gameEngine = new PokerGameEngine(_microserviceUI);
+            _microserviceUI.SetGameEngine(_gameEngine);
+            Console.WriteLine($"GameEngineService created with execution context (verbose={verbose}) using service type: {ServiceConstants.ServiceTypes.GameEngine}");
+            
+            if (verbose)
+            {
+                Console.WriteLine("Verbose logging enabled for GameEngineService");
+            }
         }
         
         /// <summary>
@@ -48,7 +70,7 @@ namespace PokerGame.Core.Microservices
         /// <param name="publisherPort">The port to use for publishing messages</param>
         /// <param name="subscriberPort">The port to use for subscribing to messages</param>
         public GameEngineService(int publisherPort, int subscriberPort) 
-            : base("GameEngine", "Poker Game Engine", publisherPort, subscriberPort)
+            : base(ServiceConstants.ServiceTypes.GameEngine, "Poker Game Engine", publisherPort, subscriberPort)
         {
             // Initialize with null-check protection
             _microserviceUI = new MicroserviceUI(this);
@@ -83,10 +105,10 @@ namespace PokerGame.Core.Microservices
         {
             // Store the service information
             _knownServices[registrationInfo.ServiceId] = registrationInfo;
-            Console.WriteLine($"Registered service: {registrationInfo.ServiceName} (ID: {registrationInfo.ServiceId}, Type: {registrationInfo.ServiceType})");
+            Console.WriteLine($"GameEngine registered service: {registrationInfo.ServiceName} (ID: {registrationInfo.ServiceId}, Type: {registrationInfo.ServiceType})");
             
             // Track the card deck service when it comes online
-            if (registrationInfo.ServiceType == "CardDeck")
+            if (registrationInfo.ServiceType == ServiceConstants.ServiceTypes.CardDeck)
             {
                 _cardDeckServiceId = registrationInfo.ServiceId;
                 Console.WriteLine($"Connected to card deck service: {registrationInfo.ServiceName}");
@@ -130,6 +152,72 @@ namespace PokerGame.Core.Microservices
                         Console.WriteLine($"Error pinging card deck service: {ex.Message}");
                     }
                 });
+            }
+            // Track console UI services and respond by broadcasting again
+            else if (registrationInfo.ServiceType == ServiceConstants.ServiceTypes.ConsoleUI || 
+                    registrationInfo.ServiceType == "PlayerUI") // Support both naming conventions for UI
+            {
+                Console.WriteLine($"ConsoleUI service registered with ID: {registrationInfo.ServiceId}");
+                
+                // When a console UI registers, immediately broadcast our registration back
+                // This helps with the bidirectional discovery
+                Task.Run(() => {
+                    try 
+                    {
+                        // First send a targeted registration directly to the console UI
+                        SendTargetedRegistrationTo(registrationInfo.ServiceId);
+                        
+                        // Then also broadcast generally for redundancy
+                        for (int i = 0; i < 3; i++) // Send multiple registration messages for redundancy
+                        {
+                            Console.WriteLine($"Broadcasting GameEngine registration to ConsoleUI service (attempt {i+1}/3)");
+                            PublishServiceRegistration();
+                            Thread.Sleep(300); // Small delay between broadcasts
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error broadcasting to ConsoleUI: {ex.Message}");
+                    }
+                });
+            }
+        }
+        
+        /// <summary>
+        /// Sends a targeted registration message directly to a specific service ID
+        /// </summary>
+        /// <param name="targetServiceId">The ID of the service to send registration to</param>
+        private void SendTargetedRegistrationTo(string targetServiceId)
+        {
+            try
+            {
+                Console.WriteLine($"Sending targeted registration to service ID: {targetServiceId}");
+                
+                // Create registration payload
+                var payload = new ServiceRegistrationPayload
+                {
+                    ServiceId = _serviceId,
+                    ServiceName = _serviceName,
+                    ServiceType = ServiceConstants.ServiceTypes.GameEngine,
+                    Endpoint = $"tcp://127.0.0.1:{_publisherPort}",
+                    Capabilities = GetServiceCapabilities()
+                };
+                
+                // Create and send the message
+                var registrationMessage = Message.Create(MessageType.ServiceRegistration, payload);
+                registrationMessage.SenderId = _serviceId;
+                registrationMessage.ReceiverId = targetServiceId;
+                registrationMessage.MessageId = Guid.NewGuid().ToString();
+                
+                // Log the attempt for debugging
+                Console.WriteLine($"====> [GameEngine {_serviceId}] Sending DIRECT registration to {targetServiceId}");
+                
+                // Send the message directly to the target
+                SendTo(registrationMessage, targetServiceId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending targeted registration: {ex.Message}");
             }
         }
         
@@ -324,6 +412,23 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
             
             if (messageObj is Message message)
             {
+                // Specially handle discovery messages to respond aggressively
+                if (message.Type == MessageType.ServiceDiscovery)
+                {
+                    Console.WriteLine($"Received service discovery message from {message.SenderId}");
+                    
+                    // Send a targeted registration directly to the requesting service
+                    if (!string.IsNullOrEmpty(message.SenderId))
+                    {
+                        Console.WriteLine($"Responding with targeted registration to {message.SenderId}");
+                        SendTargetedRegistrationTo(message.SenderId);
+                    }
+                    
+                    // Also broadcast our registration for anyone else who might be listening
+                    Console.WriteLine("Also broadcasting general registration");
+                    PublishServiceRegistration();
+                }
+                
                 await HandleMessageInternalAsync(message);
             }
             else
@@ -337,6 +442,12 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
             
             switch (message.Type)
             {
+                case MessageType.ServiceDiscovery:
+                    // Already handled in HandleMessageAsync, but we'll provide extra logging here
+                    Console.WriteLine($"Processing service discovery message from {message.SenderId} in HandleMessageInternalAsync");
+                    // No need to do additional processing as the main handler already sent registrations
+                    break;
+                    
                 case MessageType.StartGame:
                     var playerNames = message.GetPayload<string[]>();
                     if (playerNames != null && playerNames.Length >= 2)

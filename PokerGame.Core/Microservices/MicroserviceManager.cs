@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using PokerGame.Core.ServiceManagement;
 
 namespace PokerGame.Core.Microservices
 {
@@ -11,39 +12,40 @@ namespace PokerGame.Core.Microservices
     {
         private readonly List<MicroserviceBase> _services = new List<MicroserviceBase>();
         
-        // Base port allocations - will be offset with a random value to avoid conflicts
+        // Port configurations using constants for consistency
         private int GameEnginePublisherPort;
         private int GameEngineSubscriberPort;
         private int ConsoleUIPublisherPort;
-        private int ConsoleUISubscriberPort; // Same as GameEngine's publisher for subscription
+        private int ConsoleUISubscriberPort;
         private int CardDeckPublisherPort;
-        private int CardDeckSubscriberPort; // This should connect to the game engine's publisher port
+        private int CardDeckSubscriberPort;
+        private int _portOffset;
         
         // Initialize with provided or random port offset to avoid conflicts when restarting
         private void InitializePorts(int providedOffset = -1)
         {
-            int offset;
-            
+            // Store the port offset for later reference
             if (providedOffset >= 0)
             {
                 // Use the provided offset
-                offset = providedOffset;
-                Console.WriteLine($"Using provided port offset: {offset}");
+                _portOffset = providedOffset;
+                Console.WriteLine($"Using provided port offset: {_portOffset}");
             }
             else
             {
                 // Generate a random offset between 0-100 to avoid port conflicts on restart
                 Random random = new Random();
-                offset = random.Next(0, 100);
-                Console.WriteLine($"Using random port offset: {offset}");
+                _portOffset = random.Next(0, 100);
+                Console.WriteLine($"Using random port offset: {_portOffset}");
             }
             
-            GameEnginePublisherPort = 25556 + offset;
-            GameEngineSubscriberPort = 25557 + offset;
-            ConsoleUIPublisherPort = 25558 + offset;
-            ConsoleUISubscriberPort = GameEnginePublisherPort; // Connect to Game Engine's publisher port
-            CardDeckPublisherPort = 25559 + offset;
-            CardDeckSubscriberPort = GameEnginePublisherPort; // Connect to Game Engine's publisher port
+            // Use the ServiceConstants to calculate consistent port numbers
+            GameEnginePublisherPort = ServiceConstants.Ports.GetGameEnginePublisherPort(_portOffset);
+            GameEngineSubscriberPort = ServiceConstants.Ports.GetGameEngineSubscriberPort(_portOffset);
+            ConsoleUIPublisherPort = ServiceConstants.Ports.GetConsoleUIPublisherPort(_portOffset);
+            ConsoleUISubscriberPort = ServiceConstants.Ports.GetConsoleUISubscriberPort(_portOffset);
+            CardDeckPublisherPort = ServiceConstants.Ports.GetCardDeckPublisherPort(_portOffset);
+            CardDeckSubscriberPort = ServiceConstants.Ports.GetCardDeckSubscriberPort(_portOffset);
             
             // Debug port configuration
             Console.WriteLine($"====> PORT CONFIG: GameEngine Publisher: {GameEnginePublisherPort}, Subscriber: {GameEngineSubscriberPort}");

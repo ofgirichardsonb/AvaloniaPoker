@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using PokerGame.Core.Microservices;
 using PokerGame.Core.Messaging;
+using PokerGame.Core.ServiceManagement;
 
 namespace PokerGame.Services
 {

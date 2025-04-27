@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using PokerGame.Core.Game;
 using PokerGame.Core.Models;
+using PokerGame.Core.ServiceManagement;
 
 namespace PokerGame.Core.Microservices
 {
@@ -43,7 +44,7 @@ namespace PokerGame.Core.Microservices
         /// <param name="useCurses">Whether to use the curses UI (preferred flag name, same as enhanced UI)</param>
         /// <param name="autoPlay">Whether to auto-play for non-interactive testing</param>
         public ConsoleUIService(int publisherPort, int subscriberPort, bool useCurses = false, bool autoPlay = false) 
-            : base("PlayerUI", "Console UI", publisherPort, subscriberPort)
+            : base(ServiceConstants.ServiceTypes.ConsoleUI, "Console UI", publisherPort, subscriberPort)
         {
             _useEnhancedUI = useCurses; // Note: the flag is called "curses" but internally still referred to as "enhanced" 
             _autoPlayMode = autoPlay;
@@ -127,6 +128,106 @@ namespace PokerGame.Core.Microservices
         }
         
         /// <summary>
+        /// Starts the console UI service asynchronously with improved service discovery
+        /// </summary>
+        public override async Task StartAsync()
+        {
+            await base.StartAsync();
+            
+            Console.WriteLine("ConsoleUIService.StartAsync started - setting up enhanced service discovery");
+            
+            // Register to the broker more aggressively
+            for (int i = 0; i < 5; i++)
+            {
+                Console.WriteLine($"Publishing service registration (attempt {i+1}/5)...");
+                PublishServiceRegistration();
+                await Task.Delay(200);
+            }
+            
+            // Start active discovery process in the background
+            _ = Task.Run(ActiveServiceDiscoveryAsync);
+        }
+        
+        /// <summary>
+        /// Actively discovers services by repeatedly sending discovery messages
+        /// </summary>
+        private async Task ActiveServiceDiscoveryAsync()
+        {
+            // Wait for the game engine to be available with active discovery
+            int waitAttempts = 0;
+            int maxWaitAttempts = ServiceConstants.Discovery.MaxServiceDiscoveryAttempts;
+            int attemptDelayMs = ServiceConstants.Discovery.ServiceDiscoveryDelayMs;
+            int broadcastInterval = ServiceConstants.Discovery.ServiceDiscoveryBroadcastInterval;
+            
+            Console.WriteLine($"Starting ACTIVE game engine discovery process (max attempts: {maxWaitAttempts}, delay: {attemptDelayMs}ms)");
+            
+            while (_gameEngineServiceId == null && waitAttempts < maxWaitAttempts)
+            {
+                waitAttempts++;
+                Console.WriteLine($"Actively searching for game engine... (attempt {waitAttempts}/{maxWaitAttempts})");
+                
+                // First, search for existing GameEngine services
+                var gameEngineSvcIds = GetServicesOfType(ServiceConstants.ServiceTypes.GameEngine);
+                
+                if (gameEngineSvcIds.Count > 0)
+                {
+                    _gameEngineServiceId = gameEngineSvcIds[0];
+                    Console.WriteLine($"!!! Found game engine service with ID: {_gameEngineServiceId} !!!");
+                    break;
+                }
+                
+                // Send a service discovery message periodically
+                if (waitAttempts % broadcastInterval == 0) 
+                {
+                    Console.WriteLine("Sending ACTIVE service discovery broadcast...");
+                    
+                    // First, publish our own registration to make sure others know about us
+                    PublishServiceRegistration();
+                    
+                    // Then send a discovery message with our sender ID explicitly set
+                    var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
+                    discoveryMsg.SenderId = _serviceId;
+                    Broadcast(discoveryMsg);
+                    
+                    // Also try a backup direct registration message
+                    var backupRegPayload = new ServiceRegistrationPayload
+                    {
+                        ServiceId = _serviceId,
+                        ServiceName = _serviceName,
+                        ServiceType = _serviceType,
+                        Endpoint = $"tcp://127.0.0.1:{_publisherPort}",
+                        Capabilities = GetServiceCapabilities()
+                    };
+                    
+                    var backupRegMsg = Message.Create(MessageType.ServiceRegistration, backupRegPayload);
+                    backupRegMsg.SenderId = _serviceId;
+                    Broadcast(backupRegMsg);
+                }
+                
+                await Task.Delay(attemptDelayMs);
+            }
+            
+            // Check if we found the game engine
+            if (_gameEngineServiceId == null)
+            {
+                Console.WriteLine("ERROR: Could not find game engine service through active discovery.");
+                Console.WriteLine("Using dummy game engine service ID as fallback.");
+                _gameEngineServiceId = "GAME_ENGINE_DEFAULT_ID";
+            }
+            else
+            {
+                Console.WriteLine($"Successfully connected to game engine service: {_gameEngineServiceId}");
+                
+                // Get information about the game engine service
+                Console.WriteLine("Available services through active discovery:");
+                foreach (var entry in GetServiceTypes())
+                {
+                    Console.WriteLine($"- {entry.Key}: {entry.Value}");
+                }
+            }
+        }
+        
+        /// <summary>
         /// Called when a new service is registered
         /// </summary>
         /// <param name="registrationInfo">The service registration information</param>
@@ -135,7 +236,7 @@ namespace PokerGame.Core.Microservices
             try
             {
                 // Keep track of the game engine service
-                if (registrationInfo.ServiceType == "GameEngine")
+                if (registrationInfo.ServiceType == ServiceConstants.ServiceTypes.GameEngine)
                 {
                     _gameEngineServiceId = registrationInfo.ServiceId;
                     Console.WriteLine($"Connected to game engine service: {registrationInfo.ServiceName} (ID: {registrationInfo.ServiceId})");
@@ -146,7 +247,18 @@ namespace PokerGame.Core.Microservices
                     {
                         Console.WriteLine($"- {entry.Key}: {entry.Value}");
                     }
+                    
+                    // Log additional discovery information
+                    Console.WriteLine("Game Engine service found - no longer need to wait for it");
                 }
+                else
+                {
+                    // Print information about other service types too
+                    Console.WriteLine($"Service registered: {registrationInfo.ServiceName} (Type: {registrationInfo.ServiceType}, ID: {registrationInfo.ServiceId})");
+                }
+                
+                // Perform an additional broadcast now that we have services registered
+                PublishServiceRegistration();
             }
             catch (Exception ex)
             {
@@ -163,7 +275,12 @@ namespace PokerGame.Core.Microservices
             // This is a debug helper method to see what services are available
             Dictionary<string, string> result = new Dictionary<string, string>();
             
-            foreach (var serviceType in new[] { "GameEngine", "PlayerUI" })
+            // Use constants for service types for consistency
+            foreach (var serviceType in new[] { 
+                ServiceConstants.ServiceTypes.GameEngine, 
+                ServiceConstants.ServiceTypes.ConsoleUI,
+                ServiceConstants.ServiceTypes.CardDeck 
+            })
             {
                 var serviceIds = GetServicesOfType(serviceType);
                 foreach (var id in serviceIds)
@@ -420,7 +537,11 @@ namespace PokerGame.Core.Microservices
             
             // Wait for the game engine to be available with active discovery
             int waitAttempts = 0;
-            int maxWaitAttempts = 30; // 30 seconds max wait time
+            int maxWaitAttempts = ServiceConstants.Discovery.MaxServiceDiscoveryAttempts;
+            int attemptDelayMs = ServiceConstants.Discovery.ServiceDiscoveryDelayMs;
+            int broadcastInterval = ServiceConstants.Discovery.ServiceDiscoveryBroadcastInterval;
+            
+            Console.WriteLine($"Starting game engine discovery process (max attempts: {maxWaitAttempts}, delay: {attemptDelayMs}ms)");
             
             while (_gameEngineServiceId == null && waitAttempts < maxWaitAttempts)
             {
@@ -428,7 +549,7 @@ namespace PokerGame.Core.Microservices
                 Console.WriteLine($"Waiting for game engine to start... (attempt {waitAttempts}/{maxWaitAttempts})");
                 
                 // Actively search for game engine services
-                var gameEngineSvcIds = GetServicesOfType("GameEngine");
+                var gameEngineSvcIds = GetServicesOfType(ServiceConstants.ServiceTypes.GameEngine);
                 if (gameEngineSvcIds.Count > 0)
                 {
                     _gameEngineServiceId = gameEngineSvcIds[0];
@@ -437,15 +558,19 @@ namespace PokerGame.Core.Microservices
                 }
                 
                 // Send a service discovery message to find the game engine
-                if (waitAttempts % 5 == 0) // Every 5 seconds
+                if (waitAttempts % broadcastInterval == 0) 
                 {
                     Console.WriteLine("Sending service discovery broadcast...");
+                    // First, publish our own registration to make sure others know about us
+                    PublishServiceRegistration();
+                    
+                    // Then send a direct discovery message
                     var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
                     discoveryMsg.SenderId = _serviceId;
                     Broadcast(discoveryMsg);
                 }
                 
-                await Task.Delay(1000);
+                await Task.Delay(attemptDelayMs);
             }
             
             // Check if we found the game engine

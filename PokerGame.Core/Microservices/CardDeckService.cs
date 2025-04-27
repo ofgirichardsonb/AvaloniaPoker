@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using PokerGame.Core.Models;
+using PokerGame.Core.ServiceManagement;
 using NetMQ;
 using NetMQ.Sockets;
 
@@ -30,9 +31,11 @@ namespace PokerGame.Core.Microservices
         public CardDeckService(
             Messaging.ExecutionContext executionContext,
             bool useEmergencyDeckMode = false)
-            : base("CardDeck", "Card Deck Service", executionContext)
+            : base(ServiceConstants.ServiceTypes.CardDeck, "Card Deck Service", executionContext)
         {
             _useEmergencyDeckMode = useEmergencyDeckMode;
+            
+            Console.WriteLine($"CardDeckService created with execution context using service type: {ServiceConstants.ServiceTypes.CardDeck}");
             
             if (_useEmergencyDeckMode)
             {
@@ -50,7 +53,7 @@ namespace PokerGame.Core.Microservices
             int publisherPort = DefaultPublisherPort,
             int subscriberPort = DefaultSubscriberPort,
             bool useEmergencyDeckMode = false)
-            : base("CardDeck", "Card Deck Service", publisherPort, subscriberPort)
+            : base(ServiceConstants.ServiceTypes.CardDeck, "Card Deck Service", publisherPort, subscriberPort)
         {
             _useEmergencyDeckMode = useEmergencyDeckMode;
         }
@@ -157,7 +160,7 @@ namespace PokerGame.Core.Microservices
                 { 
                     ServiceId = _serviceId,
                     ServiceName = "Card Deck Service",
-                    ServiceType = "CardDeck",
+                    ServiceType = ServiceConstants.ServiceTypes.CardDeck,
                     Capabilities = new List<string> { "DeckCreate", "DeckShuffle", "DeckDeal", "DeckStatus" }
                 });
             
