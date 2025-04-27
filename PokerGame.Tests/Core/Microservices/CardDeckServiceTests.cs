@@ -19,10 +19,9 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
             
             // Act
-            var service = new CardDeckService(executionContext, mockBroker.Object);
+            var service = new CardDeckService(executionContext);
             
             // Assert
             service.Should().NotBeNull();
@@ -33,8 +32,7 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
-            var service = new CardDeckService(executionContext, mockBroker.Object);
+            var service = new CardDeckService(executionContext);
             
             // Act
             var deck = service.CreateDeck();
@@ -59,8 +57,7 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
-            var service = new CardDeckService(executionContext, mockBroker.Object);
+            var service = new CardDeckService(executionContext);
             var deck = service.CreateDeck();
             
             // Copy original deck for comparison
@@ -96,8 +93,7 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
-            var service = new CardDeckService(executionContext, mockBroker.Object);
+            var service = new CardDeckService(executionContext);
             var deck = service.CreateDeck();
             var expectedCard = deck[0]; // Top card
             var initialCount = deck.Count;
@@ -117,8 +113,7 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
-            var service = new CardDeckService(executionContext, mockBroker.Object);
+            var service = new CardDeckService(executionContext);
             var emptyDeck = new List<Card>();
             
             // Act
@@ -133,8 +128,7 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
-            var service = new CardDeckService(executionContext, mockBroker.Object);
+            var service = new CardDeckService(executionContext);
             var deck = service.CreateDeck();
             int numberOfCards = 5;
             var expectedCards = new List<Card>();
@@ -167,8 +161,7 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
-            var service = new CardDeckService(executionContext, mockBroker.Object);
+            var service = new CardDeckService(executionContext);
             var smallDeck = new List<Card>
             {
                 new Card(Suit.Hearts, Rank.Ace),

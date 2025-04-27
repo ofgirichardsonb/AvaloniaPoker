@@ -19,10 +19,9 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
             
             // Act
-            var service = new GameEngineService(executionContext, mockBroker.Object);
+            var service = new GameEngineService(executionContext);
             
             // Assert
             service.Should().NotBeNull();
@@ -33,8 +32,7 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
-            var service = new GameEngineService(executionContext, mockBroker.Object);
+            var service = new GameEngineService(executionContext);
             string playerId = "player1";
             string playerName = "Test Player";
             
@@ -57,8 +55,7 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
-            var service = new GameEngineService(executionContext, mockBroker.Object);
+            var service = new GameEngineService(executionContext);
             string playerId = "player1";
             string playerName = "Test Player";
             
@@ -81,8 +78,7 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
-            var service = new GameEngineService(executionContext, mockBroker.Object);
+            var service = new GameEngineService(executionContext);
             
             // Add some players
             service.AddPlayer("player1", "Player One");
@@ -101,8 +97,7 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
-            var service = new GameEngineService(executionContext, mockBroker.Object);
+            var service = new GameEngineService(executionContext);
             string playerId = "player1";
             string playerName = "Test Player";
             
@@ -123,8 +118,7 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
-            var service = new GameEngineService(executionContext, mockBroker.Object);
+            var service = new GameEngineService(executionContext);
             
             // Act
             var player = service.GetPlayerById("non-existing-player");
