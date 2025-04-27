@@ -45,9 +45,21 @@ jobs:
 
       - name: Add Azure DevOps remote
         run: |
-          git remote add azure "https://${{ secrets.AZURE_DEVOPS_EXT_PAT }}@dev.azure.com/ofgi/Architecture%20Lab/_git/AvaloniaPoker"
-          git fetch azure
+          git remote add ado "https://${{ secrets.AZURE_DEVOPS_EXT_PAT }}@dev.azure.com/ofgi/Architecture%20Lab/_git/AvaloniaPoker"
+          git fetch ado
+
+      - name: Debug Git Status
+        run: |
+          echo "Current branch: $(git branch --show-current)"
+          echo "Remote info:"
+          git remote -v
+          echo "Git status:"
+          git status
+          echo "Git log:"
+          git log --oneline -n 5
+          echo "Remote refs:"
+          git ls-remote ado
 
       - name: Push changes to Azure DevOps
         run: |
-          git push azure $branchName || echo "Git push failed"
+          git push ado $branchName || echo "Git push failed"
