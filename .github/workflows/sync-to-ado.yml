@@ -75,5 +75,3 @@ jobs:
             echo "Branch update failed!"
             exit 1
           fi
->>>>>>> 4e1d5ff (Fix ADO branch creation)
-
