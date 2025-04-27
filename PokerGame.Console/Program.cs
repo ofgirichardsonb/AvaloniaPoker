@@ -24,7 +24,8 @@ namespace PokerGame.Console
                 // Note: Enhanced UI and Curses UI are the same thing, just different terminology
                 bool useEnhancedUi = Array.Exists(args, arg => 
                     arg.Equals("--curses", StringComparison.OrdinalIgnoreCase) || 
-                    arg.Equals("-c", StringComparison.OrdinalIgnoreCase));
+                    arg.Equals("-c", StringComparison.OrdinalIgnoreCase) ||
+                    arg.Equals("--enhanced-ui", StringComparison.OrdinalIgnoreCase)); // For backward compatibility
                 
                 // Check for emergency deck flag - kept for compatibility but ignored
                 bool useEmergencyDeck = Array.Exists(args, arg => 
