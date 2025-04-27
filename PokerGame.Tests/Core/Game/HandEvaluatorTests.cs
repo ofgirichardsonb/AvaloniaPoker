@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
-using PokerGame.Abstractions.Models;
+using PokerGame.Abstractions;
 using PokerGame.Core.Game;
 using Xunit;
 using FluentAssertions;
+using PokerGame.Core.Models;
 
 namespace PokerGame.Tests.Core.Game
 {
@@ -15,11 +16,11 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             var cards = new List<Card>
             {
-                new Card(Suit.Hearts, Rank.Ten),
-                new Card(Suit.Hearts, Rank.Jack),
-                new Card(Suit.Hearts, Rank.Queen),
-                new Card(Suit.Hearts, Rank.King),
-                new Card(Suit.Hearts, Rank.Ace)
+                new Card(Rank.Ten, Suit.Hearts),
+                new Card(Rank.Jack, Suit.Hearts),
+                new Card(Rank.Queen, Suit.Hearts),
+                new Card(Rank.King, Suit.Hearts),
+                new Card(Rank.Ace, Suit.Hearts)
             };
             
             // Act
@@ -37,11 +38,11 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             var cards = new List<Card>
             {
-                new Card(Suit.Clubs, Rank.Six),
-                new Card(Suit.Clubs, Rank.Seven),
-                new Card(Suit.Clubs, Rank.Eight),
-                new Card(Suit.Clubs, Rank.Nine),
-                new Card(Suit.Clubs, Rank.Ten)
+                new Card(Rank.Six, Suit.Clubs),
+                new Card(Rank.Seven, Suit.Clubs),
+                new Card(Rank.Eight, Suit.Clubs),
+                new Card(Rank.Nine, Suit.Clubs),
+                new Card(Rank.Ten, Suit.Clubs)
             };
             
             // Act
@@ -59,11 +60,11 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             var cards = new List<Card>
             {
-                new Card(Suit.Hearts, Rank.Eight),
-                new Card(Suit.Diamonds, Rank.Eight),
-                new Card(Suit.Clubs, Rank.Eight),
-                new Card(Suit.Spades, Rank.Eight),
-                new Card(Suit.Hearts, Rank.King)
+                new Card(Rank.Eight, Suit.Hearts),
+                new Card(Rank.Eight, Suit.Diamonds),
+                new Card(Rank.Eight, Suit.Clubs),
+                new Card(Rank.Eight, Suit.Spades),
+                new Card(Rank.King, Suit.Hearts)
             };
             
             // Act
@@ -81,11 +82,11 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             var cards = new List<Card>
             {
-                new Card(Suit.Hearts, Rank.Nine),
-                new Card(Suit.Diamonds, Rank.Nine),
-                new Card(Suit.Clubs, Rank.Nine),
-                new Card(Suit.Hearts, Rank.Two),
-                new Card(Suit.Diamonds, Rank.Two)
+                new Card(Rank.Nine, Suit.Hearts),
+                new Card(Rank.Nine, Suit.Diamonds),
+                new Card(Rank.Nine, Suit.Clubs),
+                new Card(Rank.Two, Suit.Hearts),
+                new Card(Rank.Two, Suit.Diamonds)
             };
             
             // Act
@@ -105,11 +106,11 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             var cards = new List<Card>
             {
-                new Card(Suit.Spades, Rank.Two),
-                new Card(Suit.Spades, Rank.Five),
-                new Card(Suit.Spades, Rank.Seven),
-                new Card(Suit.Spades, Rank.Ten),
-                new Card(Suit.Spades, Rank.Queen)
+                new Card(Rank.Two, Suit.Spades),
+                new Card(Rank.Five, Suit.Spades),
+                new Card(Rank.Seven, Suit.Spades),
+                new Card(Rank.Ten, Suit.Spades),
+                new Card(Rank.Queen, Suit.Spades)
             };
             
             // Act
@@ -127,11 +128,11 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             var cards = new List<Card>
             {
-                new Card(Suit.Hearts, Rank.Four),
-                new Card(Suit.Diamonds, Rank.Five),
-                new Card(Suit.Clubs, Rank.Six),
-                new Card(Suit.Spades, Rank.Seven),
-                new Card(Suit.Hearts, Rank.Eight)
+                new Card(Rank.Four, Suit.Hearts),
+                new Card(Rank.Five, Suit.Diamonds),
+                new Card(Rank.Six, Suit.Clubs),
+                new Card(Rank.Seven, Suit.Spades),
+                new Card(Rank.Eight, Suit.Hearts)
             };
             
             // Act
@@ -149,11 +150,11 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             var cards = new List<Card>
             {
-                new Card(Suit.Hearts, Rank.Jack),
-                new Card(Suit.Diamonds, Rank.Jack),
-                new Card(Suit.Clubs, Rank.Jack),
-                new Card(Suit.Spades, Rank.Three),
-                new Card(Suit.Hearts, Rank.Nine)
+                new Card(Rank.Jack, Suit.Hearts),
+                new Card(Rank.Jack, Suit.Diamonds),
+                new Card(Rank.Jack, Suit.Clubs),
+                new Card(Rank.Three, Suit.Spades),
+                new Card(Rank.Nine, Suit.Hearts)
             };
             
             // Act
@@ -171,11 +172,11 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             var cards = new List<Card>
             {
-                new Card(Suit.Hearts, Rank.Queen),
-                new Card(Suit.Diamonds, Rank.Queen),
-                new Card(Suit.Clubs, Rank.Four),
-                new Card(Suit.Spades, Rank.Four),
-                new Card(Suit.Hearts, Rank.Ace)
+                new Card(Rank.Queen, Suit.Hearts),
+                new Card(Rank.Queen, Suit.Diamonds),
+                new Card(Rank.Four, Suit.Clubs),
+                new Card(Rank.Four, Suit.Spades),
+                new Card(Rank.Ace, Suit.Hearts)
             };
             
             // Act
@@ -195,11 +196,11 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             var cards = new List<Card>
             {
-                new Card(Suit.Hearts, Rank.Ten),
-                new Card(Suit.Diamonds, Rank.Ten),
-                new Card(Suit.Clubs, Rank.Five),
-                new Card(Suit.Spades, Rank.Seven),
-                new Card(Suit.Hearts, Rank.King)
+                new Card(Rank.Ten, Suit.Hearts),
+                new Card(Rank.Ten, Suit.Diamonds),
+                new Card(Rank.Five, Suit.Clubs),
+                new Card(Rank.Seven, Suit.Spades),
+                new Card(Rank.King, Suit.Hearts)
             };
             
             // Act
@@ -217,11 +218,11 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             var cards = new List<Card>
             {
-                new Card(Suit.Hearts, Rank.Two),
-                new Card(Suit.Diamonds, Rank.Five),
-                new Card(Suit.Clubs, Rank.Seven),
-                new Card(Suit.Spades, Rank.Ten),
-                new Card(Suit.Hearts, Rank.Ace)
+                new Card(Rank.Two, Suit.Hearts),
+                new Card(Rank.Five, Suit.Diamonds),
+                new Card(Rank.Seven, Suit.Clubs),
+                new Card(Rank.Ten, Suit.Spades),
+                new Card(Rank.Ace, Suit.Hearts)
             };
             
             // Act
@@ -239,10 +240,10 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             var cards = new List<Card>
             {
-                new Card(Suit.Hearts, Rank.Two),
-                new Card(Suit.Diamonds, Rank.Five),
-                new Card(Suit.Clubs, Rank.Seven),
-                new Card(Suit.Spades, Rank.Ten)
+                new Card(Rank.Two, Suit.Hearts),
+                new Card(Rank.Five, Suit.Diamonds),
+                new Card(Rank.Seven, Suit.Clubs),
+                new Card(Rank.Ten, Suit.Spades)
             };
             
             // Act & Assert
@@ -257,20 +258,20 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             var straightFlushCards = new List<Card>
             {
-                new Card(Suit.Clubs, Rank.Six),
-                new Card(Suit.Clubs, Rank.Seven),
-                new Card(Suit.Clubs, Rank.Eight),
-                new Card(Suit.Clubs, Rank.Nine),
-                new Card(Suit.Clubs, Rank.Ten)
+                new Card(Rank.Six, Suit.Clubs),
+                new Card(Rank.Seven, Suit.Clubs),
+                new Card(Rank.Eight, Suit.Clubs),
+                new Card(Rank.Nine, Suit.Clubs),
+                new Card(Rank.Ten, Suit.Clubs)
             };
             
             var fourOfAKindCards = new List<Card>
             {
-                new Card(Suit.Hearts, Rank.Eight),
-                new Card(Suit.Diamonds, Rank.Eight),
-                new Card(Suit.Clubs, Rank.Eight),
-                new Card(Suit.Spades, Rank.Eight),
-                new Card(Suit.Hearts, Rank.King)
+                new Card(Rank.Eight, Suit.Hearts),
+                new Card(Rank.Eight, Suit.Diamonds),
+                new Card(Rank.Eight, Suit.Clubs),
+                new Card(Rank.Eight, Suit.Spades),
+                new Card(Rank.King, Suit.Hearts)
             };
             
             // Act
@@ -290,20 +291,20 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             var pairOfKingsCards = new List<Card>
             {
-                new Card(Suit.Hearts, Rank.King),
-                new Card(Suit.Diamonds, Rank.King),
-                new Card(Suit.Clubs, Rank.Five),
-                new Card(Suit.Spades, Rank.Seven),
-                new Card(Suit.Hearts, Rank.Ten)
+                new Card(Rank.King, Suit.Hearts),
+                new Card(Rank.King, Suit.Diamonds),
+                new Card(Rank.Five, Suit.Clubs),
+                new Card(Rank.Seven, Suit.Spades),
+                new Card(Rank.Ten, Suit.Hearts)
             };
             
             var pairOfQueensCards = new List<Card>
             {
-                new Card(Suit.Hearts, Rank.Queen),
-                new Card(Suit.Diamonds, Rank.Queen),
-                new Card(Suit.Clubs, Rank.Five),
-                new Card(Suit.Spades, Rank.Seven),
-                new Card(Suit.Hearts, Rank.Ace)
+                new Card(Rank.Queen, Suit.Hearts),
+                new Card(Rank.Queen, Suit.Diamonds),
+                new Card(Rank.Five, Suit.Clubs),
+                new Card(Rank.Seven, Suit.Spades),
+                new Card(Rank.Ace, Suit.Hearts)
             };
             
             // Act
@@ -324,15 +325,15 @@ namespace PokerGame.Tests.Core.Game
             var allCards = new List<Card>
             {
                 // Hole cards
-                new Card(Suit.Hearts, Rank.Ace),
-                new Card(Suit.Hearts, Rank.King),
+                new Card(Rank.Ace, Suit.Hearts),
+                new Card(Rank.King, Suit.Hearts),
                 
                 // Community cards
-                new Card(Suit.Hearts, Rank.Queen),
-                new Card(Suit.Hearts, Rank.Jack),
-                new Card(Suit.Hearts, Rank.Ten),
-                new Card(Suit.Diamonds, Rank.Nine),
-                new Card(Suit.Clubs, Rank.Eight)
+                new Card(Rank.Queen, Suit.Hearts),
+                new Card(Rank.Jack, Suit.Hearts),
+                new Card(Rank.Ten, Suit.Hearts),
+                new Card(Rank.Nine, Suit.Diamonds),
+                new Card(Rank.Eight, Suit.Clubs)
             };
             
             // Act

@@ -121,7 +121,7 @@ namespace MSA.Foundation.Tests.Telemetry
             var properties = new Dictionary<string, string> { { "PropertyKey", "PropertyValue" } };
             
             // Act
-            Action action = () => telemetryService.TrackTrace("Test trace message", properties);
+            Action action = () => telemetryService.TrackTrace("Test trace message", properties: properties);
             
             // Assert
             action.Should().NotThrow("TrackTrace with properties should not throw when telemetry is enabled");
