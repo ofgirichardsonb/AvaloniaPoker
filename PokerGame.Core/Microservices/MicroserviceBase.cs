@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NetMQ;
 using NetMQ.Sockets;
+using PokerGame.Core.ServiceManagement;
 
 namespace PokerGame.Core.Microservices
 {
