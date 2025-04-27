@@ -915,7 +915,10 @@ namespace PokerGame.Core.Microservices
         /// <returns>A list of found service IDs</returns>
         protected async Task<List<string>> DiscoverServicesWithRetryAsync(string serviceType, int maxAttempts = 10, int delayBetweenAttemptsMs = 300)
         {
-            Console.WriteLine($"Starting service discovery for {serviceType} with {maxAttempts} max attempts");
+            Console.WriteLine($"Starting ENHANCED service discovery for {serviceType} with {maxAttempts} max attempts");
+            
+            // Try all standard port offsets to find services
+            int[] portOffsets = ServiceConstants.Discovery.StandardPortOffsets;
             
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
@@ -923,23 +926,68 @@ namespace PokerGame.Core.Microservices
                 var serviceIds = GetServicesOfType(serviceType);
                 if (serviceIds.Count > 0)
                 {
-                    Console.WriteLine($"Found {serviceIds.Count} {serviceType} services on attempt {attempt}/{maxAttempts}");
+                    Console.WriteLine($"==> Found {serviceIds.Count} {serviceType} services on attempt {attempt}/{maxAttempts}");
                     return serviceIds;
                 }
                 
-                // If we don't have any services registered, send a discovery message
-                if (attempt % 2 == 1) // Send discovery message on odd-numbered attempts
+                // Send discovery message on every attempt for more aggressive discovery
+                Console.WriteLine($"Broadcasting service discovery message (attempt {attempt}/{maxAttempts})");
+                
+                // Send general service discovery first
+                var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
+                discoveryMsg.SenderId = _serviceId;
+                discoveryMsg.MessageId = Guid.NewGuid().ToString();
+                Console.WriteLine($"Broadcasting discovery message with ID {discoveryMsg.MessageId}");
+                Broadcast(discoveryMsg);
+                
+                // Then send our own registration in case other services are looking for us
+                PublishServiceRegistration();
+                
+                // On every 3rd attempt, try multi-port discovery to find services on different port offsets
+                if (attempt % 3 == 0)
                 {
-                    Console.WriteLine($"Broadcasting service discovery message (attempt {attempt}/{maxAttempts})");
+                    Console.WriteLine("*** ATTEMPTING MULTI-PORT DISCOVERY ***");
                     
-                    // Send general service discovery first
-                    var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
-                    discoveryMsg.SenderId = _serviceId;
-                    discoveryMsg.MessageId = Guid.NewGuid().ToString();
-                    Broadcast(discoveryMsg);
+                    foreach (int offset in portOffsets)
+                    {
+                        try
+                        {
+                            // For GameEngine service type, try different port combinations
+                            if (serviceType == ServiceConstants.ServiceTypes.GameEngine)
+                            {
+                                int potentialPort = ServiceConstants.Ports.GetGameEnginePublisherPort(offset);
+                                Console.WriteLine($"Trying to contact {serviceType} on port {potentialPort} (offset {offset})");
+                                
+                                // Create a targeted message for this offset with Debug type for visibility
+                                var debugMsg = Message.Create(MessageType.Debug,
+                                    $"{_serviceType} [{_serviceId}] multi-port discovery attempt for {serviceType} on offset {offset}");
+                                debugMsg.SenderId = _serviceId;
+                                debugMsg.MessageId = Guid.NewGuid().ToString();
+                                Broadcast(debugMsg);
+                                
+                                // Send additional discovery message specifically for this port
+                                var portSpecificMsg = Message.Create(MessageType.ServiceDiscovery);
+                                portSpecificMsg.SenderId = _serviceId;
+                                portSpecificMsg.MessageId = Guid.NewGuid().ToString();
+                                Broadcast(portSpecificMsg);
+                                
+                                // Wait briefly to avoid overwhelming the network
+                                await Task.Delay(50);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error in multi-port discovery for offset {offset}: {ex.Message}");
+                        }
+                    }
                     
-                    // Then send our own registration in case other services are looking for us
-                    PublishServiceRegistration();
+                    // Check again if we've found any services after the multi-port attempt
+                    serviceIds = GetServicesOfType(serviceType);
+                    if (serviceIds.Count > 0)
+                    {
+                        Console.WriteLine($"==> Found {serviceIds.Count} {serviceType} services after multi-port discovery");
+                        return serviceIds;
+                    }
                 }
                 
                 // Wait before the next attempt
