@@ -21,59 +21,59 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
+      - name: Sync to Azure DevOps
+        run: |
+          # Set variables
+          PAT="${{ secrets.AZURE_DEVOPS_EXT_PAT }}"
+          ORG="ofgi"
+          PROJECT="Architecture Lab"
+          REPO="AvaloniaPoker"
+          BRANCH="${{ github.ref_name }}"
+          SHA="${{ github.sha }}"
 
-        - name: Sync to Azure DevOps
-          run: |
-            # Set variables
-            PAT="${{ secrets.AZURE_DEVOPS_EXT_PAT }}"
-            ORG="ofgi"
-            PROJECT="Architecture Lab"
-            REPO="AvaloniaPoker"
-            BRANCH="${{ github.ref_name }}"
-            SHA="${{ github.sha }}"
+          # Debug info
+          echo "Branch: $BRANCH"
+          echo "SHA: $SHA"
 
-            # Debug info
-            echo "Branch: $BRANCH"
-            echo "SHA: $SHA"
+          # URL encode the project name
+          PROJECT_ENC=$(echo -n "$PROJECT" | perl -MURI::Escape -ne 'print uri_escape($_)')
 
-            # URL encode the project name
-            PROJECT_ENC=$(echo -n "$PROJECT" | perl -MURI::Escape -ne 'print uri_escape($_)')
+          # Check if branch exists
+          echo "Checking if branch exists..."
+          RESPONSE=$(curl -s -u ":$PAT" \
+            "https://dev.azure.com/$ORG/$PROJECT_ENC/_apis/git/repositories/$REPO/refs?filter=heads/$BRANCH&api-version=6.0")
 
-            # Check if branch exists
-            echo "Checking if branch exists..."
-            RESPONSE=$(curl -s -u ":$PAT" \
-              "https://dev.azure.com/$ORG/$PROJECT_ENC/_apis/git/repositories/$REPO/refs?filter=heads/$BRANCH&api-version=6.0")
+          echo "Response: $RESPONSE"
 
-            echo "Response: $RESPONSE"
+          # Extract old object ID, or use zeros if branch doesn't exist
+          OLD_OBJECT_ID=$(echo $RESPONSE | grep -o '"objectId":"[^"]*"' | head -1 | cut -d'"' -f4)
+          if [ -z "$OLD_OBJECT_ID" ]; then
+            OLD_OBJECT_ID="0000000000000000000000000000000000000000"
+            echo "Branch doesn't exist, using zeros for old object ID"
+          else
+            echo "Branch exists with object ID: $OLD_OBJECT_ID"
+          fi
 
-            # Extract old object ID, or use zeros if branch doesn't exist
-            OLD_OBJECT_ID=$(echo $RESPONSE | grep -o '"objectId":"[^"]*"' | head -1 | cut -d'"' -f4)
-            if [ -z "$OLD_OBJECT_ID" ]; then
-              OLD_OBJECT_ID="0000000000000000000000000000000000000000"
-              echo "Branch doesn't exist, using zeros for old object ID"
-            else
-              echo "Branch exists with object ID: $OLD_OBJECT_ID"
-            fi
+          # Create the JSON payload
+          JSON_PAYLOAD="{\"refUpdates\":[{\"name\":\"refs/heads/$BRANCH\",\"oldObjectId\":\"$OLD_OBJECT_ID\",\"newObjectId\":\"$SHA\"}]}"
 
-            # Create the JSON payload
-            JSON_PAYLOAD="{\"refUpdates\":[{\"name\":\"refs/heads/$BRANCH\",\"oldObjectId\":\"$OLD_OBJECT_ID\",\"newObjectId\":\"$SHA\"}]}"
+          echo "JSON payload: $JSON_PAYLOAD"
 
-            echo "JSON payload: $JSON_PAYLOAD"
+          # Make the API call
+          echo "Sending API request..."
+          RESPONSE=$(curl -s -X POST -u ":$PAT" \
+            -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD" \
+            "https://dev.azure.com/$ORG/$PROJECT_ENC/_apis/git/repositories/$REPO/pushes?api-version=6.0")
 
-            # Make the API call
-            echo "Sending API request..."
-            RESPONSE=$(curl -s -X POST -u ":$PAT" \
-              -H "Content-Type: application/json" \
-              -d "$JSON_PAYLOAD" \
-              "https://dev.azure.com/$ORG/$PROJECT_ENC/_apis/git/repositories/$REPO/pushes?api-version=6.0")
+          echo "API response: $RESPONSE"
 
-            echo "API response: $RESPONSE"
-
-            # Check for success
-            if echo $RESPONSE | grep -q "\"refName\":\"refs/heads/$BRANCH\""; then
-              echo "Branch update successful!"
-            else
-              echo "Branch update failed!"
-              exit 1
-            fi
+          # Check for success
+          if echo $RESPONSE | grep -q "\"refName\":\"refs/heads/$BRANCH\""; then
+            echo "Branch update successful!"
+          else
+            echo "Branch update failed!"
+            exit 1
+          fi
+>>>>>>> 4e1d5ff (Fix ADO branch creation)
 
