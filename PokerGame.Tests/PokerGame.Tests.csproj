@@ -27,7 +27,6 @@
   <ItemGroup>
     <ProjectReference Include="..\PokerGame.Core\PokerGame.Core.csproj" />
     <ProjectReference Include="..\PokerGame.Abstractions\PokerGame.Abstractions.csproj" />
-    <ProjectReference Include="..\PokerGame.Foundation\PokerGame.Foundation.csproj" />
     <ProjectReference Include="..\MSA.Foundation\MSA.Foundation.csproj" />
   </ItemGroup>
 
