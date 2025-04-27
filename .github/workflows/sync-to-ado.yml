@@ -59,7 +59,38 @@ jobs:
           git log --oneline -n 5
           echo "Remote refs:"
           git ls-remote ado
-
-      - name: Push changes to Azure DevOps
+          
+      - name: Use Azure DevOps API for Push
         run: |
-          git push ado $branchName || echo "Git push failed"
+          # Get the current commit SHA
+          CURRENT_SHA=$(git rev-parse HEAD)
+
+          # Get the ADO commit SHA
+          ADO_SHA=$(git ls-remote ado refs/heads/development | cut -f1)
+
+          # Create JSON payload for API request
+          json_payload=$(cat <<EOF
+          {
+            "refUpdates": [
+              {
+                "name": "refs/heads/development",
+                "oldObjectId": "$ADO_SHA",
+                "newObjectId": "$CURRENT_SHA"
+              }
+            ],
+            "commits": []
+          }
+          EOF
+          )
+
+          # Debug the payload
+          echo "JSON Payload:"
+          echo "$json_payload"
+
+          # Make API request
+          curl -X POST \
+            -H "Authorization: Basic ${{ secrets.ADO_PAT_BASE64 }}" \
+            -H "Content-Type: application/json" \
+            -d "$json_payload" \
+            "https://dev.azure.com/ofgi/Architecture%20Lab/_apis/git/repositories/AvaloniaPoker/pushes?api-version=6.0"
+
