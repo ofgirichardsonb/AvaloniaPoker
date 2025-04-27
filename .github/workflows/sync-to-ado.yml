@@ -30,17 +30,17 @@ jobs:
             pat="${{ secrets.AZURE_DEVOPS_EXT_PAT }}"
             echo $pat | az devops login
             branchName="${{ github.ref_name }}"
+            currentSHA=$(git rev-parse HEAD)
+            echo "Current SHA: $currentSHA"
             branchExists="$(az repos ref list -r AvaloniaPoker --filter heads/$branchName | jq -r '.[].objectId')"
-            echo "here"
-            if [ -z $branchExists ]; then
-              echo -n "Branch $branchName does not exist, creating it..."
-              objectId="$(az repos ref list -r AvaloniaPoker --filter heads/main | jq -r '.[] | .objectId')"
-              if [ -z $objectId]; then
-                echo "No main branch found!"
-                exit 1
-              fi
-              az repos ref create --name "heads/$branchName" -r AvaloniaPoker --object-id $objectId
-              echo "created"
+            if [ -z "$branchExists" ]; then
+              echo "Branch $branchName does not exist, creating it with current SHA..."
+              az repos ref create --name "heads/$branchName" -r AvaloniaPoker --object-id $currentSHA
+              echo "Branch created pointing to current commit"
+            else
+              echo "Branch $branchName already exists, updating it..."
+              az repos ref update --name "heads/$branchName" -r AvaloniaPoker --object-id $currentSHA --old-object-id $branchExists
+              echo "Branch updated"
             fi
 
       - name: Add Azure DevOps remote
@@ -60,37 +60,7 @@ jobs:
           echo "Remote refs:"
           git ls-remote ado
           
-      - name: Use Azure DevOps API for Push
+      - name: Push to Azure DevOps
         run: |
-          # Get the current commit SHA
-          CURRENT_SHA=$(git rev-parse HEAD)
-
-          # Get the ADO commit SHA
-          ADO_SHA=$(git ls-remote ado refs/heads/development | cut -f1)
-
-          # Create JSON payload for API request
-          json_payload=$(cat <<EOF
-          {
-            "refUpdates": [
-              {
-                "name": "refs/heads/development",
-                "oldObjectId": "$ADO_SHA",
-                "newObjectId": "$CURRENT_SHA"
-              }
-            ],
-            "commits": []
-          }
-          EOF
-          )
-
-          # Debug the payload
-          echo "JSON Payload:"
-          echo "$json_payload"
-
-          # Make API request
-          curl -X POST \
-            -H "Authorization: Basic ${{ secrets.ADO_PAT_BASE64 }}" \
-            -H "Content-Type: application/json" \
-            -d "$json_payload" \
-            "https://dev.azure.com/ofgi/Architecture%20Lab/_apis/git/repositories/AvaloniaPoker/pushes?api-version=6.0"
+          git push ado HEAD:refs/heads/${{ github.ref_name }}
 
