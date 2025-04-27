@@ -971,7 +971,7 @@ namespace PokerGame.Core.Microservices
         {
             base.Dispose();
             
-            // Dispose the enhanced UI if it exists and is IDisposable
+            // Dispose the curses UI if it exists and is IDisposable
             if (_enhancedUiInstance is IDisposable disposable)
             {
                 try
