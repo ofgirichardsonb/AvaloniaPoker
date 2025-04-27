@@ -151,6 +151,7 @@ namespace PokerGame.Launcher
             Console.WriteLine("  --port-offset, -p <value>   Port offset for services (required for start-client)");
             Console.WriteLine("  --verbose, -v               Enable verbose logging");
             Console.WriteLine("  --curses, -c                Use curses UI for console client");
+            Console.WriteLine("  --enhanced-ui               [DEPRECATED] Use --curses instead");
         }
 
         /// <summary>

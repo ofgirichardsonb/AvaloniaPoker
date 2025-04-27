@@ -31,8 +31,8 @@ namespace PokerGame.Core.Microservices
         private string? _gameEngineServiceId;
         private bool _waitingForPlayerAction = false;
         private string _activePlayerId = string.Empty;
-        private bool _useEnhancedUI; // When true, use the enhanced UI (formerly known as curses UI)
-        private object? _enhancedUiInstance; // Will hold a dynamic reference to CursesUI when needed
+        private bool _useEnhancedUI; // When true, use the curses UI (internal variable still called "enhanced" for backward compatibility)
+        private object? _enhancedUiInstance; // Will hold a dynamic reference to CursesUI when needed (internal var still named "enhanced" for compatibility)
         private bool _autoPlayMode = false; // Auto-play flag for automated testing
         
         /// <summary>
@@ -40,16 +40,16 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         /// <param name="publisherPort">The port to use for publishing messages</param>
         /// <param name="subscriberPort">The port to use for subscribing to messages</param>
-        /// <param name="useCurses">Whether to use the enhanced UI (curses)</param>
+        /// <param name="useCurses">Whether to use the curses UI (preferred flag name, same as enhanced UI)</param>
         /// <param name="autoPlay">Whether to auto-play for non-interactive testing</param>
         public ConsoleUIService(int publisherPort, int subscriberPort, bool useCurses = false, bool autoPlay = false) 
             : base("PlayerUI", "Console UI", publisherPort, subscriberPort)
         {
-            _useEnhancedUI = useCurses; // Enhanced UI is the same as curses UI
+            _useEnhancedUI = useCurses; // Note: the flag is called "curses" but internally still referred to as "enhanced" 
             _autoPlayMode = autoPlay;
-            Console.WriteLine($"ConsoleUIService created with enhanced UI: {_useEnhancedUI}, Auto-play: {_autoPlayMode}");
+            Console.WriteLine($"ConsoleUIService created with curses UI: {_useEnhancedUI}, Auto-play: {_autoPlayMode}");
             
-            // Defer initialization of the enhanced UI to the Start method
+            // Defer initialization of the curses UI to the Start method
             // This ensures proper sequencing with other microservices
         }
         
@@ -61,17 +61,17 @@ namespace PokerGame.Core.Microservices
             base.Start();
             
             // Log the current state of the UI flag
-            Console.WriteLine($"ConsoleUIService starting with enhanced UI flag: {_useEnhancedUI}");
+            Console.WriteLine($"ConsoleUIService starting with curses UI flag: {_useEnhancedUI}");
             
-            // Initialize enhanced UI if requested - doing this here ensures proper initialization order
+            // Initialize curses UI if requested - doing this here ensures proper initialization order
             if (_useEnhancedUI && _enhancedUiInstance == null)
             {
                 try
                 {
-                    Console.WriteLine("Initializing Enhanced UI in Start method...");
+                    Console.WriteLine("Initializing Curses UI in Start method...");
                     
                     // Use detailed diagnostics during initialization
-                    Console.WriteLine("Enhanced UI initialization process:");
+                    Console.WriteLine("Curses UI initialization process:");
                     Console.WriteLine("1. Looking for CursesUI type");
                     
                     // Create CursesUI instance via reflection to avoid direct dependency
@@ -82,7 +82,7 @@ namespace PokerGame.Core.Microservices
                     {
                         Console.WriteLine("2. Creating instance of CursesUI");
                         _enhancedUiInstance = Activator.CreateInstance(cursesUIType);
-                        Console.WriteLine("   Successfully created Enhanced Console UI instance");
+                        Console.WriteLine("   Successfully created Curses UI instance");
                         
                         // Call Initialize method
                         Console.WriteLine("3. Looking for Initialize method");
@@ -93,11 +93,11 @@ namespace PokerGame.Core.Microservices
                         {
                             Console.WriteLine("4. Calling Initialize method");
                             initMethod.Invoke(_enhancedUiInstance, null);
-                            Console.WriteLine("   Successfully initialized Enhanced Console UI");
+                            Console.WriteLine("   Successfully initialized Curses UI");
                             
                             // Force a Console.Clear() to clean the display after initialization
                             Console.Clear();
-                            Console.WriteLine("★★★ ENHANCED UI ACTIVE ★★★");
+                            Console.WriteLine("★★★ CURSES UI ACTIVE ★★★");
                         }
                         else
                         {
@@ -107,20 +107,20 @@ namespace PokerGame.Core.Microservices
                     }
                     else
                     {
-                        Console.WriteLine("   ERROR: Enhanced UI requested but CursesUI class not found");
+                        Console.WriteLine("   ERROR: Curses UI requested but CursesUI class not found");
                         _useEnhancedUI = false;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error initializing enhanced UI: {ex.Message}");
+                    Console.WriteLine($"Error initializing curses UI: {ex.Message}");
                     Console.WriteLine(ex.StackTrace);
                     _useEnhancedUI = false;
                 }
             }
             
-            // Provide clear indication whether enhanced UI is active
-            Console.WriteLine($"►► Console UI service using enhanced UI: {_useEnhancedUI} ◄◄");
+            // Provide clear indication whether curses UI is active
+            Console.WriteLine($"►► Console UI service using curses UI: {_useEnhancedUI} ◄◄");
             
             // Start the input processing task
             Task.Run(ProcessUserInputAsync);
@@ -375,8 +375,8 @@ namespace PokerGame.Core.Microservices
             
             // Create a more visible debug message about the UI mode
             Console.WriteLine("==== POKER GAME UI INITIALIZATION ====");
-            Console.WriteLine($"Enhanced UI flag: {_useEnhancedUI}");
-            Console.WriteLine($"Enhanced UI instance exists: {_enhancedUiInstance != null}");
+            Console.WriteLine($"Curses UI flag: {_useEnhancedUI}");
+            Console.WriteLine($"Curses UI instance exists: {_enhancedUiInstance != null}");
             Console.WriteLine("====================================");
             
             if (_useEnhancedUI)
@@ -404,7 +404,7 @@ namespace PokerGame.Core.Microservices
                 }
                 catch { }
                 
-                Console.WriteLine("Enhanced UI in microservices mode is ready!");
+                Console.WriteLine("Curses UI in microservices mode is ready!");
             }
             else
             {
@@ -414,7 +414,7 @@ namespace PokerGame.Core.Microservices
                 Console.WriteLine();
             }
             
-            // Force the enhanced UI to true to ensure box-drawing characters are used
+            // Force the curses UI to true to ensure box-drawing characters are used
             // This is a fallback in case the flag isn't properly passed from command line
             _useEnhancedUI = true;
             
@@ -553,8 +553,8 @@ namespace PokerGame.Core.Microservices
                 
             if (_useEnhancedUI)
             {
-                Console.WriteLine("[DEBUG] Using enhanced UI for game state display");
-                DisplayEnhancedGameState();
+                Console.WriteLine("[DEBUG] Using curses UI for game state display");
+                DisplayCursesGameState();
                 return;
             }
             else
@@ -595,9 +595,9 @@ namespace PokerGame.Core.Microservices
         }
         
         /// <summary>
-        /// Displays an enhanced game state using our enhanced console UI
+        /// Displays a game state using our curses console UI
         /// </summary>
-        private void DisplayEnhancedGameState()
+        private void DisplayCursesGameState()
         {
             if (_enhancedUiInstance != null && _latestGameState != null)
             {
@@ -608,7 +608,7 @@ namespace PokerGame.Core.Microservices
                     
                     // Display a fancy header at the top
                     Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
-                    Console.WriteLine("║        TEXAS HOLD'EM POKER (ENHANCED CONSOLE UI)        ║");
+                    Console.WriteLine("║        TEXAS HOLD'EM POKER (CURSES CONSOLE UI)          ║");
                     Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
                     Console.WriteLine();
                     
@@ -630,7 +630,7 @@ namespace PokerGame.Core.Microservices
                 catch (Exception ex)
                 {
                     // If anything fails, fall back to text UI
-                    Console.WriteLine($"Error in enhanced UI: {ex.Message}");
+                    Console.WriteLine($"Error in curses UI: {ex.Message}");
                     Console.WriteLine(ex.StackTrace);
                 }
             }
@@ -842,7 +842,7 @@ namespace PokerGame.Core.Microservices
             
             if (_useEnhancedUI)
             {
-                // Enhanced UI action prompt
+                // Curses UI action prompt
                 Console.WriteLine("\n╔═════════════════════════════════════════════════════════╗");
                 Console.WriteLine($"║  ★ {player.Name}'s turn ★                               ║");
                 Console.WriteLine("╠═════════════════════════════════════════════════════════╣");
@@ -965,7 +965,7 @@ namespace PokerGame.Core.Microservices
         }
         
         /// <summary>
-        /// Clean up resources and dispose the Enhanced UI if it was initialized
+        /// Clean up resources and dispose the Curses UI if it was initialized
         /// </summary>
         public override void Dispose()
         {
@@ -977,11 +977,11 @@ namespace PokerGame.Core.Microservices
                 try
                 {
                     disposable.Dispose();
-                    Console.WriteLine("Enhanced Console UI properly disposed");
+                    Console.WriteLine("Curses UI properly disposed");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error disposing Enhanced Console UI: {ex.Message}");
+                    Console.WriteLine($"Error disposing Curses UI: {ex.Message}");
                 }
                 _enhancedUiInstance = null;
             }

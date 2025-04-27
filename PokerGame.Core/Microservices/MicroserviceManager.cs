@@ -67,10 +67,11 @@ namespace PokerGame.Core.Microservices
         /// <param name="args">Command line arguments to pass UI configuration</param>
         public void StartMicroservices(string[]? args = null)
         {
-            // Check if enhanced UI should be used
+            // Check if curses UI should be used (--enhanced-ui flag is supported for backward compatibility)
             bool useCursesUi = args != null && Array.Exists(args, arg => 
                 arg.Equals("--curses", StringComparison.OrdinalIgnoreCase) || 
-                arg.Equals("-c", StringComparison.OrdinalIgnoreCase));
+                arg.Equals("-c", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("--enhanced-ui", StringComparison.OrdinalIgnoreCase)); // Deprecated but supported for backward compatibility
                 
             try
             {
@@ -94,8 +95,8 @@ namespace PokerGame.Core.Microservices
                 // Small delay for initialization
                 Thread.Sleep(500);
                 
-                Console.WriteLine($"Starting Console UI Service{(useCursesUi ? " with enhanced UI" : "")}...");
-                // Create the console UI service with enhanced UI preference
+                Console.WriteLine($"Starting Console UI Service{(useCursesUi ? " with curses UI" : "")}...");
+                // Create the console UI service with curses UI preference
                 var consoleUIService = new ConsoleUIService(
                     ConsoleUIPublisherPort,
                     ConsoleUISubscriberPort, // Use subscriber port
@@ -295,7 +296,7 @@ namespace PokerGame.Core.Microservices
         /// Start only the Console UI service
         /// </summary>
         /// <param name="args">Command line arguments</param>
-        /// <param name="useEnhancedUi">Whether to use the enhanced UI</param>
+        /// <param name="useEnhancedUi">Whether to use the curses UI</param>
         public void StartConsoleUIService(string[]? args = null, bool useEnhancedUi = false)
         {
             try
@@ -303,15 +304,22 @@ namespace PokerGame.Core.Microservices
                 // Check for UI override in args if not explicitly specified
                 if (!useEnhancedUi && args != null)
                 {
+                    // Check for both curses and enhanced-ui flags (the latter is deprecated)
+                    bool hasEnhancedUiFlag = Array.Exists(args, arg => arg.Equals("--enhanced-ui", StringComparison.OrdinalIgnoreCase));
+                    if (hasEnhancedUiFlag)
+                    {
+                        Console.WriteLine("Note: --enhanced-ui is deprecated, please use --curses instead");
+                    }
+                    
                     useEnhancedUi = Array.Exists(args, arg =>
                         arg.Equals("--curses", StringComparison.OrdinalIgnoreCase) ||
                         arg.Equals("-c", StringComparison.OrdinalIgnoreCase) ||
-                        arg.Equals("--enhanced-ui", StringComparison.OrdinalIgnoreCase));
+                        arg.Equals("--enhanced-ui", StringComparison.OrdinalIgnoreCase)); // Deprecated but supported for backward compatibility
                 }
                 
-                Console.WriteLine($"Starting Console UI Service in standalone mode{(useEnhancedUi ? " with enhanced UI" : "")}...");
+                Console.WriteLine($"Starting Console UI Service in standalone mode{(useEnhancedUi ? " with curses UI" : "")}...");
                 
-                // Create the console UI service with enhanced UI preference
+                // Create the console UI service with curses UI preference
                 var consoleUIService = new ConsoleUIService(
                     ConsoleUIPublisherPort,
                     ConsoleUISubscriberPort,
@@ -323,7 +331,7 @@ namespace PokerGame.Core.Microservices
                 
                 Console.WriteLine("Console UI Service started successfully");
                 Console.WriteLine($"Publisher Port: {ConsoleUIPublisherPort}, Subscriber Port: {ConsoleUISubscriberPort}");
-                Console.WriteLine($"Enhanced UI: {(useEnhancedUi ? "Enabled" : "Disabled")}");
+                Console.WriteLine($"Curses UI: {(useEnhancedUi ? "Enabled" : "Disabled")}");
             }
             catch (Exception ex)
             {

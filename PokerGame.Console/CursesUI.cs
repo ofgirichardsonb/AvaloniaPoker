@@ -41,7 +41,7 @@ namespace PokerGame.Console
                 
             try
             {
-                // Initialize the enhanced UI with fancy box drawing
+                // Initialize the curses UI with fancy box drawing
                 Initialize();
                 
                 // Get number of players and initialize game
@@ -92,7 +92,7 @@ namespace PokerGame.Console
         }
         
         /// <summary>
-        /// Initialize the enhanced UI
+        /// Initialize the curses UI
         /// </summary>
         public void Initialize()
         {
@@ -117,7 +117,7 @@ namespace PokerGame.Console
                 
                 // Display a fancy header
                 System.Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
-                System.Console.WriteLine("║        TEXAS HOLD'EM POKER (ENHANCED CONSOLE UI)        ║");
+                System.Console.WriteLine("║        TEXAS HOLD'EM POKER (CURSES CONSOLE UI)          ║");
                 System.Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
                 System.Console.WriteLine();
                 System.Console.WriteLine("Waiting for game data...");
@@ -134,11 +134,11 @@ namespace PokerGame.Console
                 }
                 
                 _initialized = true;
-                System.Console.WriteLine("Enhanced UI initialized successfully");
+                System.Console.WriteLine("Curses UI initialized successfully");
             }
             catch (Exception ex)
             {
-                System.Console.WriteLine($"Error initializing enhanced UI: {ex.Message}");
+                System.Console.WriteLine($"Error initializing curses UI: {ex.Message}");
                 System.Console.WriteLine("Using simplified console UI");
             }
         }
@@ -288,7 +288,7 @@ namespace PokerGame.Console
                 
                 // Display a fancy header with box-drawing characters
                 System.Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
-                System.Console.WriteLine("║        TEXAS HOLD'EM POKER (ENHANCED CONSOLE UI)        ║");
+                System.Console.WriteLine("║        TEXAS HOLD'EM POKER (CURSES CONSOLE UI)          ║");
                 System.Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
                 
                 try 
