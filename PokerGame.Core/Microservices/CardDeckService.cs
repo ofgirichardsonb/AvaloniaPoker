@@ -283,7 +283,9 @@ namespace PokerGame.Core.Microservices
                                 // Create a new subscriber socket
                                 _subscriberSocket = new NetMQ.Sockets.SubscriberSocket();
                                 _subscriberSocket.Options.ReceiveHighWatermark = 1000;
-                                _subscriberSocket.Connect($"tcp://localhost:{_subscriberPort}");
+                                // Access subscriberPort from base class
+                                int subscriberPort = _subscriberPort > 0 ? _subscriberPort : DefaultSubscriberPort;
+                                _subscriberSocket.Connect($"tcp://localhost:{subscriberPort}");
                                 _subscriberSocket.SubscribeToAnyTopic();
                                 
                                 Console.WriteLine("Successfully recreated subscriber socket in critical message handler");

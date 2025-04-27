@@ -44,6 +44,8 @@ namespace PokerGame.Core.Microservices
         
         // Configuration options
         private readonly int _heartbeatIntervalMs;
+        protected readonly int _publisherPort;
+        protected readonly int _subscriberPort;
         
         /// <summary>
         /// Creates a new microservice instance with an execution context
@@ -62,6 +64,8 @@ namespace PokerGame.Core.Microservices
             _serviceName = serviceName;
             _serviceType = serviceType;
             _heartbeatIntervalMs = heartbeatIntervalMs;
+            _publisherPort = 0; // Not used in this constructor but initialized for completeness
+            _subscriberPort = 0; // Not used in this constructor but initialized for completeness
             
             // Use the provided execution context to set up messaging
             // The broker will handle the actual communication
@@ -87,6 +91,8 @@ namespace PokerGame.Core.Microservices
             _serviceName = serviceName;
             _serviceType = serviceType;
             _heartbeatIntervalMs = heartbeatIntervalMs;
+            _publisherPort = publisherPort;
+            _subscriberPort = subscriberPort;
             
             // Set up the publisher socket with retry logic
             int maxRetries = 3;
@@ -463,8 +469,9 @@ namespace PokerGame.Core.Microservices
                                 Console.WriteLine($"Attempting to recreate publisher socket on port {_publisherPort}...");
                                 _publisherSocket = new PublisherSocket();
                                 _publisherSocket.Options.SendHighWatermark = 1000;
-                                _publisherSocket.Bind($"tcp://127.0.0.1:{_publisherPort}");
-                                Console.WriteLine("Publisher socket recreated successfully");
+                                int publisherPort = _publisherPort > 0 ? _publisherPort : 5559; // Default if not set
+                                _publisherSocket.Bind($"tcp://127.0.0.1:{publisherPort}");
+                                Console.WriteLine($"Publisher socket recreated successfully on port {publisherPort}");
                             }
                             
                             // Try to recreate the subscriber socket if necessary
@@ -473,9 +480,10 @@ namespace PokerGame.Core.Microservices
                                 Console.WriteLine($"Attempting to recreate subscriber socket on port {_subscriberPort}...");
                                 _subscriberSocket = new SubscriberSocket();
                                 _subscriberSocket.Options.ReceiveHighWatermark = 1000;
-                                _subscriberSocket.Connect($"tcp://localhost:{_subscriberPort}");
+                                int subscriberPort = _subscriberPort > 0 ? _subscriberPort : 5560; // Default if not set
+                                _subscriberSocket.Connect($"tcp://localhost:{subscriberPort}");
                                 _subscriberSocket.SubscribeToAnyTopic();
-                                Console.WriteLine("Subscriber socket recreated successfully");
+                                Console.WriteLine($"Subscriber socket recreated successfully on port {subscriberPort}");
                             }
                             
                             // Give the sockets a moment to fully initialize
