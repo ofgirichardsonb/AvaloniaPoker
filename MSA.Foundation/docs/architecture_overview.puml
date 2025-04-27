@@ -1,56 +1,75 @@
-@startuml Architecture Overview
+@startuml MSA.Foundation Architecture Overview
 
-skinparam componentStyle uml2
-skinparam packageStyle rectangle
-skinparam backgroundColor white
-skinparam DefaultFontSize 12
+!define RECTANGLE_SHAPE rectangle
+!define COMPONENT_SHAPE component
 
-!define MESSAGING_COLOR #C5E1A5
-!define TELEMETRY_COLOR #BBDEFB
-!define SERVICE_COLOR #F8BBD0
-!define EXTERNAL_COLOR #FFE082
+skinparam BackgroundColor white
+skinparam ComponentStyle uml2
+skinparam DefaultTextAlignment center
+skinparam TitleFontSize 20
+skinparam ComponentFontSize 14
+skinparam PackageFontSize 16
+skinparam PackageBorderColor #777777
+skinparam PackageFontColor #333333
+skinparam ArrowColor #555555
 
-package "MSA.Foundation" {
+title MSA.Foundation Architecture Overview
+
+package "MSA.Foundation" as Foundation {
+  ' Messaging components
+  package "Messaging" as Messaging {
+    component [MessageBroker] as MB #palegreen
+    component [SocketCommunicationAdapter] as SCA #palegreen
+    component [Message] as MSG #palegreen
+    enum "MessageType" as MT #palegreen
     
-    package "Messaging" #MESSAGING_COLOR {
-        [MessageBroker] as msgBroker
-        [SocketCommunicationAdapter] as socketAdapter
-        [Message] as message
-        [IMessageBroker] as iMsgBroker
-    }
+    MB .down.> MSG : creates
+    MB -down-> SCA : uses
+    MSG .right.> MT : has
+  }
+  
+  ' Telemetry components
+  package "Telemetry" as Telemetry {
+    interface "ITelemetryService" as ITS #lightyellow
+    component [TelemetryService] as TS #lightyellow
     
-    package "Telemetry" #TELEMETRY_COLOR {
-        [TelemetryService] as telemetry
-        [ITelemetryService] as iTelemetry
-    }
+    ITS <|.. TS : implements
+  }
+  
+  ' Service Management components
+  package "Service Management" as ServiceMgmt {
+    component [ExecutionContext] as EC #lavender
+    component [ServiceConstants] as SC #lavender
     
-    package "ServiceManagement" #SERVICE_COLOR {
-        [ExecutionContext] as execContext
-        [ServiceConstants] as constants
-    }
+    EC .down.> SC : uses
+  }
+  
+  ' Cross-component relationships
+  MB ..> TS : sends telemetry
 }
 
-cloud "External Dependencies" #EXTERNAL_COLOR {
-    [NetMQ] as netmq
-    [Application Insights] as appInsights
+' External applications
+package "Applications" as Apps {
+  RECTANGLE_SHAPE "Application 1" as App1 #lightblue
+  RECTANGLE_SHAPE "Application 2" as App2 #lightblue
+  RECTANGLE_SHAPE "Application 3" as App3 #lightblue
 }
 
-' Relationships within MSA.Foundation
-iMsgBroker <|-- msgBroker
-msgBroker --> socketAdapter : uses
-msgBroker --> message : creates/processes
-iTelemetry <|-- telemetry
+' Application relationships
+App1 -up-> MB : uses messaging
+App1 -up-> TS : uses telemetry
+App1 -up-> EC : manages services
 
-' Relationships with external dependencies
-socketAdapter --> netmq : uses
-telemetry --> appInsights : sends data to
+App2 -up-> MB : uses messaging
+App2 -up-> TS : uses telemetry
+App2 -up-> EC : manages services
 
-' Consumer relationship example
-actor "Application" as app
-app --> msgBroker : publishes/subscribes
-app --> telemetry : tracks events
-app --> execContext : manages lifecycle
+App3 -up-> MB : uses messaging
+App3 -up-> TS : uses telemetry
+App3 -up-> EC : manages services
 
-footer MSA Foundation v0.1.0 - Architecture Overview
+' External systems
+cloud "Azure Application Insights" as AAI
+TS -up-> AAI : sends telemetry data
 
 @enduml

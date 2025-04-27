@@ -1,105 +1,154 @@
 # MSA.Foundation Architecture Overview
 
-## High-Level Architecture
+## Introduction
+
+MSA.Foundation is a reusable architectural framework designed to simplify the development of microservice-based applications. It provides a set of core components for messaging, telemetry, and service management that can be shared across multiple projects.
+
+## Key Components
 
 ```mermaid
-graph TB
-    subgraph MSA.Foundation["MSA.Foundation"]
-        subgraph Messaging["Messaging"]
-            style Messaging fill:#C5E1A5,stroke:#7CB342
-            iMsgBroker["IMessageBroker"]
-            msgBroker["MessageBroker"]
-            socketAdapter["SocketCommunicationAdapter"]
-            message["Message"]
+graph TD
+    subgraph Foundation["MSA.Foundation"]
+        style Foundation fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
+        
+        subgraph Messaging["Messaging Layer"]
+            style Messaging fill:#e8f5e9,stroke:#388e3c,stroke-width:1px
+            MB["MessageBroker"]
+            SCA["SocketCommunicationAdapter"]
+            MSG["Message"]
+            MT["MessageType"]
         end
         
-        subgraph Telemetry["Telemetry"]
-            style Telemetry fill:#BBDEFB,stroke:#64B5F6
-            iTelemetry["ITelemetryService"]
-            telemetry["TelemetryService"]
+        subgraph Telemetry["Telemetry Layer"]
+            style Telemetry fill:#fff8e1,stroke:#ffa000,stroke-width:1px
+            TS["TelemetryService"]
+            ITS["ITelemetryService"]
         end
         
-        subgraph ServiceManagement["ServiceManagement"]
-            style ServiceManagement fill:#F8BBD0,stroke:#F06292
-            execContext["ExecutionContext"]
-            constants["ServiceConstants"]
+        subgraph ServiceMgmt["Service Management"]
+            style ServiceMgmt fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+            EC["ExecutionContext"]
+            SC["ServiceConstants"]
         end
     end
     
-    subgraph ExternalDeps["External Dependencies"]
-        style ExternalDeps fill:#FFE082,stroke:#FFB300
-        netmq["NetMQ"]
-        appInsights["Application Insights"]
+    subgraph Applications["Applications"]
+        style Applications fill:#ffebee,stroke:#c62828,stroke-width:2px
+        App1["Application 1"]
+        App2["Application 2"]
+        App3["Application 3"]
     end
     
-    %% Relationships within MSA.Foundation
-    iMsgBroker -.-> msgBroker
-    msgBroker --> socketAdapter
-    msgBroker --> message
-    iTelemetry -.-> telemetry
+    App1 --> MB
+    App1 --> TS
+    App1 --> EC
     
-    %% Relationships with external dependencies
-    socketAdapter --> netmq
-    telemetry --> appInsights
+    App2 --> MB
+    App2 --> TS
+    App2 --> EC
     
-    %% Consumer relationship example
-    app["Application"] --> msgBroker
-    app --> telemetry
-    app --> execContext
+    App3 --> MB
+    App3 --> TS
+    App3 --> EC
     
-    %% Add clarifying labels
-    classDef relationshipLabel text-align:left
-    class Messaging relationshipLabel
-    class Telemetry relationshipLabel
-    class ServiceManagement relationshipLabel
+    MB --> SCA
+    MB --- MSG
+    MSG --- MT
+    
+    TS -.-> ITS
+    
+    classDef component fill:#f5f5f5,stroke:#333,stroke-width:1px
+    class MB,SCA,MSG,MT,TS,ITS,EC,SC component
 ```
 
-## Component Interactions
+## Architectural Principles
+
+### 1. Separation of Concerns
+
+MSA.Foundation follows strict separation of concerns by dividing functionality into three main layers:
+
+- **Messaging**: Handles all communication between services
+- **Telemetry**: Provides monitoring, logging, and performance tracking
+- **Service Management**: Manages service lifecycle and configuration
+
+### 2. Dependency Inversion
+
+The framework uses interfaces and dependency injection to ensure components are loosely coupled:
+
+- `IMessageBroker` interface allows different messaging implementations
+- `ITelemetryService` interface supports various telemetry providers
+- Service components depend on abstractions, not concrete implementations
+
+### 3. Cross-Platform Compatibility
+
+All components are designed to work across different platforms:
+
+- .NET 8.0 based for cross-platform support
+- Platform-agnostic communication via ZeroMQ
+- Cloud-friendly telemetry with Application Insights
+
+## Communication Flow
 
 ```mermaid
 sequenceDiagram
-    participant App as Application
-    participant Broker as MessageBroker
-    participant Socket as SocketCommunicationAdapter
-    participant TelSvc as TelemetryService
+    participant Service1 as Service 1
+    participant MsgBroker as Message Broker
+    participant Service2 as Service 2
+    participant TelSvc as Telemetry Service
     
-    App->>Broker: Subscribe(messageType, callback)
-    Broker-->>App: subscriptionId
-    
-    App->>Broker: PublishMessage(message)
-    Broker->>Socket: SendMessage(topic, serializedMsg)
-    Socket-->>Broker: success
-    Broker-->>App: success
-    
-    Note over Socket: Message received on topic
-    Socket->>Broker: OnMessageReceived(topic, payload)
-    Broker->>App: Invoke callback
-    
-    App->>TelSvc: TrackEvent("MessageProcessed")
-    TelSvc->>App: (void)
+    Service1->>MsgBroker: PublishMessage(command)
+    MsgBroker->>Service2: OnMessageReceived(command)
+    Service2->>TelSvc: TrackEvent("CommandReceived")
+    Service2->>MsgBroker: PublishMessage(response)
+    MsgBroker->>Service1: OnMessageReceived(response)
+    Service1->>TelSvc: TrackEvent("ResponseReceived")
 ```
 
-## Service Management Flow
+## Integration Patterns
 
-```mermaid
-flowchart LR
-    subgraph ServiceLifecycle["Service Lifecycle"]
-        Start[Service Start] --> Init[Initialize]
-        Init --> RunAsync[RunAsync in ExecutionContext]
-        RunAsync --> Loop[Processing Loop]
-        Loop --> |Event| Handle[Handle Event]
-        Handle --> Loop
-        Loop --> |Cancellation| Cleanup[Cleanup]
-        Cleanup --> Stop[Service Stop]
-    end
-    
-    subgraph ExecutionContextMgmt["Execution Context Management"]
-        CreateContext[Create Context] --> ConfigThread[Configure Thread]
-        ConfigThread --> TokenSource[Create CancellationTokenSource]
-        TokenSource --> Ready[Ready for Tasks]
-        Ready --> |Task Execution| Running[Execute Task]
-        Ready --> |Cancellation| Disposed[Dispose Resources]
-    end
-    
-    ServiceLifecycle -.-> |uses| ExecutionContextMgmt
-```
+MSA.Foundation supports several integration patterns:
+
+1. **Request/Response**: For synchronous communication between services
+2. **Publish/Subscribe**: For event-driven architectures
+3. **Command**: For direct service control
+4. **Event**: For loose coupling and scalability
+
+## Deployment Model
+
+The framework supports flexible deployment options:
+
+- **In-Process**: Services running as threads within a single process
+- **Cross-Process**: Services running as separate processes on a single machine
+- **Distributed**: Services running across multiple machines or containers
+
+## Configuration
+
+Configuration is handled through a combination of:
+
+- Environment variables for secrets and environment-specific settings
+- ServiceConstants for static configuration
+- JSON configuration files for application settings
+
+## Extensibility
+
+MSA.Foundation is designed for extensibility:
+
+- Custom message types can be added to extend the messaging capabilities
+- Telemetry can be extended with custom event tracking
+- Service management can be customized for specific deployment scenarios
+
+## Performance Considerations
+
+- SocketCommunicationAdapter uses efficient binary serialization
+- Telemetry batches events to minimize performance impact
+- ExecutionContext manages thread lifecycle to prevent leaks
+
+## Security
+
+- Communication can be secured using transport-level encryption
+- Telemetry includes safeguards for sensitive data
+- Message validation prevents malformed messages
+
+## Conclusion
+
+MSA.Foundation provides a robust, extensible framework for building microservice-based applications with a focus on reliability, scalability, and maintainability. By abstracting common infrastructure concerns, it allows developers to focus on business logic rather than plumbing code.
