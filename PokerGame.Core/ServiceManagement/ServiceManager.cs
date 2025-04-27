@@ -102,10 +102,98 @@ namespace PokerGame.Core.ServiceManagement
                 portOffset = _random.Next(900) + 100;
             }
             
-            // TODO: Initialize and start the core services
-            // This is a placeholder for the actual implementation
-            
-            return portOffset;
+            try
+            {
+                // Create a cancellation token source for the service
+                var cts = new CancellationTokenSource();
+                
+                // Define the service name
+                string serviceName = "ServicesHost";
+                
+                // Create the service info
+                var serviceInfo = new ServiceInfo
+                {
+                    Name = serviceName,
+                    CancellationTokenSource = cts
+                };
+                
+                // Get configuration
+                string? dotnetPath = "dotnet"; // Default command
+                string servicesProjectPath = "PokerGame.Services/PokerGame.Services.csproj";
+                
+                // Log the startup
+                Console.WriteLine($"Starting services host with port offset {portOffset} (verbose: {verbose})...");
+                
+                // Build the arguments list
+                List<string> args = new List<string>
+                {
+                    "run",
+                    "--project",
+                    servicesProjectPath,
+                    "--",
+                    $"--port-offset={portOffset}"
+                };
+                
+                if (verbose)
+                {
+                    args.Add("--verbose");
+                }
+                
+                // Add the --all-services flag to run all services
+                args.Add("--all-services");
+                
+                // Set up the process information
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = dotnetPath,
+                    Arguments = string.Join(" ", args),
+                    UseShellExecute = false,
+                    CreateNoWindow = false,
+                    RedirectStandardOutput = false,
+                    RedirectStandardError = false
+                };
+                
+                // Start the process
+                var process = new System.Diagnostics.Process
+                {
+                    StartInfo = psi,
+                    EnableRaisingEvents = true
+                };
+                
+                // Set up event handler for when the process exits
+                process.Exited += (sender, e) =>
+                {
+                    Console.WriteLine($"Services host process exited with code {process.ExitCode}");
+                    _services.Remove(serviceName);
+                };
+                
+                // Start the process
+                process.Start();
+                
+                Console.WriteLine($"Started services host process with PID {process.Id}");
+                
+                // Create a task that completes when the process exits
+                var processTask = Task.Run(() =>
+                {
+                    process.WaitForExit();
+                    return Task.CompletedTask;
+                });
+                
+                // Store the task and process info
+                serviceInfo.Task = processTask;
+                serviceInfo.Process = process;
+                
+                // Add the service to the dictionary
+                _services[serviceName] = serviceInfo;
+                
+                // Return the port offset that was used
+                return portOffset;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error starting services host: {ex.Message}");
+                return portOffset;
+            }
         }
         
         /// <summary>
@@ -120,10 +208,99 @@ namespace PokerGame.Core.ServiceManagement
             // Ensure the manager is initialized
             Initialize();
             
-            // TODO: Start the console client
-            // This is a placeholder for the actual implementation
-            
-            return 1; // Return a dummy ID
+            try
+            {
+                // Create a cancellation token source for the service
+                var cts = new CancellationTokenSource();
+                
+                // Define the service name
+                string serviceName = "ConsoleClient";
+                
+                // Create the service info
+                var serviceInfo = new ServiceInfo
+                {
+                    Name = serviceName,
+                    CancellationTokenSource = cts
+                };
+                
+                // Get configuration
+                string? dotnetPath = "dotnet"; // Default command
+                string consoleProjectPath = "PokerGame.Console/PokerGame.Console.csproj";
+                
+                // Log the startup
+                Console.WriteLine($"Starting console client with port offset {portOffset} (curses: {useCurses})...");
+                
+                // Build the arguments list
+                List<string> args = new List<string>
+                {
+                    "run",
+                    "--project",
+                    consoleProjectPath,
+                    "--",
+                    $"--port-offset={portOffset}"
+                };
+                
+                if (useCurses)
+                {
+                    args.Add("--curses");
+                }
+                
+                if (verbose)
+                {
+                    args.Add("--verbose");
+                }
+                
+                // Set up the process information
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = dotnetPath,
+                    Arguments = string.Join(" ", args),
+                    UseShellExecute = false,
+                    CreateNoWindow = false,
+                    RedirectStandardOutput = false,
+                    RedirectStandardError = false
+                };
+                
+                // Start the process
+                var process = new System.Diagnostics.Process
+                {
+                    StartInfo = psi,
+                    EnableRaisingEvents = true
+                };
+                
+                // Set up event handler for when the process exits
+                process.Exited += (sender, e) =>
+                {
+                    Console.WriteLine($"Console client process exited with code {process.ExitCode}");
+                    _services.Remove(serviceName);
+                };
+                
+                // Start the process
+                process.Start();
+                
+                Console.WriteLine($"Started console client process with PID {process.Id}");
+                
+                // Create a task that completes when the process exits
+                var processTask = Task.Run(() =>
+                {
+                    process.WaitForExit();
+                    return Task.CompletedTask;
+                });
+                
+                // Store the task and process info
+                serviceInfo.Task = processTask;
+                serviceInfo.Process = process;
+                
+                // Add the service to the dictionary
+                _services[serviceName] = serviceInfo;
+                
+                return process.Id;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error starting console client: {ex.Message}");
+                return -1;
+            }
         }
         
         /// <summary>
@@ -147,7 +324,25 @@ namespace PokerGame.Core.ServiceManagement
         {
             try
             {
-                // Cancel the token to signal stop
+                Console.WriteLine($"Stopping service {service.Name}...");
+                
+                // Handle process-based services first
+                if (service.Process != null && !service.Process.HasExited)
+                {
+                    try
+                    {
+                        Console.WriteLine($"Stopping process with PID {service.Process.Id}...");
+                        service.Process.Kill(entireProcessTree: true);
+                        service.Process.WaitForExit(5000);
+                        Console.WriteLine($"Process with PID {service.Process.Id} stopped");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error stopping process for service {service.Name}: {ex.Message}");
+                    }
+                }
+                
+                // Cancel the token to signal stop for thread-based services
                 service.CancellationTokenSource?.Cancel();
                 
                 // Wait for the task to complete
@@ -155,6 +350,8 @@ namespace PokerGame.Core.ServiceManagement
                 {
                     Task.WaitAll(new[] { service.Task }, 5000);
                 }
+                
+                Console.WriteLine($"Service {service.Name} stopped");
             }
             catch (Exception ex)
             {
@@ -165,6 +362,10 @@ namespace PokerGame.Core.ServiceManagement
                 // Dispose of the cancellation token source
                 service.CancellationTokenSource?.Dispose();
                 service.CancellationTokenSource = null;
+                
+                // Dispose of the process
+                service.Process?.Dispose();
+                service.Process = null;
             }
         }
         
@@ -224,6 +425,11 @@ namespace PokerGame.Core.ServiceManagement
             /// Cancellation token source for stopping the service
             /// </summary>
             public CancellationTokenSource? CancellationTokenSource { get; set; }
+            
+            /// <summary>
+            /// Process associated with the service (if applicable)
+            /// </summary>
+            public System.Diagnostics.Process? Process { get; set; }
         }
     }
 }

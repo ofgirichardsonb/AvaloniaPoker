@@ -76,6 +76,12 @@ namespace PokerGame.Launcher
                     {
                         curses = true;
                     }
+                    // For backward compatibility, map --enhanced-ui to --curses
+                    else if (arg == "--enhanced-ui")
+                    {
+                        Console.WriteLine("Note: --enhanced-ui is deprecated, use --curses instead");
+                        curses = true;
+                    }
                     else
                     {
                         Console.WriteLine($"Unrecognized argument: {arg}");
@@ -162,7 +168,7 @@ namespace PokerGame.Launcher
                 // Use the service manager to start all services
                 int actualPortOffset = _serviceManager!.StartAllServices(portOffset, curses, verbose);
                 
-                Console.WriteLine($"All services started with port offset {actualPortOffset} using {(curses ? "curses" : "enhanced")} UI");
+                Console.WriteLine($"All services started with port offset {actualPortOffset} using {(curses ? "curses" : "standard")} UI");
                 
                 // Keep running until Ctrl+C
                 WaitForCancellation();
@@ -230,7 +236,7 @@ namespace PokerGame.Launcher
                     return Task.FromResult(1);
                 }
                 
-                Console.WriteLine($"Console client started with port offset {portOffset} using {(curses ? "curses" : "enhanced")} UI");
+                Console.WriteLine($"Console client started with port offset {portOffset} using {(curses ? "curses" : "standard")} UI");
                 
                 // Client doesn't need to keep running, it has its own process
                 return Task.FromResult(0);

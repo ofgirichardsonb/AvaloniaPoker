@@ -2,6 +2,7 @@
 
 # Simple script for managing poker game services using the new launcher
 # This script uses the PokerGame.Launcher project which now has built-in service management
+# Note: --enhanced-ui is deprecated; use --curses instead
 
 # Function to build the launcher if needed
 build_launcher() {
@@ -28,9 +29,15 @@ run_launcher() {
     # Pass them directly to the launcher
     local args=("$command")
     
-    # Add all other arguments as-is
+    # Process and map arguments
     for arg in "$@"; do
-        args+=("$arg")
+        # Map deprecated --enhanced-ui to --curses
+        if [ "$arg" == "--enhanced-ui" ]; then
+            echo "Note: --enhanced-ui is deprecated, using --curses instead"
+            args+=("--curses")
+        else
+            args+=("$arg")
+        fi
     done
     
     # Print the command to be executed
@@ -103,6 +110,7 @@ case "$1" in
         echo "  --port-offset=N, -p N - Use port offset N for the services"
         echo "  --verbose, -v         - Enable verbose logging"
         echo "  --curses, -c          - Use enhanced UI (curses) for console client"
+        echo "  --enhanced-ui         - Deprecated: Use --curses instead"
         exit 1
         ;;
 esac
