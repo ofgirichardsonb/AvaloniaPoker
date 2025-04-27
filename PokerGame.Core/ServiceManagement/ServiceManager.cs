@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using PokerGame.Core.Messaging;
@@ -119,7 +120,16 @@ namespace PokerGame.Core.ServiceManagement
                 
                 // Get configuration
                 string? dotnetPath = "dotnet"; // Default command
-                string servicesProjectPath = "PokerGame.Services/PokerGame.Services.csproj";
+                
+                // Get base directory - the executing assembly's location
+                string baseDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? string.Empty;
+                
+                // Navigate to the solution root from the bin directory
+                string solutionRoot = Path.GetFullPath(Path.Combine(baseDir, "..","..","..",".."));
+                Console.WriteLine($"Solution root directory: {solutionRoot}");
+                
+                string servicesProjectPath = Path.Combine(solutionRoot, "PokerGame.Services", "PokerGame.Services.csproj");
+                Console.WriteLine($"Services project path: {servicesProjectPath}");
                 
                 // Log the startup
                 Console.WriteLine($"Starting services host with port offset {portOffset} (verbose: {verbose})...");
@@ -150,7 +160,8 @@ namespace PokerGame.Core.ServiceManagement
                     UseShellExecute = false,
                     CreateNoWindow = false,
                     RedirectStandardOutput = false,
-                    RedirectStandardError = false
+                    RedirectStandardError = false,
+                    WorkingDirectory = solutionRoot
                 };
                 
                 // Start the process
@@ -225,7 +236,16 @@ namespace PokerGame.Core.ServiceManagement
                 
                 // Get configuration
                 string? dotnetPath = "dotnet"; // Default command
-                string consoleProjectPath = "PokerGame.Console/PokerGame.Console.csproj";
+                
+                // Get base directory - the executing assembly's location
+                string baseDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? string.Empty;
+                
+                // Navigate to the solution root from the bin directory
+                string solutionRoot = Path.GetFullPath(Path.Combine(baseDir, "..","..","..",".."));
+                Console.WriteLine($"Solution root directory: {solutionRoot}");
+                
+                string consoleProjectPath = Path.Combine(solutionRoot, "PokerGame.Console", "PokerGame.Console.csproj");
+                Console.WriteLine($"Console project path: {consoleProjectPath}");
                 
                 // Log the startup
                 Console.WriteLine($"Starting console client with port offset {portOffset} (curses: {useCurses})...");
@@ -258,7 +278,8 @@ namespace PokerGame.Core.ServiceManagement
                     UseShellExecute = false,
                     CreateNoWindow = false,
                     RedirectStandardOutput = false,
-                    RedirectStandardError = false
+                    RedirectStandardError = false,
+                    WorkingDirectory = solutionRoot
                 };
                 
                 // Start the process

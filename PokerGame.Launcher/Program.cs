@@ -93,8 +93,15 @@ namespace PokerGame.Launcher
                 var instrumentationKey = configuration["ApplicationInsights:InstrumentationKey"];
                 if (!string.IsNullOrEmpty(instrumentationKey))
                 {
-                    _telemetryService = new TelemetryService(instrumentationKey);
-                    Console.WriteLine("Telemetry service initialized successfully");
+                    _telemetryService = TelemetryService.Instance;
+                    if (_telemetryService.Initialize(instrumentationKey))
+                    {
+                        Console.WriteLine("Telemetry service initialized successfully");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Failed to initialize telemetry service");
+                    }
                 }
                 else
                 {
