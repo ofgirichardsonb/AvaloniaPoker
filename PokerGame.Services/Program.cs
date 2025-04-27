@@ -43,12 +43,18 @@ namespace PokerGame.Services
                     .Build();
 
                 // Initialize telemetry with configuration
-                string? instrumentationKey = configuration["ApplicationInsights:InstrumentationKey"];
+                // Always try environment variable first as it's the most reliable approach
+                string? instrumentationKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
                 
-                // Fall back to environment variable if not in appsettings.json
+                // Only fall back to configuration if environment variable isn't available
                 if (string.IsNullOrEmpty(instrumentationKey))
                 {
-                    instrumentationKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
+                    instrumentationKey = configuration["ApplicationInsights:InstrumentationKey"];
+                    Console.WriteLine("Using instrumentation key from configuration (appsettings.json)");
+                }
+                else
+                {
+                    Console.WriteLine("Using instrumentation key from environment variable");
                 }
                 
                 // Get the TelemetryService instance and initialize it if possible

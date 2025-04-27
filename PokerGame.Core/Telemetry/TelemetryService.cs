@@ -52,13 +52,18 @@ namespace PokerGame.Core.Telemetry
             if (string.IsNullOrEmpty(instrumentationKey))
             {
                 Console.WriteLine("Warning: Application Insights instrumentation key is missing or empty");
+                Console.WriteLine("  - Current directory: " + Directory.GetCurrentDirectory());
+                Console.WriteLine("  - Environment variable exists: " + 
+                    (Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY") != null ? "Yes" : "No"));
                 return false;
             }
             
             try
             {
+                Console.WriteLine("Initializing Application Insights telemetry with key length: " + instrumentationKey.Length);
+                
                 _instrumentationKey = instrumentationKey;
-                // Use ConnectionString instead of InstrumentationKey
+                // Use ConnectionString instead of InstrumentationKey for modern Application Insights
                 _telemetryClient.TelemetryConfiguration.ConnectionString = $"InstrumentationKey={instrumentationKey}";
                 
                 // Set common properties for all telemetry
@@ -69,6 +74,7 @@ namespace PokerGame.Core.Telemetry
                 
                 // Track initialization
                 _telemetryClient.TrackEvent("TelemetryInitialized");
+                Console.WriteLine("Successfully initialized Application Insights telemetry");
                 
                 _isInitialized = true;
                 return true;
@@ -76,6 +82,7 @@ namespace PokerGame.Core.Telemetry
             catch (Exception ex)
             {
                 Console.WriteLine($"Error initializing Application Insights: {ex.Message}");
+                Console.WriteLine($"Error details: {ex.StackTrace}");
                 return false;
             }
         }

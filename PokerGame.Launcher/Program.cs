@@ -90,13 +90,18 @@ namespace PokerGame.Launcher
         {
             try
             {
-                // Try to get instrumentation key from configuration first
-                var instrumentationKey = configuration["ApplicationInsights:InstrumentationKey"];
+                // Always try environment variable first as it's the most reliable approach
+                var instrumentationKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
                 
-                // If not found in configuration, check environment variables
+                // Only fall back to configuration if environment variable isn't available
                 if (string.IsNullOrEmpty(instrumentationKey))
                 {
-                    instrumentationKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
+                    instrumentationKey = configuration["ApplicationInsights:InstrumentationKey"];
+                    Console.WriteLine("Using instrumentation key from configuration (appsettings.json)");
+                }
+                else
+                {
+                    Console.WriteLine("Using instrumentation key from environment variable");
                 }
                 
                 if (!string.IsNullOrEmpty(instrumentationKey))
@@ -119,6 +124,7 @@ namespace PokerGame.Launcher
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to initialize telemetry: {ex.Message}");
+                Console.WriteLine($"Error details: {ex.StackTrace}");
             }
         }
     }
