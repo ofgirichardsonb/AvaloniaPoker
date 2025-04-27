@@ -34,22 +34,12 @@ jobs:
           echo "Branch: $BRANCH"
           echo "SHA: $SHA"
 
-
           # URL encode the project name
           PROJECT_ENC=$(echo "$PROJECT" | sed 's/ /%20/g')
 
-          # API base URL
-          API_URL="https://dev.azure.com/$ORG/$PROJECT_ENC/_apis/git/repositories/$REPO"
-
-          echo "API URL: $API_URL"
-
-          # First, we need to check out the full repository with all commits
-          echo "Setting up Git repository..."
+          # Setup Git
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-
-          # Make sure we have the full history
-          git fetch --unshallow || true
 
           # Add Azure DevOps as a remote
           git remote add ado "https://$PAT@dev.azure.com/$ORG/$PROJECT_ENC/_git/$REPO"
@@ -57,42 +47,24 @@ jobs:
           # Fetch from Azure DevOps to see what's there
           git fetch ado || true
 
-          # Print remotes and branches for debugging
-          git remote -v
-          git branch -a
+          # Make sure we have all the current branch's commits
+          git fetch --unshallow || true
 
-          # Try to find a branch to base our new branch on
-          echo "Looking for main branch in Azure DevOps..."
-          git ls-remote ado refs/heads/main
-          if [ $? -eq 0 ]; then
-            BASE_BRANCH="main"
-          else
-            echo "Looking for master branch in Azure DevOps..."
-            git ls-remote ado refs/heads/master
-            if [ $? -eq 0 ]; then
-              BASE_BRANCH="master"
-            else
-              echo "No main or master branch found in Azure DevOps, using current SHA as starting point"
-              BASE_BRANCH=""
-            fi
-          fi
+          echo "Current GitHub branch state:"
+          git log -n 3 --oneline
 
-          # Create and push the branch
-          echo "Creating and pushing branch $BRANCH to Azure DevOps..."
+          # Create a new orphan branch with no parents
+          echo "Creating clean branch for push..."
+          git checkout --orphan temp-branch-clean
 
-          if [ -n "$BASE_BRANCH" ]; then
-            # If we found a base branch, create our branch from it
-            git checkout -b temp-branch "ado/$BASE_BRANCH"
+          # Add all files from the current state
+          git add -A
 
-            # Cherry-pick or merge the commits we want to push
-            # (this is simplified - you might need a more complex strategy)
-            git cherry-pick $SHA || true
+          # Create a commit with the current state
+          git commit -m "Synced state from GitHub $BRANCH branch at $SHA"
 
-            # Force push to the target branch
-            git push ado "temp-branch:refs/heads/$BRANCH" --force
-          else
-            # If no base branch, just push the current branch
-            git push ado "HEAD:refs/heads/$BRANCH" --force
-          fi
+          # Force push this clean branch to ADO
+          echo "Pushing to Azure DevOps..."
+          git push ado "temp-branch-clean:refs/heads/$BRANCH" --force
 
           echo "Push complete."
