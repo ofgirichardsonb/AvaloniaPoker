@@ -138,6 +138,7 @@ namespace PokerGame.Services
                     }
                     
                     Console.WriteLine($"Attempting to create {typeof(T).Name} with ExecutionContext constructor");
+                    Console.WriteLine($"Constructor parameters: ExecutionContext + {(constructorArgs != null ? constructorArgs.Length : 0)} additional args");
                     instance = (T)Activator.CreateInstance(typeof(T), ecParameters.ToArray());
                     Console.WriteLine($"Successfully created {typeof(T).Name} with ExecutionContext constructor");
                 }
@@ -153,9 +154,9 @@ namespace PokerGame.Services
                 {
                     try
                     {
-                        // MicroserviceBase constructor expects:
+                        // Note: Some service constructors expect:
                         // (string serviceType, string serviceName, int publisherPort, int subscriberPort, [int heartbeatIntervalMs = 5000])
-                        // followed by any additional parameters
+                        // while others have different parameter signatures - need to try multiple approaches
                         
                         // Prepare the base constructor parameters - note serviceName and serviceType are reversed from our method params
                         var parameters = new List<object>();
@@ -172,8 +173,26 @@ namespace PokerGame.Services
                         
                         // Create the service instance using reflection with port-based constructor
                         Console.WriteLine($"Attempting to create {typeof(T).Name} with port-based constructor");
-                        instance = (T)Activator.CreateInstance(typeof(T), parameters.ToArray());
-                        Console.WriteLine($"Successfully created {typeof(T).Name} with port-based constructor");
+                        Console.WriteLine($"Parameters: serviceType='{serviceType}', serviceName='{serviceName}', " +
+                                         $"publisherPort={publisherPort}, subscriberPort={subscriberPort}, " +
+                                         $"plus {(constructorArgs != null ? constructorArgs.Length : 0)} additional args");
+                        
+                        try
+                        {
+                            // Try standard parameter order first
+                            instance = (T)Activator.CreateInstance(typeof(T), parameters.ToArray());
+                            Console.WriteLine($"Successfully created {typeof(T).Name} with standard parameter order");
+                        }
+                        catch (Exception standardEx)
+                        {
+                            // If that fails, try with different orders of the parameters
+                            Console.WriteLine($"Standard parameter constructor failed: {standardEx.Message}");
+                            Console.WriteLine("Trying alternate constructor with ports-only");
+                            
+                            // Some services may just need the port parameters
+                            instance = (T)Activator.CreateInstance(typeof(T), publisherPort, subscriberPort);
+                            Console.WriteLine($"Successfully created {typeof(T).Name} with ports-only constructor");
+                        }
                     }
                     catch (Exception ex)
                     {

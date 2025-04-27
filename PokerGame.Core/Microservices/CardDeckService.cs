@@ -64,6 +64,38 @@ namespace PokerGame.Core.Microservices
         }
         
         /// <summary>
+        /// Creates a new card deck service with service type, name, and ports
+        /// This constructor matches the pattern expected by MicroserviceManager reflection instantiation
+        /// </summary>
+        /// <param name="serviceType">The type of the service</param>
+        /// <param name="serviceName">The name of the service</param>
+        /// <param name="publisherPort">The port to publish messages on</param>
+        /// <param name="subscriberPort">The port to subscribe to messages on</param>
+        /// <param name="verbose">Whether verbose logging is enabled</param>
+        /// <param name="useEmergencyDeckMode">Whether to always use emergency decks</param>
+        public CardDeckService(
+            string serviceType,
+            string serviceName,
+            int publisherPort,
+            int subscriberPort,
+            bool verbose = false,
+            bool useEmergencyDeckMode = false)
+            : base(serviceType, serviceName, publisherPort, subscriberPort)
+        {
+            _useEmergencyDeckMode = useEmergencyDeckMode;
+            
+            Console.WriteLine($"CardDeckService created with reflection-compatible constructor: serviceType={serviceType}, serviceName={serviceName}");
+            
+            if (_useEmergencyDeckMode)
+            {
+                Console.WriteLine("===> CardDeckService: Running in emergency deck mode - will create decks immediately without network");
+            }
+            
+            // Ensure that the card deck service is properly initialized
+            VerifyCriticalMessageHandlers();
+        }
+        
+        /// <summary>
         /// Verifies that critical message handlers are properly set up
         /// </summary>
         private void VerifyCriticalMessageHandlers()

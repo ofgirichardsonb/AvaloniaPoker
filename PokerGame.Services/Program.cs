@@ -204,6 +204,7 @@ namespace PokerGame.Services
                             verbose);
                             
                         Console.WriteLine($"Game Engine Service started with ID: {gameEngineService.ServiceId}");
+                        Console.WriteLine($"Game Engine Service type: {gameEngineService.GetType().FullName}");
                     }
                     catch (Exception ex)
                     {
@@ -227,10 +228,10 @@ namespace PokerGame.Services
                             "CardDeck", 
                             publisherPort, 
                             subscriberPort, 
-                            verbose,
-                            false);  // useEmergencyDeckMode parameter
+                            verbose);  // Don't pass useEmergencyDeckMode parameter as it's optional with default value of false
                             
                         Console.WriteLine($"Card Deck Service started with ID: {cardDeckService.ServiceId}");
+                        Console.WriteLine($"Card Deck Service type: {cardDeckService.GetType().FullName}");
                     }
                     catch (Exception ex)
                     {
