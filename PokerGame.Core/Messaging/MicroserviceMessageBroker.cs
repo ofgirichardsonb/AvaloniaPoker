@@ -97,7 +97,7 @@ namespace PokerGame.Core.Messaging
                 
             // Handle service discovery
             _broker.RegisterHandler(
-                MessageType.ServiceDiscovery.ToString(),
+                ((MessageType)Enum.Parse(typeof(MessageType), "ServiceDiscovery")).ToString(),
                 async (envelope) =>
                 {
                     Console.WriteLine($"Received service discovery request from {envelope.GetMetadata("SenderId")}");
@@ -117,7 +117,7 @@ namespace PokerGame.Core.Messaging
                         // Create a Message object from the envelope for compatibility with existing code
                         var message = new Message
                         {
-                            Type = MessageType.ServiceRegistration,
+                            Type = (Microservices.MessageType)Enum.Parse(typeof(Microservices.MessageType), "ServiceRegistration"),
                             SenderId = envelope.GetMetadata("SenderId")
                         };
                         message.SetPayload(payload);
@@ -143,7 +143,7 @@ namespace PokerGame.Core.Messaging
             };
             
             var envelope = MessageEnvelope.Create(
-                MessageType.ServiceRegistration.ToString(), 
+                ((MessageType)Enum.Parse(typeof(MessageType), "ServiceRegistration")).ToString(), 
                 registrationPayload);
                 
             _broker.Broadcast(envelope);

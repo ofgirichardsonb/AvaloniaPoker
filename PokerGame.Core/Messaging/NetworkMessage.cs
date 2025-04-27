@@ -5,16 +5,17 @@ using System.Text.Json.Serialization;
 namespace PokerGame.Core.Messaging
 {
     /// <summary>
-    /// Message types for the simplified messaging system
+    /// Message types for the networking system
     /// </summary>
-    [Obsolete("Use MessageType instead. This enum will be removed in a future release.")]
-    public enum SimpleMessageType
+    public enum MessageType
     {
         // System messages
         Heartbeat,
         ServiceRegistration,
+        ServiceDiscovery,
         Acknowledgment,
         Error,
+        Ping,
         
         // Game-related messages
         GameState,
@@ -22,26 +23,51 @@ namespace PokerGame.Core.Messaging
         PlayerAction,
         CardDeal,
         DeckShuffle,
-        DeckCreate,     // Added to support deck creation messages
+        DeckShuffled,
+        DeckCreate,
+        DeckCreated,
+        DeckDeal,
+        DeckDealt,
+        DeckStatus,
+        DeckStatusResponse,
+        DeckBurn,
+        DeckBurnResponse,
+        DeckReset,
         StartHand,
         EndHand,
+        StartGame,
+        GameStarted,
+        EndGame,
+        GameEnded,
+        HandStarted,
+        HandEnded,
+        RoundComplete,
+        HandComplete,
+        
+        // Player management messages
+        PlayerLeave,
+        PlayerUpdate,
+        
+        // UI messages
+        DisplayUpdate,
+        UserInput,
         
         // Notification messages
         InfoMessage,
-        DebugMessage
+        DebugMessage,
+        Notification
     }
     
     /// <summary>
-    /// A simple message class with minimal required fields
+    /// Represents a message sent between components over the network
     /// </summary>
-    [Obsolete("Use NetworkMessage instead. This class will be removed in a future release.")]
-    public class SimpleMessage
+    public class NetworkMessage
     {
         /// <summary>
         /// Gets or sets the type of the message
         /// </summary>
         [JsonPropertyName("type")]
-        public SimpleMessageType Type { get; set; }
+        public MessageType Type { get; set; }
         
         /// <summary>
         /// Gets or sets the unique identifier of the message
@@ -83,7 +109,7 @@ namespace PokerGame.Core.Messaging
         /// <summary>
         /// Creates a new message with a random ID and the current timestamp
         /// </summary>
-        public SimpleMessage()
+        public NetworkMessage()
         {
             MessageId = Guid.NewGuid().ToString();
             Timestamp = DateTime.UtcNow;
@@ -95,9 +121,9 @@ namespace PokerGame.Core.Messaging
         /// <param name="type">The type of the message</param>
         /// <param name="payload">The payload of the message</param>
         /// <returns>A new message</returns>
-        public static SimpleMessage Create(SimpleMessageType type, object payload = null)
+        public static NetworkMessage Create(MessageType type, object? payload = null)
         {
-            return new SimpleMessage
+            return new NetworkMessage
             {
                 Type = type,
                 Payload = payload
@@ -111,12 +137,12 @@ namespace PokerGame.Core.Messaging
         /// <param name="originalMessage">The original message being responded to</param>
         /// <param name="payload">The payload of the response</param>
         /// <returns>A new response message</returns>
-        public static SimpleMessage CreateResponse(SimpleMessageType type, SimpleMessage originalMessage, object payload = null)
+        public static NetworkMessage CreateResponse(MessageType type, NetworkMessage originalMessage, object? payload = null)
         {
             if (originalMessage == null)
                 throw new ArgumentNullException(nameof(originalMessage));
                 
-            return new SimpleMessage
+            return new NetworkMessage
             {
                 Type = type,
                 InResponseTo = originalMessage.MessageId,
@@ -131,9 +157,9 @@ namespace PokerGame.Core.Messaging
         /// <param name="originalMessage">The original message being acknowledged</param>
         /// <param name="payload">Optional payload data to include</param>
         /// <returns>A new acknowledgment message</returns>
-        public static SimpleMessage CreateAcknowledgment(SimpleMessage originalMessage, object payload = null)
+        public static NetworkMessage CreateAcknowledgment(NetworkMessage originalMessage, object? payload = null)
         {
-            return CreateResponse(SimpleMessageType.Acknowledgment, originalMessage, payload);
+            return CreateResponse(MessageType.Acknowledgment, originalMessage, payload);
         }
         
         /// <summary>
@@ -142,9 +168,9 @@ namespace PokerGame.Core.Messaging
         /// <param name="originalMessage">The original message that caused the error</param>
         /// <param name="errorMessage">The error message</param>
         /// <returns>A new error message</returns>
-        public static SimpleMessage CreateError(SimpleMessage originalMessage, string errorMessage)
+        public static NetworkMessage CreateError(NetworkMessage originalMessage, string errorMessage)
         {
-            return CreateResponse(SimpleMessageType.Error, originalMessage, errorMessage);
+            return CreateResponse(MessageType.Error, originalMessage, errorMessage);
         }
         
         /// <summary>
@@ -176,7 +202,7 @@ namespace PokerGame.Core.Messaging
         /// Gets the payload as a string
         /// </summary>
         /// <returns>The payload as a string</returns>
-        public string GetPayloadAsString()
+        public string? GetPayloadAsString()
         {
             if (Payload == null)
                 return null;
@@ -191,6 +217,7 @@ namespace PokerGame.Core.Messaging
         }
     }
     
-    // Service registration payload is defined in MessageTypes.cs
-    // This comment prevents re-adding the class here during refactoring
+    // Note: ServiceRegistrationPayload is currently defined in SimpleMessage.cs
+    // In a future release, it will be moved here with the rest of the NetworkMessage components
+    // Once the transition from SimpleMessage to NetworkMessage is complete
 }

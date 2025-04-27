@@ -17,7 +17,7 @@ namespace PokerGame.Core.Microservices
         private readonly bool _verbose;
         private readonly PokerGame.Core.Messaging.ExecutionContext _executionContext;
         private readonly CancellationTokenSource _cancellationTokenSource;
-        private SimpleMessageBroker _messageBroker;
+        private SocketCommunicationAdapter _messageBroker;
         private readonly Logger _logger;
         private Task _backgroundTask;
         private bool _disposed = false;
@@ -102,8 +102,8 @@ namespace PokerGame.Core.Microservices
                 
                 _logger.Log($"Starting {_serviceType} service '{_serviceName}'...");
                 
-                // Create and start the message broker with our execution context
-                _messageBroker = new SimpleMessageBroker(_serviceId, _publisherPort, _subscriberPort, _executionContext, _verbose);
+                // Create and start the socket communication adapter with our execution context
+                _messageBroker = new SocketCommunicationAdapter(_serviceId, _publisherPort, _subscriberPort, _executionContext, _verbose);
                 _messageBroker.MessageReceived += OnMessageReceived;
                 _messageBroker.Start();
                 

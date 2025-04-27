@@ -102,7 +102,9 @@ namespace PokerGame.Core.Microservices
                     var ackReceived = new TaskCompletionSource<bool>();
                     
                     // Define the acknowledgment pattern - what message type confirms receipt
-                    MessageType expectedAckType = GetAcknowledgmentType(message.Type);
+                    // Use explicit cast and fully qualified namespace to convert between different MessageType enums
+                    var messageType = (PokerGame.Core.Messaging.MessageType)((int)message.Type);
+                    var expectedAckType = GetAcknowledgmentType(messageType);
                     
                     // Register a handler for the acknowledgment message
                     messageBroker.RegisterMessageHandler(expectedAckType, async (ackMessage) => {
@@ -204,38 +206,38 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         /// <param name="requestType">The type of the request message</param>
         /// <returns>The expected acknowledgment message type</returns>
-        private static MessageType GetAcknowledgmentType(MessageType requestType)
+        private static PokerGame.Core.Messaging.MessageType GetAcknowledgmentType(PokerGame.Core.Messaging.MessageType requestType)
         {
             // Pattern matching for request/response message pairs
             switch (requestType)
             {
-                case MessageType.DeckCreate:
-                    return MessageType.DeckCreated;
+                case PokerGame.Core.Messaging.MessageType.DeckCreate:
+                    return PokerGame.Core.Messaging.MessageType.DeckCreated;
                     
-                case MessageType.DeckShuffle:
-                    return MessageType.DeckShuffled;
+                case PokerGame.Core.Messaging.MessageType.DeckShuffle:
+                    return PokerGame.Core.Messaging.MessageType.DeckShuffled;
                     
-                case MessageType.DeckDeal:
-                    return MessageType.DeckDealt;
+                case PokerGame.Core.Messaging.MessageType.DeckDeal:
+                    return PokerGame.Core.Messaging.MessageType.DeckDealt;
                     
-                case MessageType.DeckStatus:
-                    return MessageType.DeckStatusResponse;
+                case PokerGame.Core.Messaging.MessageType.DeckStatus:
+                    return PokerGame.Core.Messaging.MessageType.DeckStatusResponse;
                     
-                case MessageType.StartHand:
-                    return MessageType.HandStarted;
+                case PokerGame.Core.Messaging.MessageType.StartHand:
+                    return PokerGame.Core.Messaging.MessageType.HandStarted;
                     
-                case MessageType.EndHand:
-                    return MessageType.HandEnded;
+                case PokerGame.Core.Messaging.MessageType.EndHand:
+                    return PokerGame.Core.Messaging.MessageType.HandEnded;
                     
-                case MessageType.StartGame:
-                    return MessageType.GameStarted;
+                case PokerGame.Core.Messaging.MessageType.StartGame:
+                    return PokerGame.Core.Messaging.MessageType.GameStarted;
                     
-                case MessageType.EndGame:
-                    return MessageType.GameEnded;
+                case PokerGame.Core.Messaging.MessageType.EndGame:
+                    return PokerGame.Core.Messaging.MessageType.GameEnded;
                     
                 // For messages that don't have a specific acknowledgment type
                 default:
-                    return MessageType.Acknowledgment;
+                    return PokerGame.Core.Messaging.MessageType.Acknowledgment;
             }
         }
     }

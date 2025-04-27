@@ -37,15 +37,18 @@ namespace PokerGame.Core.Messaging
         public static Message ToLegacyMessage(this MessageEnvelope envelope)
         {
             // Try to parse the message type from the string
-            if (!Enum.TryParse<MessageType>(envelope.Type, out var messageType))
+            // Parse the message type into Microservices.MessageType for the Message
+            Microservices.MessageType microservicesMessageType;
+            
+            if (!Enum.TryParse<Microservices.MessageType>(envelope.Type, out microservicesMessageType))
             {
-                messageType = MessageType.Error; // Default to Error if unknown
+                microservicesMessageType = Microservices.MessageType.Error; // Default to Error if unknown
             }
             
             var message = new Message
             {
                 MessageId = envelope.MessageId,
-                Type = messageType,
+                Type = microservicesMessageType,
                 SenderId = envelope.GetMetadata("SenderId"),
                 ReceiverId = envelope.GetMetadata("TargetId"),
                 Timestamp = envelope.Timestamp,
