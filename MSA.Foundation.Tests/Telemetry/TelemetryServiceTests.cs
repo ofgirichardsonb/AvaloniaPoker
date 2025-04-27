@@ -11,39 +11,39 @@ namespace MSA.Foundation.Tests.Telemetry
     public class TelemetryServiceTests
     {
         [Fact]
-        public void Constructor_WithoutInstrumentationKey_ShouldCreateInstanceWithTelemetryDisabled()
+        public void Initialize_WithoutInstrumentationKey_ShouldReturnFalse()
         {
             // Arrange
-            var configuration = CreateConfigurationWithoutKey();
+            var telemetryService = TelemetryService.Instance;
             
             // Act
-            var telemetryService = new TelemetryService(configuration);
+            var result = telemetryService.Initialize("");
             
             // Assert
             telemetryService.Should().NotBeNull();
-            telemetryService.IsEnabled.Should().BeFalse("Telemetry should be disabled when no instrumentation key is provided");
+            result.Should().BeFalse("Initialize should return false when no instrumentation key is provided");
         }
         
         [Fact]
-        public void Constructor_WithInstrumentationKeyInConfiguration_ShouldCreateInstanceWithTelemetryEnabled()
+        public void Initialize_WithInstrumentationKey_ShouldReturnTrue()
         {
             // Arrange
-            var configuration = CreateConfigurationWithKey("test-key");
+            var telemetryService = TelemetryService.Instance;
             
-            // Act
-            var telemetryService = new TelemetryService(configuration);
+            // Act - Note: this won't actually connect to Azure, but the method should return true
+            var result = telemetryService.Initialize("test-key");
             
             // Assert
             telemetryService.Should().NotBeNull();
-            telemetryService.IsEnabled.Should().BeTrue("Telemetry should be enabled when instrumentation key is provided");
+            result.Should().BeTrue("Initialize should return true when an instrumentation key is provided");
         }
         
         [Fact]
         public void TrackEvent_WhenTelemetryIsEnabled_ShouldNotThrowException()
         {
             // Arrange
-            var configuration = CreateConfigurationWithKey("test-key");
-            var telemetryService = new TelemetryService(configuration);
+            var telemetryService = TelemetryService.Instance;
+            telemetryService.Initialize("test-key");
             
             // Act
             Action action = () => telemetryService.TrackEvent("TestEvent");
@@ -53,27 +53,26 @@ namespace MSA.Foundation.Tests.Telemetry
         }
         
         [Fact]
-        public void TrackEvent_WithPropertiesAndMetrics_ShouldNotThrowException()
+        public void TrackEvent_WithProperties_ShouldNotThrowException()
         {
             // Arrange
-            var configuration = CreateConfigurationWithKey("test-key");
-            var telemetryService = new TelemetryService(configuration);
+            var telemetryService = TelemetryService.Instance;
+            telemetryService.Initialize("test-key");
             var properties = new Dictionary<string, string> { { "PropertyKey", "PropertyValue" } };
-            var metrics = new Dictionary<string, double> { { "MetricKey", 42.0 } };
             
             // Act
-            Action action = () => telemetryService.TrackEvent("TestEvent", properties, metrics);
+            Action action = () => telemetryService.TrackEvent("TestEvent", properties);
             
             // Assert
-            action.Should().NotThrow("TrackEvent with properties and metrics should not throw when telemetry is enabled");
+            action.Should().NotThrow("TrackEvent with properties should not throw when telemetry is enabled");
         }
         
         [Fact]
         public void TrackException_WhenTelemetryIsEnabled_ShouldNotThrowException()
         {
             // Arrange
-            var configuration = CreateConfigurationWithKey("test-key");
-            var telemetryService = new TelemetryService(configuration);
+            var telemetryService = TelemetryService.Instance;
+            telemetryService.Initialize("test-key");
             var exception = new InvalidOperationException("Test exception");
             
             // Act
@@ -87,8 +86,8 @@ namespace MSA.Foundation.Tests.Telemetry
         public void TrackException_WithProperties_ShouldNotThrowException()
         {
             // Arrange
-            var configuration = CreateConfigurationWithKey("test-key");
-            var telemetryService = new TelemetryService(configuration);
+            var telemetryService = TelemetryService.Instance;
+            telemetryService.Initialize("test-key");
             var exception = new InvalidOperationException("Test exception");
             var properties = new Dictionary<string, string> { { "PropertyKey", "PropertyValue" } };
             
@@ -103,8 +102,8 @@ namespace MSA.Foundation.Tests.Telemetry
         public void TrackTrace_WhenTelemetryIsEnabled_ShouldNotThrowException()
         {
             // Arrange
-            var configuration = CreateConfigurationWithKey("test-key");
-            var telemetryService = new TelemetryService(configuration);
+            var telemetryService = TelemetryService.Instance;
+            telemetryService.Initialize("test-key");
             
             // Act
             Action action = () => telemetryService.TrackTrace("Test trace message");
@@ -117,8 +116,8 @@ namespace MSA.Foundation.Tests.Telemetry
         public void TrackTrace_WithProperties_ShouldNotThrowException()
         {
             // Arrange
-            var configuration = CreateConfigurationWithKey("test-key");
-            var telemetryService = new TelemetryService(configuration);
+            var telemetryService = TelemetryService.Instance;
+            telemetryService.Initialize("test-key");
             var properties = new Dictionary<string, string> { { "PropertyKey", "PropertyValue" } };
             
             // Act
@@ -132,8 +131,8 @@ namespace MSA.Foundation.Tests.Telemetry
         public void TrackRequest_WhenTelemetryIsEnabled_ShouldNotThrowException()
         {
             // Arrange
-            var configuration = CreateConfigurationWithKey("test-key");
-            var telemetryService = new TelemetryService(configuration);
+            var telemetryService = TelemetryService.Instance;
+            telemetryService.Initialize("test-key");
             var startTime = DateTimeOffset.UtcNow;
             var duration = TimeSpan.FromMilliseconds(100);
             
@@ -148,13 +147,13 @@ namespace MSA.Foundation.Tests.Telemetry
         public void TrackDependency_WhenTelemetryIsEnabled_ShouldNotThrowException()
         {
             // Arrange
-            var configuration = CreateConfigurationWithKey("test-key");
-            var telemetryService = new TelemetryService(configuration);
+            var telemetryService = TelemetryService.Instance;
+            telemetryService.Initialize("test-key");
             var startTime = DateTimeOffset.UtcNow;
             var duration = TimeSpan.FromMilliseconds(100);
             
             // Act
-            Action action = () => telemetryService.TrackDependency("TestDependency", "TestCommand", startTime, duration, true);
+            Action action = () => telemetryService.TrackDependency("HTTP", "test-target", "TestDependency", "TestCommand", startTime, duration, true);
             
             // Assert
             action.Should().NotThrow("TrackDependency should not throw when telemetry is enabled");
@@ -164,8 +163,8 @@ namespace MSA.Foundation.Tests.Telemetry
         public void Flush_ShouldNotThrowException()
         {
             // Arrange
-            var configuration = CreateConfigurationWithKey("test-key");
-            var telemetryService = new TelemetryService(configuration);
+            var telemetryService = TelemetryService.Instance;
+            telemetryService.Initialize("test-key");
             
             // Act
             Action action = () => telemetryService.Flush();

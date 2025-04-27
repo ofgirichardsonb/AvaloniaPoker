@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using MSA.Foundation.ServiceManagement;
 using Xunit;
 using FluentAssertions;
+
+// Using alias to avoid ambiguity with System.Threading.ExecutionContext
+using MSAEC = MSA.Foundation.ServiceManagement.ExecutionContext;
 
 namespace MSA.Foundation.Tests.ServiceManagement
 {
@@ -14,7 +16,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
         public void Constructor_ShouldInitializeWithDefaults()
         {
             // Arrange & Act
-            var context = new ExecutionContext();
+            var context = new MSAEC();
             
             // Assert
             context.Should().NotBeNull();
@@ -30,7 +32,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             string serviceId = "test-service-id";
             
             // Act
-            var context = new ExecutionContext(serviceId);
+            var context = new MSAEC(serviceId);
             
             // Assert
             context.ServiceId.Should().Be(serviceId, "ServiceId should match the provided value");
@@ -44,7 +46,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             var cts = new CancellationTokenSource();
             
             // Act
-            var context = new ExecutionContext(serviceId, cts.Token);
+            var context = new MSAEC(serviceId, cts.Token);
             
             // Assert
             context.ServiceId.Should().Be(serviceId, "ServiceId should match the provided value");
@@ -55,7 +57,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
         public void Cancel_ShouldCancelTheToken()
         {
             // Arrange
-            var context = new ExecutionContext();
+            var context = new MSAEC();
             
             // Act
             context.Cancel();
@@ -68,7 +70,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
         public async Task WithTimeout_ShouldCancelAfterSpecifiedTimeout()
         {
             // Arrange
-            var context = new ExecutionContext();
+            var context = new MSAEC();
             var timeout = TimeSpan.FromMilliseconds(50);
             
             // Act
@@ -85,7 +87,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
         public void GetMetadata_ShouldReturnEmptyDictionary_WhenNoMetadataExists()
         {
             // Arrange
-            var context = new ExecutionContext();
+            var context = new MSAEC();
             
             // Act
             var metadata = context.GetMetadata();
@@ -99,7 +101,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
         public void SetMetadata_ShouldStoreAndRetrieveValues()
         {
             // Arrange
-            var context = new ExecutionContext();
+            var context = new MSAEC();
             string key = "test-key";
             string value = "test-value";
             
@@ -115,7 +117,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
         public void SetMetadata_WithMultipleValues_ShouldStoreAllValues()
         {
             // Arrange
-            var context = new ExecutionContext();
+            var context = new MSAEC();
             var metadata = new Dictionary<string, object>
             {
                 { "key1", "value1" },
@@ -141,7 +143,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
         public void GetMetadata_WithNonExistentKey_ShouldReturnDefaultValue()
         {
             // Arrange
-            var context = new ExecutionContext();
+            var context = new MSAEC();
             
             // Act
             var result = context.GetMetadata<string>("non-existent-key");
@@ -154,7 +156,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
         public void GetMetadata_WithIncorrectType_ShouldThrowException()
         {
             // Arrange
-            var context = new ExecutionContext();
+            var context = new MSAEC();
             context.SetMetadata("numeric-key", 42);
             
             // Act
@@ -168,7 +170,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
         public void RemoveMetadata_ShouldRemoveExistingKey()
         {
             // Arrange
-            var context = new ExecutionContext();
+            var context = new MSAEC();
             string key = "test-key";
             string value = "test-value";
             context.SetMetadata(key, value);
@@ -185,7 +187,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
         public void ClearMetadata_ShouldRemoveAllMetadata()
         {
             // Arrange
-            var context = new ExecutionContext();
+            var context = new MSAEC();
             context.SetMetadata("key1", "value1");
             context.SetMetadata("key2", "value2");
             

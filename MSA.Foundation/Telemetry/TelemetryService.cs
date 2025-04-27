@@ -6,6 +6,7 @@ using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.DataContracts;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.ApplicationInsights.DependencyCollector;
+using Microsoft.Extensions.Configuration;
 
 namespace MSA.Foundation.Telemetry
 {
@@ -45,6 +46,39 @@ namespace MSA.Foundation.Telemetry
             }
             
             _telemetryClient = new TelemetryClient(config);
+        }
+        
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TelemetryService"/> class with a configuration
+        /// </summary>
+        /// <param name="configuration">The configuration to use for initialization</param>
+        public TelemetryService(IConfiguration configuration)
+        {
+            var config = TelemetryConfiguration.CreateDefault();
+            
+            try
+            {
+                _dependencyModule = new DependencyTrackingTelemetryModule();
+                _dependencyModule.Initialize(config);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: Failed to initialize dependency tracking: {ex.Message}");
+                _dependencyModule = null;
+            }
+            
+            _telemetryClient = new TelemetryClient(config);
+            
+            // Initialize with configuration
+            string? instrumentationKey = configuration["ApplicationInsights:InstrumentationKey"];
+            if (!string.IsNullOrWhiteSpace(instrumentationKey))
+            {
+                Initialize(instrumentationKey);
+            }
+            else
+            {
+                Console.WriteLine("Warning: No instrumentation key found in configuration");
+            }
         }
         
         /// <summary>

@@ -165,10 +165,7 @@ namespace MSA.Foundation.Tests.Messaging
         {
             // Arrange
             var messageBroker = CreateMessageBrokerWithMockedSocket();
-            bool acknowledgmentSent = false;
-            
-            // We'll use a special field to track if an acknowledgment was sent
-            SetupMessageBrokerToTrackAcknowledgments(messageBroker, ref acknowledgmentSent);
+            var ackReceived = new ManualResetEventSlim(false);
             
             // Create a message that requires acknowledgment
             var message = new Message(MessageType.Command, "testSender", "testPayload")
@@ -178,14 +175,19 @@ namespace MSA.Foundation.Tests.Messaging
             
             messageBroker.Start();
             
+            // Subscribe to acknowledgments directly here
+            messageBroker.Subscribe(MessageType.Acknowledgment, msg => {
+                ackReceived.Set();
+            });
+            
             // Act - Simulate receiving a message that requires acknowledgment
             SimulateMessageReceived(messageBroker, message);
             
-            // Allow time for acknowledgment to be sent
-            Thread.Sleep(100);
+            // Wait for acknowledgment with timeout
+            bool wasSignaled = ackReceived.Wait(TimeSpan.FromSeconds(1));
             
             // Assert
-            acknowledgmentSent.Should().BeTrue("An acknowledgment should be sent for messages with RequireAcknowledgment=true");
+            wasSignaled.Should().BeTrue("An acknowledgment should be sent for messages with RequireAcknowledgment=true");
             
             // Cleanup
             messageBroker.Stop();
@@ -218,18 +220,6 @@ namespace MSA.Foundation.Tests.Messaging
                 System.Reflection.BindingFlags.NonPublic | 
                 System.Reflection.BindingFlags.Instance)
                 ?.Invoke(messageBroker, new object[] { topic, payload });
-        }
-        
-        private void SetupMessageBrokerToTrackAcknowledgments(MessageBroker messageBroker, ref bool acknowledgmentSent)
-        {
-            // In a real implementation, you would use reflection or a test interface
-            // to hook into the acknowledgment sending mechanism
-            
-            // This is simplified - in a real test you'd use reflection or 
-            // modify the MessageBroker to have a test hook
-            messageBroker.Subscribe(MessageType.Acknowledgment, message => {
-                acknowledgmentSent = true;
-            });
         }
     }
 }

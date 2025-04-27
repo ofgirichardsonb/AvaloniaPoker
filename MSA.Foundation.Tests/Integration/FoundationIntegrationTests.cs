@@ -9,6 +9,9 @@ using Xunit;
 using FluentAssertions;
 using System.Collections.Generic;
 
+// Using alias to avoid ambiguity with System.Threading.ExecutionContext
+using MSAEC = MSA.Foundation.ServiceManagement.ExecutionContext;
+
 namespace MSA.Foundation.Tests.Integration
 {
     public class FoundationIntegrationTests
@@ -27,7 +30,7 @@ namespace MSA.Foundation.Tests.Integration
             var telemetryService = new TelemetryService(config);
             var messageBroker = new MessageBroker("localhost", 5600, true);
             
-            var executionContext = new ExecutionContext("test-service");
+            var executionContext = new MSAEC("test-service");
             var messagesReceived = new List<Message>();
             var messageReceived = new ManualResetEventSlim(false);
             
@@ -59,7 +62,7 @@ namespace MSA.Foundation.Tests.Integration
         public void ExecutionContext_WithMessageBroker_ShouldShareServiceId()
         {
             // Arrange
-            var executionContext = new ExecutionContext("test-service-id");
+            var executionContext = new MSAEC("test-service-id");
             var messageBroker = new MessageBroker("localhost", 5601, false);
             
             // Act
@@ -104,7 +107,7 @@ namespace MSA.Foundation.Tests.Integration
                 .Build();
             
             var telemetryService = new TelemetryService(config);
-            var executionContext = new ExecutionContext("test-service-id");
+            var executionContext = new MSAEC("test-service-id");
             
             // Act - Track an operation with the service ID in the properties
             Action trackAction = () => telemetryService.TrackEvent("TestOperation", 
@@ -129,7 +132,7 @@ namespace MSA.Foundation.Tests.Integration
                 .Build();
             
             var telemetryService = new TelemetryService(config);
-            var executionContext = new ExecutionContext("test-integrated-service");
+            var executionContext = new MSAEC("test-integrated-service");
             int portOffset = 300;
             
             var publisherPort = ServiceConstants.GetPublisherPort(portOffset);

@@ -13,7 +13,7 @@ namespace MSA.Foundation.Tests.Messaging
         public void Constructor_WithValidParameters_ShouldInitializeCorrectly()
         {
             // Arrange & Act
-            using var adapter = new SocketCommunicationAdapter("localhost", 5000, 5001);
+            using var adapter = new SocketCommunicationAdapter("localhost", 5000, false);
             
             // Assert
             adapter.Should().NotBeNull();
@@ -23,7 +23,7 @@ namespace MSA.Foundation.Tests.Messaging
         public void Dispose_ShouldCleanupResources()
         {
             // Arrange
-            var adapter = new SocketCommunicationAdapter("localhost", 5000, 5001);
+            var adapter = new SocketCommunicationAdapter("localhost", 5000, false);
             
             // Act
             Action disposeAction = () => adapter.Dispose();
@@ -33,147 +33,111 @@ namespace MSA.Foundation.Tests.Messaging
         }
         
         [Fact]
-        public void StartPublisher_ShouldStartPublisherSocket()
+        public void Start_ShouldInitializeSocketsCorrectly()
         {
             // Arrange
-            using var adapter = new SocketCommunicationAdapter("localhost", 5000, 5001);
+            using var adapter = new SocketCommunicationAdapter("localhost", 5000, false);
             
             // Act
-            adapter.StartPublisher();
-            
-            // Assert - No exception thrown means success
-            // In a real test, we would verify the socket is actually listening
-        }
-        
-        [Fact]
-        public void StartSubscriber_ShouldStartSubscriberSocket()
-        {
-            // Arrange
-            using var adapter = new SocketCommunicationAdapter("localhost", 5000, 5001);
-            var messageReceived = false;
-            
-            // Act
-            adapter.StartSubscriber((_,_) => messageReceived = true);
-            
-            // Assert - No exception thrown means success
-            // In a real test, we would verify the socket is actually listening
-        }
-        
-        [Fact]
-        public void Publish_ShouldReturnTrue_WhenPublisherIsStarted()
-        {
-            // Arrange
-            using var adapter = new SocketCommunicationAdapter("localhost", 5000, 5001);
-            adapter.StartPublisher();
-            
-            // Act
-            bool result = adapter.Publish("topic", "message");
+            Action startAction = () => adapter.Start();
             
             // Assert
-            result.Should().BeTrue("Publish should return true when publisher is started");
+            startAction.Should().NotThrow();
         }
         
         [Fact]
-        public void Publish_ShouldReturnFalse_WhenPublisherIsNotStarted()
+        public void SendMessage_ShouldReturnFalse_WhenNotStarted()
         {
             // Arrange
-            using var adapter = new SocketCommunicationAdapter("localhost", 5000, 5001);
+            using var adapter = new SocketCommunicationAdapter("localhost", 5000, false);
             
             // Act
-            bool result = adapter.Publish("topic", "message");
+            bool result = adapter.SendMessage("topic", "message");
             
             // Assert
-            result.Should().BeFalse("Publish should return false when publisher is not started");
+            result.Should().BeFalse("SendMessage should return false when not started");
         }
         
         [Fact]
-        public async Task PublishAsync_ShouldReturnTrue_WhenPublisherIsStarted()
+        public void SendMessage_AfterStart_ShouldSendMessage()
         {
             // Arrange
-            using var adapter = new SocketCommunicationAdapter("localhost", 5000, 5001);
-            adapter.StartPublisher();
+            using var adapter = new SocketCommunicationAdapter("localhost", 5000, false);
+            adapter.Start();
             
             // Act
-            bool result = await adapter.PublishAsync("topic", "message");
+            bool result = adapter.SendMessage("topic", "message");
             
             // Assert
-            result.Should().BeTrue("PublishAsync should return true when publisher is started");
+            result.Should().BeTrue("SendMessage should return true after adapter is started");
         }
         
         [Fact]
-        public async Task PublishAsync_ShouldReturnFalse_WhenPublisherIsNotStarted()
+        public void Subscribe_ShouldReturnSubscriptionId()
         {
             // Arrange
-            using var adapter = new SocketCommunicationAdapter("localhost", 5000, 5001);
+            using var adapter = new SocketCommunicationAdapter("localhost", 5000, false);
             
             // Act
-            bool result = await adapter.PublishAsync("topic", "message");
+            string subscriptionId = adapter.Subscribe("topic", (_, _) => { });
             
             // Assert
-            result.Should().BeFalse("PublishAsync should return false when publisher is not started");
+            subscriptionId.Should().NotBeNullOrEmpty("Subscribe should return a non-empty subscription ID");
         }
         
         [Fact]
-        public void StartSubscriber_ShouldInvokeCallback_WhenMessageIsReceived()
-        {
-            // Note: This is more of an integration test that would require actual socket communication
-            // For unit testing, we would need to mock the socket or use a test adapter
-            
-            // Arrange
-            using var adapter = new SocketCommunicationAdapter("localhost", 5000, 5001);
-            string receivedTopic = null;
-            string receivedMessage = null;
-            var messageReceived = new ManualResetEventSlim(false);
-            
-            adapter.StartSubscriber((topic, message) => {
-                receivedTopic = topic;
-                receivedMessage = message;
-                messageReceived.Set();
-            });
-            
-            // In a real test environment, we would now send a message to the adapter
-            // But for unit testing purposes, this would require integration with real sockets
-            
-            // For demonstration purposes only:
-            // messageReceived.Wait(TimeSpan.FromSeconds(1));
-            
-            // Assert
-            // receivedTopic.Should().Be("expectedTopic");
-            // receivedMessage.Should().Be("expectedMessage");
-            
-            // Since we can't easily simulate receiving a message in a unit test,
-            // this test is more of a placeholder
-        }
-        
-        [Fact]
-        public void SubscribeToTopic_ShouldSubscribeToSpecificTopic()
+        public void SubscribeAll_ShouldReturnSubscriptionId()
         {
             // Arrange
-            using var adapter = new SocketCommunicationAdapter("localhost", 5000, 5001);
-            adapter.StartSubscriber((_, _) => { });
+            using var adapter = new SocketCommunicationAdapter("localhost", 5000, false);
             
             // Act
-            adapter.SubscribeToTopic("testTopic");
+            string subscriptionId = adapter.SubscribeAll((_, _) => { });
             
-            // Assert - No exception thrown means success
-            // In a real test, we would verify the subscription was successful
+            // Assert
+            subscriptionId.Should().NotBeNullOrEmpty("SubscribeAll should return a non-empty subscription ID");
         }
         
         [Fact]
-        public void Stop_ShouldStopPublisherAndSubscriber()
+        public void Unsubscribe_WithValidId_ShouldReturnTrue()
         {
             // Arrange
-            using var adapter = new SocketCommunicationAdapter("localhost", 5000, 5001);
-            adapter.StartPublisher();
-            adapter.StartSubscriber((_, _) => { });
+            using var adapter = new SocketCommunicationAdapter("localhost", 5000, false);
+            string subscriptionId = adapter.Subscribe("topic", (_, _) => { });
+            
+            // Act
+            bool result = adapter.Unsubscribe(subscriptionId);
+            
+            // Assert
+            result.Should().BeTrue("Unsubscribe should return true for a valid subscription ID");
+        }
+        
+        [Fact]
+        public void Unsubscribe_WithInvalidId_ShouldReturnFalse()
+        {
+            // Arrange
+            using var adapter = new SocketCommunicationAdapter("localhost", 5000, false);
+            
+            // Act
+            bool result = adapter.Unsubscribe("invalid-id");
+            
+            // Assert
+            result.Should().BeFalse("Unsubscribe should return false for an invalid subscription ID");
+        }
+        
+        [Fact]
+        public void Stop_ShouldClearAllResources()
+        {
+            // Arrange
+            using var adapter = new SocketCommunicationAdapter("localhost", 5000, false);
+            adapter.Start();
             
             // Act
             adapter.Stop();
             
             // Assert
-            // After stopping, publishing should return false
-            bool publishResult = adapter.Publish("topic", "message");
-            publishResult.Should().BeFalse("After stopping, Publish should return false");
+            bool sendResult = adapter.SendMessage("topic", "message");
+            sendResult.Should().BeFalse("After stopping, SendMessage should return false");
         }
     }
 }
