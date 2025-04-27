@@ -53,12 +53,25 @@ namespace PokerGame.Core.Microservices
             : base("CardDeck", "Card Deck Service", publisherPort, subscriberPort)
         {
             _useEmergencyDeckMode = useEmergencyDeckMode;
+        }
+        
+        /// <summary>
+        /// Constructor to match what MicroserviceManager expects (serviceType, serviceName, publisherPort, subscriberPort)
+        /// </summary>
+        public CardDeckService(
+            string serviceType,
+            string serviceName,
+            int publisherPort,
+            int subscriberPort,
+            bool useEmergencyDeckMode = false)
+            : base(serviceType, serviceName, publisherPort, subscriberPort)
+        {
+            _useEmergencyDeckMode = useEmergencyDeckMode;
             
             if (_useEmergencyDeckMode)
             {
                 Console.WriteLine("===> CardDeckService: Running in emergency deck mode - will create decks immediately without network");
             }
-            
             // Ensure that the card deck service is properly initialized
             VerifyCriticalMessageHandlers();
         }

@@ -57,14 +57,8 @@ namespace PokerGame.Core.Microservices
         }
         
         /// <summary>
-        /// Creates a new game engine service with service type, name, and ports
-        /// This constructor matches the pattern expected by MicroserviceManager reflection instantiation
+        /// Constructor to match what MicroserviceManager expects (serviceType, serviceName, publisherPort, subscriberPort)
         /// </summary>
-        /// <param name="serviceType">The type of the service</param>
-        /// <param name="serviceName">The name of the service</param>
-        /// <param name="publisherPort">The port to publish messages on</param>
-        /// <param name="subscriberPort">The port to subscribe to messages on</param>
-        /// <param name="verbose">Whether verbose logging is enabled</param>
         public GameEngineService(
             string serviceType,
             string serviceName,
@@ -73,12 +67,12 @@ namespace PokerGame.Core.Microservices
             bool verbose = false)
             : base(serviceType, serviceName, publisherPort, subscriberPort)
         {
-            Console.WriteLine($"GameEngineService created with reflection-compatible constructor: serviceType={serviceType}, serviceName={serviceName}");
-            
             // Initialize with null-check protection
             _microserviceUI = new MicroserviceUI(this);
             _gameEngine = new PokerGameEngine(_microserviceUI);
             _microserviceUI.SetGameEngine(_gameEngine);
+            
+            Console.WriteLine($"GameEngineService created with reflection-compatible constructor: serviceType={serviceType}, serviceName={serviceName}");
         }
         
         /// <summary>
