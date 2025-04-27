@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Advanced script for managing poker game services using the new launcher
-# This script uses the PokerGame.Launcher project to manage services more reliably
+# Simple script for managing poker game services using the new launcher
+# This script uses the PokerGame.Launcher project which now has built-in service management
 
 # Function to build the launcher if needed
 build_launcher() {
@@ -24,71 +24,20 @@ run_launcher() {
     # Build the launcher first
     build_launcher
     
-    # Prepare arguments array
-    local cmdArgs=("$command")
-    
     # Process additional arguments
-    # For System.CommandLine beta4, we need to use a different strategy
-    # Try using explicit flag=value syntax for each argument
+    # Pass them directly to the launcher
+    local args=("$command")
     
-    # Check for common command-line flags
-    local portValue=""
-    local useVerbose=false
-    local useCurses=false
-    local nextIsPort=false
-    
+    # Add all other arguments as-is
     for arg in "$@"; do
-        case "$arg" in
-            --port-offset=*|-p=*)
-                # Extract the port offset value
-                portValue="${arg#*=}"
-                ;;
-            --port-offset|-p)
-                # The next argument is the port value
-                nextIsPort=true
-                ;;
-            [0-9]*)
-                # If this is just a number, assume it's a port value
-                if [ "$nextIsPort" = true ]; then
-                    portValue="$arg"
-                    nextIsPort=false
-                elif [ -z "$portValue" ]; then
-                    # If no port value yet, assume it's a port offset
-                    portValue="$arg"
-                fi
-                ;;
-            --verbose|-v)
-                useVerbose=true
-                ;;
-            --curses|-c)
-                useCurses=true
-                ;;
-        esac
+        args+=("$arg")
     done
     
-    # Set up the command arguments
-    cmdArgs=("$command")
-    
-    # Add the port offset if provided
-    if [ -n "$portValue" ]; then
-        # Use separate arguments for flag and value with System.CommandLine
-        cmdArgs+=("--port-offset" "$portValue")
-    fi
-    
-    # Add other flags
-    if [ "$useVerbose" = true ]; then
-        cmdArgs+=("--verbose")
-    fi
-    
-    if [ "$useCurses" = true ]; then
-        cmdArgs+=("--curses")
-    fi
-    
     # Print the command to be executed
-    echo "Executing: dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --no-build -- ${cmdArgs[*]}"
+    echo "Executing: dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --no-build -- ${args[*]}"
     
     # Run the launcher with the specified command and processed arguments
-    dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --no-build -- "${cmdArgs[@]}"
+    dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --no-build -- "${args[@]}"
     
     return $?
 }

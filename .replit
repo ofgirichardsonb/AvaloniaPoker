@@ -30,7 +30,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "./poker-services.sh start-client --port-offset=200 --curses"
+args = "./poker-services.sh start-client --port-offset 200 --curses"
 
 [[workflows.workflow]]
 name = "poker_curses"
@@ -49,7 +49,7 @@ task = "shell.exec"
 args = "./poker-services.sh services-and-curses --port-offset 5000 --verbose"
 
 [deployment]
-run = ["sh", "-c", "./poker-services.sh start-client --port-offset=200 --curses"]
+run = ["sh", "-c", "./poker-services.sh start-client --port-offset 200 --curses"]
 
 [[ports]]
 localPort = 5570

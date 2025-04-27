@@ -1,5 +1,3 @@
-using PokerGame.Core.Process;
-
 namespace PokerGame.Launcher
 {
     /// <summary>
