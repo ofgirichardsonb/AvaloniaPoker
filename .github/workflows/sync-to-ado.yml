@@ -34,8 +34,25 @@ jobs:
           echo "Branch: $BRANCH"
           echo "SHA: $SHA"
 
-          # URL encode the project name
-          PROJECT_ENC=$(echo -n "$PROJECT" | perl -MURI::Escape -ne 'print uri_escape($_)')
+          # URL encode the project name (simpler approach)
+          PROJECT_ENC=$(echo "$PROJECT" | sed 's/ /%20/g')
+
+          # API base URL
+          API_URL="https://dev.azure.com/$ORG/$PROJECT_ENC/_apis/git/repositories/$REPO"
+
+          echo "API URL: $API_URL"
+
+          # Test PAT with a simple API call
+          echo "Testing authentication..."
+          AUTH_TEST=$(curl -s -o /dev/null -w "%{http_code}" -u ":$PAT" \
+            "https://dev.azure.com/$ORG/_apis/projects?api-version=6.0")
+
+          echo "Auth test HTTP status: $AUTH_TEST"
+
+          if [ "$AUTH_TEST" != "200" ]; then
+            echo "Authentication failed! Check your PAT token."
+            exit 1
+          fi
 
           # API base URL
           API_URL="https://dev.azure.com/$ORG/$PROJECT_ENC/_apis/git/repositories/$REPO"
@@ -45,57 +62,40 @@ jobs:
 
           # Check if branch exists
           echo "Checking if branch exists..."
-          RESPONSE=$(curl -s -H "$AUTH_HEADER" \
+          REFS_RESPONSE=$(curl -s -u ":$PAT" \
             "$API_URL/refs?filter=heads/$BRANCH&api-version=6.0")
 
-          echo "Response: $RESPONSE"
+          # Save HTTP status code
+          REFS_STATUS=$?
 
-          # If branch doesn't exist, create it
-          if echo $RESPONSE | grep -q '"count":0'; then
-            echo "Branch doesn't exist, creating it..."
+          echo "Refs API status: $REFS_STATUS"
+          echo "Refs API response: $REFS_RESPONSE"
 
-            # Create branch reference using the refs API
-            CREATE_JSON="[{\"name\":\"refs/heads/$BRANCH\",\"newObjectId\":\"$SHA\",\"oldObjectId\":\"0000000000000000000000000000000000000000\"}]"
-
-            echo "Create JSON: $CREATE_JSON"
-
-            CREATE_RESPONSE=$(curl -s -X POST -H "$AUTH_HEADER" \
-              -H "Content-Type: application/json" \
-              -d "$CREATE_JSON" \
-              "$API_URL/refs?api-version=6.0")
-
-            echo "Create response: $CREATE_RESPONSE"
-
-            # Check for success
-            if echo $CREATE_RESPONSE | grep -q "$SHA"; then
-              echo "Branch created successfully!"
-            else
-              echo "Branch creation failed!"
-              exit 1
-            fi
-
-          # If branch exists, update it
-          else
-            echo "Branch exists, updating it..."
-            OLD_SHA=$(echo $RESPONSE | grep -o '"objectId":"[^"]*"' | head -1 | cut -d'"' -f4)
-
-            # Update branch reference using the refs API
-            UPDATE_JSON="[{\"name\":\"refs/heads/$BRANCH\",\"newObjectId\":\"$SHA\",\"oldObjectId\":\"$OLD_SHA\"}]"
-
-            echo "Update JSON: $UPDATE_JSON" 
-
-            UPDATE_RESPONSE=$(curl -s -X POST -H "$AUTH_HEADER" \
-              -H "Content-Type: application/json" \
-              -d "$UPDATE_JSON" \
-              "$API_URL/refs?api-version=6.0")
-
-            echo "Update response: $UPDATE_RESPONSE"
-
-            # Check for success
-            if echo $UPDATE_RESPONSE | grep -q "$SHA"; then
-              echo "Branch updated successfully!"
-            else
-              echo "Branch update failed!"
-              exit 1
-            fi
+          # If curl failed completely
+          if [ $REFS_STATUS -ne 0 ]; then
+            echo "Failed to connect to Azure DevOps API. Check your network and API URL."
+            exit 1
           fi
+
+          # Try a different API call to test repository access
+          echo "Testing repository access..."
+          REPO_TEST=$(curl -s -u ":$PAT" \
+            "$API_URL?api-version=6.0")
+
+          echo "Repository API response: $REPO_TEST"
+
+          # Try creating/updating branch directly with simplified approach
+          echo "Attempting to update branch reference..."
+
+          # Simplified JSON for creating/updating the branch
+          REF_JSON="[{\"name\":\"refs/heads/$BRANCH\",\"newObjectId\":\"$SHA\",\"oldObjectId\":\"0000000000000000000000000000000000000000\"}]"
+
+          echo "Reference JSON: $REF_JSON"
+
+          # Add verbose flag to see more details about the request
+          UPDATE_RESPONSE=$(curl -v -u ":$PAT" \
+            -H "Content-Type: application/json" \
+            -d "$REF_JSON" \
+            "$API_URL/refs?api-version=6.0")
+
+          echo "Update response: $UPDATE_RESPONSE"
