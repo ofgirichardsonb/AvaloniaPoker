@@ -422,11 +422,31 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     {
                         Console.WriteLine($"Responding with targeted registration to {message.SenderId}");
                         SendTargetedRegistrationTo(message.SenderId);
+                        
+                        // Send multiple times for reliability
+                        Task.Run(async () => {
+                            for (int i = 0; i < 3; i++)
+                            {
+                                await Task.Delay(200 * (i + 1));
+                                Console.WriteLine($"Sending delayed targeted registration attempt {i+1} to {message.SenderId}");
+                                SendTargetedRegistrationTo(message.SenderId);
+                            }
+                        });
                     }
                     
                     // Also broadcast our registration for anyone else who might be listening
                     Console.WriteLine("Also broadcasting general registration");
                     PublishServiceRegistration();
+                    
+                    // Send multiple broadcasts for reliability
+                    Task.Run(async () => {
+                        for (int i = 0; i < 2; i++)
+                        {
+                            await Task.Delay(300 * (i + 1));
+                            Console.WriteLine($"Sending delayed broadcast registration attempt {i+1}");
+                            PublishServiceRegistration();
+                        }
+                    });
                 }
                 
                 await HandleMessageInternalAsync(message);

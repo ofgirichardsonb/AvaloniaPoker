@@ -140,6 +140,45 @@ namespace PokerGame.Core.ServiceManagement
             /// Interval between service discovery broadcasts in attempts
             /// </summary>
             public const int ServiceDiscoveryBroadcastInterval = 5;
+            
+            /// <summary>
+            /// Standard port offsets used in the system
+            /// </summary>
+            public static readonly int[] StandardPortOffsets = new[] { 0, 200, 5000 };
+            
+            /// <summary>
+            /// Attempts to normalize a port offset to one of the standard values
+            /// </summary>
+            /// <param name="offset">The provided port offset</param>
+            /// <returns>The normalized port offset</returns>
+            public static int NormalizePortOffset(int offset)
+            {
+                // If the offset matches a standard offset, return it
+                foreach (var standardOffset in StandardPortOffsets)
+                {
+                    if (offset == standardOffset)
+                    {
+                        return offset;
+                    }
+                }
+                
+                // If not a standard offset, use the closest one
+                // This helps with compatibility when different offsets are used
+                int closestOffset = StandardPortOffsets[0];
+                int minDifference = Math.Abs(offset - closestOffset);
+                
+                foreach (var standardOffset in StandardPortOffsets)
+                {
+                    int difference = Math.Abs(offset - standardOffset);
+                    if (difference < minDifference)
+                    {
+                        minDifference = difference;
+                        closestOffset = standardOffset;
+                    }
+                }
+                
+                return closestOffset;
+            }
         }
     }
 }

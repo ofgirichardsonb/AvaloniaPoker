@@ -19,6 +19,7 @@ namespace PokerGame.Core.Microservices
         Notification,     // General notification/info message
         Acknowledgment,   // Generic acknowledgment for any message
         Ping,             // Ping message to check service availability
+        Debug,            // Debug information message
         
         // Game engine messages
         StartGame,        // Request to start a new game

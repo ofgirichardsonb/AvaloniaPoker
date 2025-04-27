@@ -48,6 +48,14 @@ namespace PokerGame.Core.Microservices
         protected readonly int _subscriberPort;
         
         /// <summary>
+        /// Gets the service registry showing service ID to service type mappings
+        /// </summary>
+        protected Dictionary<string, string> GetServiceRegistry()
+        {
+            return _serviceRegistry.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+        }
+                
+        /// <summary>
         /// Creates a new microservice instance with an execution context
         /// </summary>
         /// <param name="serviceType">The type of service</param>
@@ -188,6 +196,25 @@ namespace PokerGame.Core.Microservices
             
             // Send one more registration after everything is started
             RegisterService();
+            
+            // Send multiple registrations with increasing delays for improved reliability
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Enhanced service discovery: sending multiple registrations");
+            Task.Run(async () => {
+                for (int i = 0; i < 5; i++)
+                {
+                    await Task.Delay(100 * (i + 1));
+                    PublishServiceRegistration();
+                }
+            });
+            
+            // Debug our sockets and connections
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Publisher port: {_publisherPort}, Subscriber port: {_subscriberPort}");
+            
+            // Broadcast port information to help with debugging
+            var portInfoMessage = Message.Create(MessageType.Debug, 
+                $"Service {_serviceName} ({_serviceType}) is using publisher port {_publisherPort} and subscriber port {_subscriberPort}");
+            portInfoMessage.SenderId = _serviceId;
+            Broadcast(portInfoMessage);
             
             Console.WriteLine($"====> [{_serviceType} {_serviceId}] Microservice async start completed");
         }
@@ -434,6 +461,49 @@ namespace PokerGame.Core.Microservices
             
             // Wait briefly to allow broadcast to complete before attempting other communications
             Thread.Sleep(100);
+        }
+        
+        /// <summary>
+        /// Sends a targeted service registration directly to a specific service
+        /// </summary>
+        /// <param name="targetServiceId">The ID of the service to send registration to</param>
+        public void SendTargetedRegistrationTo(string targetServiceId)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(targetServiceId))
+                {
+                    Console.WriteLine("Cannot send targeted registration: target service ID is null or empty");
+                    return;
+                }
+                
+                var registrationInfo = new ServiceRegistrationPayload
+                {
+                    ServiceId = _serviceId,
+                    ServiceName = _serviceName,
+                    ServiceType = _serviceType,
+                    Endpoint = $"tcp://127.0.0.1:{_publisherPort}",
+                    Capabilities = GetServiceCapabilities()
+                };
+                
+                var message = Message.Create(MessageType.ServiceRegistration, registrationInfo);
+                message.SenderId = _serviceId;
+                message.ReceiverId = targetServiceId; // Target specific service
+                message.MessageId = Guid.NewGuid().ToString();
+                
+                // Log this targeted registration
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Sending targeted registration to service {targetServiceId} with message ID {message.MessageId}");
+                
+                // Direct send to target - use SendTo instead of SendMessage
+                SendTo(message, targetServiceId);
+                
+                // Wait briefly to allow message to be processed
+                Thread.Sleep(100);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending targeted registration: {ex.Message}");
+            }
         }
         
         /// <summary>
@@ -765,7 +835,13 @@ namespace PokerGame.Core.Microservices
             
             if (payload != null)
             {
-                _serviceRegistry[payload.ServiceId] = payload.ServiceType;
+                // Add or update the service registry - use ConcurrentDictionary's thread-safe methods
+                _serviceRegistry.AddOrUpdate(
+                    payload.ServiceId,
+                    payload.ServiceType, // Add this value if the key doesn't exist
+                    (key, oldValue) => payload.ServiceType // Update to this value if the key exists
+                );
+                
                 Console.WriteLine($"Registered service: {payload.ServiceName} ({payload.ServiceType})");
                 
                 // Let derived classes know about the registration
@@ -828,6 +904,51 @@ namespace PokerGame.Core.Microservices
         {
             // Base implementation does nothing
             return Task.CompletedTask;
+        }
+        
+        /// <summary>
+        /// Attempts to discover services of a specified type with multiple retry attempts
+        /// </summary>
+        /// <param name="serviceType">The service type to discover</param>
+        /// <param name="maxAttempts">Maximum number of attempts to find the service</param>
+        /// <param name="delayBetweenAttemptsMs">Delay between attempts in milliseconds</param>
+        /// <returns>A list of found service IDs</returns>
+        protected async Task<List<string>> DiscoverServicesWithRetryAsync(string serviceType, int maxAttempts = 10, int delayBetweenAttemptsMs = 300)
+        {
+            Console.WriteLine($"Starting service discovery for {serviceType} with {maxAttempts} max attempts");
+            
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                // Check if we have any services of this type already registered
+                var serviceIds = GetServicesOfType(serviceType);
+                if (serviceIds.Count > 0)
+                {
+                    Console.WriteLine($"Found {serviceIds.Count} {serviceType} services on attempt {attempt}/{maxAttempts}");
+                    return serviceIds;
+                }
+                
+                // If we don't have any services registered, send a discovery message
+                if (attempt % 2 == 1) // Send discovery message on odd-numbered attempts
+                {
+                    Console.WriteLine($"Broadcasting service discovery message (attempt {attempt}/{maxAttempts})");
+                    
+                    // Send general service discovery first
+                    var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
+                    discoveryMsg.SenderId = _serviceId;
+                    discoveryMsg.MessageId = Guid.NewGuid().ToString();
+                    Broadcast(discoveryMsg);
+                    
+                    // Then send our own registration in case other services are looking for us
+                    PublishServiceRegistration();
+                }
+                
+                // Wait before the next attempt
+                await Task.Delay(delayBetweenAttemptsMs);
+            }
+            
+            // If we've exhausted all attempts, return an empty list
+            Console.WriteLine($"Failed to discover any {serviceType} services after {maxAttempts} attempts");
+            return new List<string>();
         }
     }
 }

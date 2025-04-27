@@ -90,7 +90,15 @@ namespace PokerGame.Launcher
         {
             try
             {
+                // Try to get instrumentation key from configuration first
                 var instrumentationKey = configuration["ApplicationInsights:InstrumentationKey"];
+                
+                // If not found in configuration, check environment variables
+                if (string.IsNullOrEmpty(instrumentationKey))
+                {
+                    instrumentationKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
+                }
+                
                 if (!string.IsNullOrEmpty(instrumentationKey))
                 {
                     _telemetryService = TelemetryService.Instance;

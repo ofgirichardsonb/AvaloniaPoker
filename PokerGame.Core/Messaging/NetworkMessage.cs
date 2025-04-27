@@ -16,6 +16,7 @@ namespace PokerGame.Core.Messaging
         Acknowledgment,
         Error,
         Ping,
+        Debug,
         
         // Game-related messages
         GameState,
