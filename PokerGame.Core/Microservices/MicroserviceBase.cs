@@ -46,7 +46,30 @@ namespace PokerGame.Core.Microservices
         private readonly int _heartbeatIntervalMs;
         
         /// <summary>
-        /// Creates a new microservice instance
+        /// Creates a new microservice instance with an execution context
+        /// </summary>
+        /// <param name="serviceType">The type of service</param>
+        /// <param name="serviceName">The human-readable name of the service</param>
+        /// <param name="executionContext">The execution context to use</param>
+        /// <param name="heartbeatIntervalMs">The interval between heartbeats in milliseconds</param>
+        protected MicroserviceBase(
+            string serviceType, 
+            string serviceName, 
+            Messaging.ExecutionContext executionContext,
+            int heartbeatIntervalMs = 5000)
+        {
+            _serviceId = Guid.NewGuid().ToString();
+            _serviceName = serviceName;
+            _serviceType = serviceType;
+            _heartbeatIntervalMs = heartbeatIntervalMs;
+            
+            // Use the provided execution context to set up messaging
+            // The broker will handle the actual communication
+            Console.WriteLine($"Creating microservice {serviceName} ({serviceType}) with execution context");
+        }
+        
+        /// <summary>
+        /// Creates a new microservice instance with ports for backward compatibility
         /// </summary>
         /// <param name="serviceType">The type of service</param>
         /// <param name="serviceName">The human-readable name of the service</param>

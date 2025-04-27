@@ -30,7 +30,20 @@ namespace PokerGame.Core.Microservices
         private readonly Dictionary<string, ServiceRegistrationPayload> _knownServices = new Dictionary<string, ServiceRegistrationPayload>();
         
         /// <summary>
-        /// Creates a new game engine service
+        /// Creates a new game engine service with an execution context
+        /// </summary>
+        /// <param name="executionContext">The execution context to use</param>
+        public GameEngineService(Messaging.ExecutionContext executionContext) 
+            : base("GameEngine", "Poker Game Engine", executionContext)
+        {
+            // Initialize with null-check protection
+            _microserviceUI = new MicroserviceUI(this);
+            _gameEngine = new PokerGameEngine(_microserviceUI);
+            _microserviceUI.SetGameEngine(_gameEngine);
+        }
+        
+        /// <summary>
+        /// Creates a new game engine service with specific ports (backwards compatibility)
         /// </summary>
         /// <param name="publisherPort">The port to use for publishing messages</param>
         /// <param name="subscriberPort">The port to use for subscribing to messages</param>

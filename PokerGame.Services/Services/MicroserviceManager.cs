@@ -116,30 +116,71 @@ namespace PokerGame.Services
             bool verbose = false,
             params object[] constructorArgs) where T : MicroserviceBase
         {
-            // Create a service-specific execution context from the broker manager's context
-            var executionContext = _brokerManager.CreateServiceExecutionContext();
-            
             try
             {
-                // MicroserviceBase constructor expects:
-                // (string serviceType, string serviceName, int publisherPort, int subscriberPort, [int heartbeatIntervalMs = 5000])
-                // followed by any additional parameters
+                // Create a service-specific execution context from the broker manager's context
+                var executionContext = _brokerManager.CreateServiceExecutionContext();
                 
-                // Prepare the base constructor parameters - note serviceName and serviceType are reversed from our method params
-                var parameters = new List<object>();
-                parameters.Add(serviceType);       // serviceType first
-                parameters.Add(serviceName);       // then serviceName
-                parameters.Add(publisherPort);     // then publisherPort
-                parameters.Add(subscriberPort);    // then subscriberPort
+                // Try to create the service with the ExecutionContext-based constructor first
+                T? instance = null;
+                bool useExecutionContextConstructor = true;
                 
-                // Add any additional constructor arguments
-                if (constructorArgs != null && constructorArgs.Length > 0)
+                try
                 {
-                    parameters.AddRange(constructorArgs);
+                    // First try the ExecutionContext constructor
+                    var ecParameters = new List<object>();
+                    ecParameters.Add(executionContext);
+                    
+                    // Add any additional constructor arguments
+                    if (constructorArgs != null && constructorArgs.Length > 0)
+                    {
+                        ecParameters.AddRange(constructorArgs);
+                    }
+                    
+                    Console.WriteLine($"Attempting to create {typeof(T).Name} with ExecutionContext constructor");
+                    instance = (T)Activator.CreateInstance(typeof(T), ecParameters.ToArray());
+                    Console.WriteLine($"Successfully created {typeof(T).Name} with ExecutionContext constructor");
+                }
+                catch (Exception ex)
+                {
+                    // If the ExecutionContext constructor failed, use the port-based constructor as fallback
+                    Console.WriteLine($"ExecutionContext constructor failed: {ex.Message}. Falling back to port-based constructor.");
+                    useExecutionContextConstructor = false;
                 }
                 
-                // Create the service instance using reflection
-                var instance = (T)Activator.CreateInstance(typeof(T), parameters.ToArray());
+                // If ExecutionContext constructor failed, try the port-based constructor
+                if (!useExecutionContextConstructor)
+                {
+                    try
+                    {
+                        // MicroserviceBase constructor expects:
+                        // (string serviceType, string serviceName, int publisherPort, int subscriberPort, [int heartbeatIntervalMs = 5000])
+                        // followed by any additional parameters
+                        
+                        // Prepare the base constructor parameters - note serviceName and serviceType are reversed from our method params
+                        var parameters = new List<object>();
+                        parameters.Add(serviceType);       // serviceType first
+                        parameters.Add(serviceName);       // then serviceName
+                        parameters.Add(publisherPort);     // then publisherPort
+                        parameters.Add(subscriberPort);    // then subscriberPort
+                        
+                        // Add any additional constructor arguments
+                        if (constructorArgs != null && constructorArgs.Length > 0)
+                        {
+                            parameters.AddRange(constructorArgs);
+                        }
+                        
+                        // Create the service instance using reflection with port-based constructor
+                        Console.WriteLine($"Attempting to create {typeof(T).Name} with port-based constructor");
+                        instance = (T)Activator.CreateInstance(typeof(T), parameters.ToArray());
+                        Console.WriteLine($"Successfully created {typeof(T).Name} with port-based constructor");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error creating service with port-based constructor: {ex.Message}");
+                        throw new InvalidOperationException($"Failed to create instance of {typeof(T).Name} with either ExecutionContext or port-based constructor", ex);
+                    }
+                }
                 
                 if (instance == null)
                 {

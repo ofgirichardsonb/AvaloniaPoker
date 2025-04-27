@@ -23,7 +23,25 @@ namespace PokerGame.Core.Microservices
         private readonly bool _useEmergencyDeckMode;
         
         /// <summary>
-        /// Creates a new card deck service
+        /// Creates a new card deck service with an execution context
+        /// </summary>
+        /// <param name="executionContext">The execution context to use</param>
+        /// <param name="useEmergencyDeckMode">Whether to always use emergency decks instead of network communication</param>
+        public CardDeckService(
+            Messaging.ExecutionContext executionContext,
+            bool useEmergencyDeckMode = false)
+            : base("CardDeck", "Card Deck Service", executionContext)
+        {
+            _useEmergencyDeckMode = useEmergencyDeckMode;
+            
+            if (_useEmergencyDeckMode)
+            {
+                Console.WriteLine("===> CardDeckService: Running in emergency deck mode - will create decks immediately without network");
+            }
+        }
+        
+        /// <summary>
+        /// Creates a new card deck service with specific ports (backwards compatibility)
         /// </summary>
         /// <param name="publisherPort">The port to publish messages on</param>
         /// <param name="subscriberPort">The port to subscribe to messages on</param>
