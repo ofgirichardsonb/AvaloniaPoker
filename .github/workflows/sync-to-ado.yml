@@ -31,47 +31,71 @@ jobs:
           BRANCH="${{ github.ref_name }}"
           SHA="${{ github.sha }}"
 
-          # Debug info
           echo "Branch: $BRANCH"
           echo "SHA: $SHA"
 
           # URL encode the project name
           PROJECT_ENC=$(echo -n "$PROJECT" | perl -MURI::Escape -ne 'print uri_escape($_)')
 
+          # API base URL
+          API_URL="https://dev.azure.com/$ORG/$PROJECT_ENC/_apis/git/repositories/$REPO"
+
+          # Authorization header with base64 encoded PAT
+          AUTH_HEADER="Authorization: Basic $(echo -n ":$PAT" | base64)"
+
           # Check if branch exists
           echo "Checking if branch exists..."
-          RESPONSE=$(curl -s -u ":$PAT" \
-            "https://dev.azure.com/$ORG/$PROJECT_ENC/_apis/git/repositories/$REPO/refs?filter=heads/$BRANCH&api-version=6.0")
+          RESPONSE=$(curl -s -H "$AUTH_HEADER" \
+            "$API_URL/refs?filter=heads/$BRANCH&api-version=6.0")
 
           echo "Response: $RESPONSE"
 
-          # Extract old object ID, or use zeros if branch doesn't exist
-          OLD_OBJECT_ID=$(echo $RESPONSE | grep -o '"objectId":"[^"]*"' | head -1 | cut -d'"' -f4)
-          if [ -z "$OLD_OBJECT_ID" ]; then
-            OLD_OBJECT_ID="0000000000000000000000000000000000000000"
-            echo "Branch doesn't exist, using zeros for old object ID"
+          # If branch doesn't exist, create it
+          if echo $RESPONSE | grep -q '"count":0'; then
+            echo "Branch doesn't exist, creating it..."
+
+            # Create branch reference using the refs API
+            CREATE_JSON="[{\"name\":\"refs/heads/$BRANCH\",\"newObjectId\":\"$SHA\",\"oldObjectId\":\"0000000000000000000000000000000000000000\"}]"
+
+            echo "Create JSON: $CREATE_JSON"
+
+            CREATE_RESPONSE=$(curl -s -X POST -H "$AUTH_HEADER" \
+              -H "Content-Type: application/json" \
+              -d "$CREATE_JSON" \
+              "$API_URL/refs?api-version=6.0")
+
+            echo "Create response: $CREATE_RESPONSE"
+
+            # Check for success
+            if echo $CREATE_RESPONSE | grep -q "$SHA"; then
+              echo "Branch created successfully!"
+            else
+              echo "Branch creation failed!"
+              exit 1
+            fi
+
+          # If branch exists, update it
           else
-            echo "Branch exists with object ID: $OLD_OBJECT_ID"
-          fi
+            echo "Branch exists, updating it..."
+            OLD_SHA=$(echo $RESPONSE | grep -o '"objectId":"[^"]*"' | head -1 | cut -d'"' -f4)
 
-          # Create the JSON payload
-          JSON_PAYLOAD="{\"refUpdates\":[{\"name\":\"refs/heads/$BRANCH\",\"oldObjectId\":\"$OLD_OBJECT_ID\",\"newObjectId\":\"$SHA\"}],\"commits\":[]}"
+            # Update branch reference using the refs API
+            UPDATE_JSON="[{\"name\":\"refs/heads/$BRANCH\",\"newObjectId\":\"$SHA\",\"oldObjectId\":\"$OLD_SHA\"}]"
 
-          echo "JSON payload: $JSON_PAYLOAD"
+            echo "Update JSON: $UPDATE_JSON" 
 
-          # Make the API call
-          echo "Sending API request..."
-          RESPONSE=$(curl -s -X POST -u ":$PAT" \
-            -H "Content-Type: application/json" \
-            -d "$JSON_PAYLOAD" \
-            "https://dev.azure.com/$ORG/$PROJECT_ENC/_apis/git/repositories/$REPO/pushes?api-version=6.0")
+            UPDATE_RESPONSE=$(curl -s -X POST -H "$AUTH_HEADER" \
+              -H "Content-Type: application/json" \
+              -d "$UPDATE_JSON" \
+              "$API_URL/refs?api-version=6.0")
 
-          echo "API response: $RESPONSE"
+            echo "Update response: $UPDATE_RESPONSE"
 
-          # Check for success
-          if echo $RESPONSE | grep -q "\"refName\":\"refs/heads/$BRANCH\""; then
-            echo "Branch update successful!"
-          else
-            echo "Branch update failed!"
-            exit 1
+            # Check for success
+            if echo $UPDATE_RESPONSE | grep -q "$SHA"; then
+              echo "Branch updated successfully!"
+            else
+              echo "Branch update failed!"
+              exit 1
+            fi
           fi
