@@ -1,0 +1,190 @@
+@startuml MSA.Foundation Class Diagram
+
+skinparam classAttributeIconSize 0
+skinparam backgroundColor white
+skinparam classFontSize 12
+skinparam classFontName Arial
+skinparam classArrowFontSize 11
+
+' Define packages
+package "MSA.Foundation.Messaging" {
+    interface IMessageBroker {
+        + void Start()
+        + void Stop()
+        + bool PublishMessage(Message message)
+        + Task<bool> PublishMessageAsync(Message message)
+        + string Subscribe(MessageType messageType, Action<Message> callback)
+        + string SubscribeAsync(MessageType messageType, Func<Message, Task> callback)
+        + string SubscribeAll(Action<Message> callback)
+        + string SubscribeAllAsync(Func<Message, Task> callback)
+        + bool Unsubscribe(string subscriptionId)
+    }
+    
+    class MessageBroker {
+        - SocketCommunicationAdapter _socketAdapter
+        - ConcurrentDictionary<string, Subscription> _subscriptions
+        - string _brokerId
+        - bool _isRunning
+        + MessageBroker(string address, int port, bool verbose)
+        + void Start()
+        + void Stop()
+        + bool PublishMessage(Message message)
+        + Task<bool> PublishMessageAsync(Message message)
+        + string Subscribe(MessageType messageType, Action<Message> callback)
+        + string SubscribeAsync(MessageType messageType, Func<Message, Task> callback)
+        + string SubscribeAll(Action<Message> callback)
+        + string SubscribeAllAsync(Func<Message, Task> callback)
+        + bool Unsubscribe(string subscriptionId)
+        - void OnMessageReceived(string topic, string payload)
+        - void SendAcknowledgment(Message message)
+    }
+    
+    class SocketCommunicationAdapter {
+        - string _address
+        - int _port
+        - bool _verbose
+        - PublisherSocket _publisherSocket
+        - SubscriberSocket _subscriberSocket
+        - Task _receiveTask
+        - CancellationTokenSource _cancellationTokenSource
+        - ConcurrentDictionary<string, Action<string, string>> _subscribers
+        + SocketCommunicationAdapter(string address, int port, bool verbose)
+        + void Start()
+        + void Stop()
+        + bool SendMessage(string topic, string message)
+        + string Subscribe(string topic, Action<string, string> callback)
+        + string SubscribeAll(Action<string, string> callback)
+        + bool Unsubscribe(string subscriptionId)
+        - void ReceiveMessages(CancellationToken cancellationToken)
+        - void LogVerbose(string message)
+    }
+    
+    class Message {
+        + string MessageId
+        + MessageType MessageType
+        + string SenderId
+        + string ReceiverId
+        + DateTime Timestamp
+        + string? Payload
+        + Dictionary<string, string> Headers
+        + bool RequireAcknowledgment
+        + string? AcknowledgmentId
+        + Message()
+        + Message(MessageType messageType, string senderId, string? payload)
+        + Message CreateAcknowledgment(string receiverId)
+        + Message CreateResponse(string receiverId, string? payload)
+        + string ToJson()
+        + {static} Message? FromJson(string json)
+        + void SetPayload<T>(T payload)
+        + T? GetPayload<T>()
+    }
+    
+    enum MessageType {
+        Unknown
+        ServiceRegistration
+        ServiceDiscovery
+        Command
+        Event
+        Acknowledgment
+        Heartbeat
+        Debug
+        Error
+        Data
+        Request
+        Response
+    }
+    
+    class Subscription {
+        + MessageType? MessageType
+        + Action<Message> Callback
+        + Subscription(MessageType? messageType, Action<Message> callback)
+    }
+}
+
+package "MSA.Foundation.Telemetry" {
+    interface ITelemetryService {
+        + bool Initialize(string instrumentationKey)
+        + void TrackEvent(string eventName, IDictionary<string, string>? properties)
+        + void TrackMetric(string metricName, double value, IDictionary<string, string>? properties)
+        + void TrackException(Exception exception, IDictionary<string, string>? properties)
+        + void TrackRequest(string name, DateTimeOffset timestamp, TimeSpan duration, string responseCode, bool success)
+        + void TrackDependency(string dependencyTypeName, string target, string dependencyName, string data, DateTimeOffset startTime, TimeSpan duration, bool success)
+        + void TrackTrace(string message, SeverityLevel severityLevel, IDictionary<string, string>? properties)
+        + void Flush()
+        + Task FlushAsync()
+    }
+    
+    class TelemetryService {
+        - {static} Lazy<TelemetryService> _instance
+        + {static} TelemetryService Instance
+        - TelemetryClient _telemetryClient
+        - DependencyTrackingTelemetryModule? _dependencyModule
+        - bool _isInitialized
+        - string? _instrumentationKey
+        - TelemetryService()
+        + bool Initialize(string instrumentationKey)
+        - string GetAppVersion()
+        + void TrackEvent(string eventName, IDictionary<string, string>? properties)
+        + void TrackMetric(string metricName, double value, IDictionary<string, string>? properties)
+        + void TrackException(Exception exception, IDictionary<string, string>? properties)
+        + void TrackRequest(string name, DateTimeOffset timestamp, TimeSpan duration, string responseCode, bool success)
+        + void TrackDependency(string dependencyTypeName, string target, string dependencyName, string data, DateTimeOffset startTime, TimeSpan duration, bool success)
+        + void TrackTrace(string message, SeverityLevel severityLevel, IDictionary<string, string>? properties)
+        + void Flush()
+        + Task FlushAsync()
+    }
+}
+
+package "MSA.Foundation.ServiceManagement" {
+    class ExecutionContext {
+        - CancellationTokenSource _cts
+        - Thread _thread
+        - bool _isRunning
+        + CancellationToken CancellationToken
+        + int ThreadId
+        + bool IsRunning
+        + ExecutionContext()
+        + ExecutionContext(Thread thread)
+        + Task RunAsync(Action action)
+        + Task<T> RunAsync<T>(Func<T> func)
+        + void Stop()
+    }
+    
+    class ServiceConstants {
+        + {static} string StaticServiceIdPrefix
+        + {static} int BaseCentralBrokerPort
+        + {static} int DynamicPortRangeStart
+        + {static} int DynamicPortRangeEnd
+        + {static} int GetCentralBrokerPort(int portOffset)
+        + {static} int NormalizePort(int port, int portOffset)
+        + {static} void RegisterStaticId(string serviceType, string staticId)
+        + {static} string GetStaticId(string serviceType)
+    }
+}
+
+' Relationship definitions
+IMessageBroker <|.. MessageBroker
+MessageBroker o-- SocketCommunicationAdapter
+MessageBroker o-- Message
+MessageBroker *-- Subscription
+Message ..> MessageType
+ITelemetryService <|.. TelemetryService
+
+' Add notes
+note right of MessageBroker::_subscriptions
+  Manages callbacks for message subscriptions
+end note
+
+note right of TelemetryService::Instance
+  Singleton pattern for global access
+end note
+
+note right of ExecutionContext
+  Manages thread lifecycle and cancellation
+end note
+
+note right of ServiceConstants
+  Contains static configuration and utility methods
+end note
+
+@enduml

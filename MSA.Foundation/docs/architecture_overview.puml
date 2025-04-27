@@ -1,0 +1,56 @@
+@startuml Architecture Overview
+
+skinparam componentStyle uml2
+skinparam packageStyle rectangle
+skinparam backgroundColor white
+skinparam DefaultFontSize 12
+
+!define MESSAGING_COLOR #C5E1A5
+!define TELEMETRY_COLOR #BBDEFB
+!define SERVICE_COLOR #F8BBD0
+!define EXTERNAL_COLOR #FFE082
+
+package "MSA.Foundation" {
+    
+    package "Messaging" #MESSAGING_COLOR {
+        [MessageBroker] as msgBroker
+        [SocketCommunicationAdapter] as socketAdapter
+        [Message] as message
+        [IMessageBroker] as iMsgBroker
+    }
+    
+    package "Telemetry" #TELEMETRY_COLOR {
+        [TelemetryService] as telemetry
+        [ITelemetryService] as iTelemetry
+    }
+    
+    package "ServiceManagement" #SERVICE_COLOR {
+        [ExecutionContext] as execContext
+        [ServiceConstants] as constants
+    }
+}
+
+cloud "External Dependencies" #EXTERNAL_COLOR {
+    [NetMQ] as netmq
+    [Application Insights] as appInsights
+}
+
+' Relationships within MSA.Foundation
+iMsgBroker <|-- msgBroker
+msgBroker --> socketAdapter : uses
+msgBroker --> message : creates/processes
+iTelemetry <|-- telemetry
+
+' Relationships with external dependencies
+socketAdapter --> netmq : uses
+telemetry --> appInsights : sends data to
+
+' Consumer relationship example
+actor "Application" as app
+app --> msgBroker : publishes/subscribes
+app --> telemetry : tracks events
+app --> execContext : manages lifecycle
+
+footer MSA Foundation v0.1.0 - Architecture Overview
+
+@enduml
