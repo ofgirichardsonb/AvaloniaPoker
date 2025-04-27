@@ -55,7 +55,7 @@ jobs:
           fi
 
           # Create the JSON payload
-          JSON_PAYLOAD="{\"refUpdates\":[{\"name\":\"refs/heads/$BRANCH\",\"oldObjectId\":\"$OLD_OBJECT_ID\",\"newObjectId\":\"$SHA\"}]}"
+          JSON_PAYLOAD="{\"refUpdates\":[{\"name\":\"refs/heads/$BRANCH\",\"oldObjectId\":\"$OLD_OBJECT_ID\",\"newObjectId\":\"$SHA\"}],\"commits\":[]}"
 
           echo "JSON payload: $JSON_PAYLOAD"
 
