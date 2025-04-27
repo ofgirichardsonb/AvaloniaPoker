@@ -151,14 +151,26 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         public virtual void Start()
         {
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Starting microservice: {_serviceName}");
+            
             // Start the message processing task
             _processingTask = Task.Run(ProcessMessagesAsync, _cancellationTokenSource?.Token ?? CancellationToken.None);
             
-            // Start the heartbeat task
+            // Give time for processing task to initialize
+            Thread.Sleep(300);
+            
+            // Register this service with others - do this before starting heartbeat
+            for (int i = 0; i < 3; i++)
+            {
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Sending service registration broadcast (attempt {i+1}/3)");
+                RegisterService();
+                Thread.Sleep(100); // Small delay between registration attempts
+            }
+            
+            // Start the heartbeat task after registration to ensure service is visible
             _heartbeatTask = Task.Run(SendHeartbeatAsync, _cancellationTokenSource?.Token ?? CancellationToken.None);
             
-            // Register this service with others
-            RegisterService();
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Microservice started successfully");
         }
         
         /// <summary>
@@ -166,11 +178,18 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         public virtual async Task StartAsync()
         {
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Starting microservice asynchronously: {_serviceName}");
+            
             // Start using the synchronous method
             Start();
             
-            // Give a small delay to allow initialization
-            await Task.Delay(100);
+            // Give a longer delay to allow full initialization and multiple registration broadcasts
+            await Task.Delay(500);
+            
+            // Send one more registration after everything is started
+            RegisterService();
+            
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Microservice async start completed");
         }
         
         /// <summary>
@@ -395,12 +414,26 @@ namespace PokerGame.Core.Microservices
                 ServiceId = _serviceId,
                 ServiceName = _serviceName,
                 ServiceType = _serviceType,
-                Endpoint = "tcp://127.0.0.1", // Base endpoint, actual port is in specific implementations
+                Endpoint = $"tcp://127.0.0.1:{_publisherPort}", // Include the port for better visibility
                 Capabilities = GetServiceCapabilities()
             };
             
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Publishing service registration: {_serviceName} ({_serviceType})");
+            
+            // Create and broadcast service registration
             var message = Message.Create(MessageType.ServiceRegistration, payload);
+            
+            // Set a unique message ID for better tracking
+            message.MessageId = Guid.NewGuid().ToString();
+            
+            // Log the registration details
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Broadcasting registration message ID: {message.MessageId}");
+            
+            // Broadcast the message
             Broadcast(message);
+            
+            // Wait briefly to allow broadcast to complete before attempting other communications
+            Thread.Sleep(100);
         }
         
         /// <summary>

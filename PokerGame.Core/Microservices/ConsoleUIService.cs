@@ -418,11 +418,46 @@ namespace PokerGame.Core.Microservices
             // This is a fallback in case the flag isn't properly passed from command line
             _useEnhancedUI = true;
             
-            // Wait for the game engine to be available
-            while (_gameEngineServiceId == null)
+            // Wait for the game engine to be available with active discovery
+            int waitAttempts = 0;
+            int maxWaitAttempts = 30; // 30 seconds max wait time
+            
+            while (_gameEngineServiceId == null && waitAttempts < maxWaitAttempts)
             {
-                Console.WriteLine("Waiting for game engine to start...");
+                waitAttempts++;
+                Console.WriteLine($"Waiting for game engine to start... (attempt {waitAttempts}/{maxWaitAttempts})");
+                
+                // Actively search for game engine services
+                var gameEngineSvcIds = GetServicesOfType("GameEngine");
+                if (gameEngineSvcIds.Count > 0)
+                {
+                    _gameEngineServiceId = gameEngineSvcIds[0];
+                    Console.WriteLine($"!!! Found game engine service: {_gameEngineServiceId} !!!");
+                    break;
+                }
+                
+                // Send a service discovery message to find the game engine
+                if (waitAttempts % 5 == 0) // Every 5 seconds
+                {
+                    Console.WriteLine("Sending service discovery broadcast...");
+                    var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
+                    discoveryMsg.SenderId = _serviceId;
+                    Broadcast(discoveryMsg);
+                }
+                
                 await Task.Delay(1000);
+            }
+            
+            // Check if we found the game engine
+            if (_gameEngineServiceId == null)
+            {
+                Console.WriteLine("ERROR: Could not find game engine service after maximum wait time.");
+                Console.WriteLine("Using dummy game engine service ID as fallback.");
+                _gameEngineServiceId = "GAME_ENGINE_DEFAULT_ID";
+            }
+            else
+            {
+                Console.WriteLine($"Successfully connected to game engine service: {_gameEngineServiceId}");
             }
             
             // Get number of players
