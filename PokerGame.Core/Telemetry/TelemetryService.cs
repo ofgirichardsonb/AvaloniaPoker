@@ -49,9 +49,12 @@ namespace PokerGame.Core.Telemetry
         /// <returns>True if initialization was successful, otherwise false</returns>
         public bool Initialize(string instrumentationKey)
         {
-            if (string.IsNullOrEmpty(instrumentationKey))
+            // Check if instrumentationKey is really empty or just whitespace
+            if (string.IsNullOrWhiteSpace(instrumentationKey))
             {
-                Console.WriteLine("Warning: Application Insights instrumentation key is missing or empty");
+                Console.WriteLine("WARNING: Application Insights instrumentation key is missing, empty, or just whitespace");
+                Console.WriteLine($"  - Key value: '{instrumentationKey}'");
+                Console.WriteLine($"  - Key length: {(instrumentationKey?.Length.ToString() ?? "null")}");
                 Console.WriteLine("  - Current directory: " + Directory.GetCurrentDirectory());
                 Console.WriteLine("  - Environment variable exists: " + 
                     (Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY") != null ? "Yes" : "No"));
@@ -60,11 +63,21 @@ namespace PokerGame.Core.Telemetry
             
             try
             {
-                Console.WriteLine("Initializing Application Insights telemetry with key length: " + instrumentationKey.Length);
+                // Make sure the key isn't just whitespace
+                string trimmedKey = instrumentationKey.Trim();
+                if (string.IsNullOrEmpty(trimmedKey))
+                {
+                    Console.WriteLine("WARNING: After trimming, Application Insights key is empty");
+                    return false;
+                }
                 
-                _instrumentationKey = instrumentationKey;
-                // Use ConnectionString instead of InstrumentationKey for modern Application Insights
-                _telemetryClient.TelemetryConfiguration.ConnectionString = $"InstrumentationKey={instrumentationKey}";
+                Console.WriteLine($"Initializing Application Insights telemetry with key: '{trimmedKey.Substring(0,4)}...' (Length: {trimmedKey.Length})");
+                
+                _instrumentationKey = trimmedKey;
+                
+                // Set both for compatibility
+                _telemetryClient.TelemetryConfiguration.InstrumentationKey = trimmedKey;
+                _telemetryClient.TelemetryConfiguration.ConnectionString = $"InstrumentationKey={trimmedKey}";
                 
                 // Set common properties for all telemetry
                 _telemetryClient.Context.Component.Version = GetAppVersion();
@@ -72,16 +85,20 @@ namespace PokerGame.Core.Telemetry
                 _telemetryClient.Context.User.Id = Environment.MachineName;
                 _telemetryClient.Context.Device.OperatingSystem = Environment.OSVersion.ToString();
                 
-                // Track initialization
+                // Log application identity data
+                Console.WriteLine($"Setting telemetry context - Version: {_telemetryClient.Context.Component.Version}, OS: {_telemetryClient.Context.Device.OperatingSystem}");
+                
+                // Track initialization with explicit flush
                 _telemetryClient.TrackEvent("TelemetryInitialized");
-                Console.WriteLine("Successfully initialized Application Insights telemetry");
+                _telemetryClient.Flush();
+                Console.WriteLine("Successfully initialized Application Insights telemetry and sent test event");
                 
                 _isInitialized = true;
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error initializing Application Insights: {ex.Message}");
+                Console.WriteLine($"ERROR initializing Application Insights: {ex.Message}");
                 Console.WriteLine($"Error details: {ex.StackTrace}");
                 return false;
             }

@@ -43,19 +43,37 @@ namespace PokerGame.Services
                     .Build();
 
                 // Initialize telemetry with configuration
+                Console.WriteLine("Starting telemetry initialization...");
+                
                 // Always try environment variable first as it's the most reliable approach
                 string? instrumentationKey = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY");
+                Console.WriteLine($"Environment variable APPINSIGHTS_INSTRUMENTATIONKEY exists: {(instrumentationKey != null ? "Yes" : "No")}");
+                if (instrumentationKey != null)
+                {
+                    Console.WriteLine($"Environment variable key length: {instrumentationKey.Length}");
+                }
+                
+                // Check for configuration values
+                var configKey = configuration["ApplicationInsights:InstrumentationKey"];
+                Console.WriteLine($"Configuration key exists: {(!string.IsNullOrEmpty(configKey) ? "Yes" : "No")}");
+                if (!string.IsNullOrEmpty(configKey))
+                {
+                    Console.WriteLine($"Configuration key length: {configKey.Length}");
+                }
                 
                 // Only fall back to configuration if environment variable isn't available
                 if (string.IsNullOrEmpty(instrumentationKey))
                 {
-                    instrumentationKey = configuration["ApplicationInsights:InstrumentationKey"];
+                    instrumentationKey = configKey;
                     Console.WriteLine("Using instrumentation key from configuration (appsettings.json)");
                 }
                 else
                 {
                     Console.WriteLine("Using instrumentation key from environment variable");
                 }
+                
+                // Print working directory for reference
+                Console.WriteLine($"Current directory: {Directory.GetCurrentDirectory()}");
                 
                 // Get the TelemetryService instance and initialize it if possible
                 var coreTelemetryService = PokerGame.Core.Telemetry.TelemetryService.Instance;
