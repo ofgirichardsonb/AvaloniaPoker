@@ -34,7 +34,8 @@ jobs:
           echo "Branch: $BRANCH"
           echo "SHA: $SHA"
 
-          # URL encode the project name (simpler approach)
+
+          # URL encode the project name
           PROJECT_ENC=$(echo "$PROJECT" | sed 's/ /%20/g')
 
           # API base URL
@@ -42,60 +43,56 @@ jobs:
 
           echo "API URL: $API_URL"
 
-          # Test PAT with a simple API call
-          echo "Testing authentication..."
-          AUTH_TEST=$(curl -s -o /dev/null -w "%{http_code}" -u ":$PAT" \
-            "https://dev.azure.com/$ORG/_apis/projects?api-version=6.0")
+          # First, we need to check out the full repository with all commits
+          echo "Setting up Git repository..."
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
 
-          echo "Auth test HTTP status: $AUTH_TEST"
+          # Make sure we have the full history
+          git fetch --unshallow || true
 
-          if [ "$AUTH_TEST" != "200" ]; then
-            echo "Authentication failed! Check your PAT token."
-            exit 1
+          # Add Azure DevOps as a remote
+          git remote add ado "https://$PAT@dev.azure.com/$ORG/$PROJECT_ENC/_git/$REPO"
+
+          # Fetch from Azure DevOps to see what's there
+          git fetch ado || true
+
+          # Print remotes and branches for debugging
+          git remote -v
+          git branch -a
+
+          # Try to find a branch to base our new branch on
+          echo "Looking for main branch in Azure DevOps..."
+          git ls-remote ado refs/heads/main
+          if [ $? -eq 0 ]; then
+            BASE_BRANCH="main"
+          else
+            echo "Looking for master branch in Azure DevOps..."
+            git ls-remote ado refs/heads/master
+            if [ $? -eq 0 ]; then
+              BASE_BRANCH="master"
+            else
+              echo "No main or master branch found in Azure DevOps, using current SHA as starting point"
+              BASE_BRANCH=""
+            fi
           fi
 
-          # API base URL
-          API_URL="https://dev.azure.com/$ORG/$PROJECT_ENC/_apis/git/repositories/$REPO"
+          # Create and push the branch
+          echo "Creating and pushing branch $BRANCH to Azure DevOps..."
 
-          # Authorization header with base64 encoded PAT
-          AUTH_HEADER="Authorization: Basic $(echo -n ":$PAT" | base64)"
+          if [ -n "$BASE_BRANCH" ]; then
+            # If we found a base branch, create our branch from it
+            git checkout -b temp-branch "ado/$BASE_BRANCH"
 
-          # Check if branch exists
-          echo "Checking if branch exists..."
-          REFS_RESPONSE=$(curl -s -u ":$PAT" \
-            "$API_URL/refs?filter=heads/$BRANCH&api-version=6.0")
+            # Cherry-pick or merge the commits we want to push
+            # (this is simplified - you might need a more complex strategy)
+            git cherry-pick $SHA || true
 
-          # Save HTTP status code
-          REFS_STATUS=$?
-
-          echo "Refs API status: $REFS_STATUS"
-          echo "Refs API response: $REFS_RESPONSE"
-
-          # If curl failed completely
-          if [ $REFS_STATUS -ne 0 ]; then
-            echo "Failed to connect to Azure DevOps API. Check your network and API URL."
-            exit 1
+            # Force push to the target branch
+            git push ado "temp-branch:refs/heads/$BRANCH" --force
+          else
+            # If no base branch, just push the current branch
+            git push ado "HEAD:refs/heads/$BRANCH" --force
           fi
 
-          # Try a different API call to test repository access
-          echo "Testing repository access..."
-          REPO_TEST=$(curl -s -u ":$PAT" \
-            "$API_URL?api-version=6.0")
-
-          echo "Repository API response: $REPO_TEST"
-
-          # Try creating/updating branch directly with simplified approach
-          echo "Attempting to update branch reference..."
-
-          # Simplified JSON for creating/updating the branch
-          REF_JSON="[{\"name\":\"refs/heads/$BRANCH\",\"newObjectId\":\"$SHA\",\"oldObjectId\":\"0000000000000000000000000000000000000000\"}]"
-
-          echo "Reference JSON: $REF_JSON"
-
-          # Add verbose flag to see more details about the request
-          UPDATE_RESPONSE=$(curl -v -u ":$PAT" \
-            -H "Content-Type: application/json" \
-            -d "$REF_JSON" \
-            "$API_URL/refs?api-version=6.0")
-
-          echo "Update response: $UPDATE_RESPONSE"
+          echo "Push complete."
