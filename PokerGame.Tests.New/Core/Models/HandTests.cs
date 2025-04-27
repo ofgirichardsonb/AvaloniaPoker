@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using PokerGame.Abstractions.Models;
+using PokerGame.Core.Models;
 using Xunit;
 using FluentAssertions;
 
-namespace PokerGame.Tests.Core.Models
+namespace PokerGame.Tests.New.Core.Models
 {
     public class HandTests
     {
@@ -25,8 +25,8 @@ namespace PokerGame.Tests.Core.Models
             // Arrange
             var cards = new List<Card>
             {
-                new Card(Suit.Hearts, Rank.Ace),
-                new Card(Suit.Spades, Rank.King)
+                new Card(Rank.Ace, Suit.Hearts),
+                new Card(Rank.King, Suit.Spades)
             };
             
             // Act
@@ -42,7 +42,7 @@ namespace PokerGame.Tests.Core.Models
         {
             // Arrange
             var hand = new Hand();
-            var card = new Card(Suit.Diamonds, Rank.Queen);
+            var card = new Card(Rank.Queen, Suit.Diamonds);
             
             // Act
             hand.AddCard(card);
@@ -59,8 +59,8 @@ namespace PokerGame.Tests.Core.Models
             var hand = new Hand();
             var cards = new List<Card>
             {
-                new Card(Suit.Clubs, Rank.Ten),
-                new Card(Suit.Hearts, Rank.Jack)
+                new Card(Rank.Ten, Suit.Clubs),
+                new Card(Rank.Jack, Suit.Hearts)
             };
             
             // Act
@@ -75,7 +75,7 @@ namespace PokerGame.Tests.Core.Models
         public void RemoveCard_WithExistingCard_ShouldRemoveCardFromHand()
         {
             // Arrange
-            var card = new Card(Suit.Spades, Rank.Ace);
+            var card = new Card(Rank.Ace, Suit.Spades);
             var hand = new Hand(new List<Card> { card });
             
             // Act
@@ -90,8 +90,8 @@ namespace PokerGame.Tests.Core.Models
         public void RemoveCard_WithNonExistingCard_ShouldReturnFalse()
         {
             // Arrange
-            var hand = new Hand(new List<Card> { new Card(Suit.Hearts, Rank.Two) });
-            var nonExistingCard = new Card(Suit.Diamonds, Rank.Three);
+            var hand = new Hand(new List<Card> { new Card(Rank.Two, Suit.Hearts) });
+            var nonExistingCard = new Card(Rank.Three, Suit.Diamonds);
             
             // Act
             bool result = hand.RemoveCard(nonExistingCard);
@@ -107,8 +107,8 @@ namespace PokerGame.Tests.Core.Models
             // Arrange
             var hand = new Hand(new List<Card>
             {
-                new Card(Suit.Clubs, Rank.Four),
-                new Card(Suit.Diamonds, Rank.Five)
+                new Card(Rank.Four, Suit.Clubs),
+                new Card(Rank.Five, Suit.Diamonds)
             });
             
             // Act
@@ -122,7 +122,7 @@ namespace PokerGame.Tests.Core.Models
         public void Contains_WithExistingCard_ShouldReturnTrue()
         {
             // Arrange
-            var card = new Card(Suit.Hearts, Rank.King);
+            var card = new Card(Rank.King, Suit.Hearts);
             var hand = new Hand(new List<Card> { card });
             
             // Act
@@ -136,8 +136,8 @@ namespace PokerGame.Tests.Core.Models
         public void Contains_WithNonExistingCard_ShouldReturnFalse()
         {
             // Arrange
-            var hand = new Hand(new List<Card> { new Card(Suit.Spades, Rank.Queen) });
-            var nonExistingCard = new Card(Suit.Hearts, Rank.Queen);
+            var hand = new Hand(new List<Card> { new Card(Rank.Queen, Suit.Spades) });
+            var nonExistingCard = new Card(Rank.Queen, Suit.Hearts);
             
             // Act
             bool result = hand.Contains(nonExistingCard);
@@ -152,8 +152,8 @@ namespace PokerGame.Tests.Core.Models
             // Arrange
             var hand = new Hand(new List<Card>
             {
-                new Card(Suit.Hearts, Rank.Ace),
-                new Card(Suit.Diamonds, Rank.King)
+                new Card(Rank.Ace, Suit.Hearts),
+                new Card(Rank.King, Suit.Diamonds)
             });
             
             // Act

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using PokerGame.Abstractions;
+using System.Linq;
 using PokerGame.Core.Game;
+using PokerGame.Core.Models;
 using Xunit;
 using FluentAssertions;
-using PokerGame.Core.Models;
 
 namespace PokerGame.Tests.Core.Game
 {

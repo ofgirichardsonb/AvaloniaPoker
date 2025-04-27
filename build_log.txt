@@ -1,0 +1,23 @@
+Build started 4/27/2025 9:43:48 PM.
+     1>Project "/home/runner/workspace/PokerGame.Tests.New/PokerGame.Tests.New.csproj" on node 1 (Restore target(s)).
+     1>_GetAllRestoreProjectPathItems:
+         Determining projects to restore...
+       Restore:
+         X.509 certificate chain validation will use the fallback certificate bundle at '/nix/store/8y83na7h81fw5kr1msmjc7rvx329djp0-dotnet-sdk-8.0.300/sdk/8.0.300/trustedroots/codesignctl.pem'.
+         X.509 certificate chain validation will use the fallback certificate bundle at '/nix/store/8y83na7h81fw5kr1msmjc7rvx329djp0-dotnet-sdk-8.0.300/sdk/8.0.300/trustedroots/timestampctl.pem'.
+         Assets file has not changed. Skipping assets file writing. Path: /home/runner/workspace/MSA.Foundation/obj/project.assets.json
+         Assets file has not changed. Skipping assets file writing. Path: /home/runner/workspace/PokerGame.Abstractions/obj/project.assets.json
+         Assets file has not changed. Skipping assets file writing. Path: /home/runner/workspace/PokerGame.Core/obj/project.assets.json
+         Restored /home/runner/workspace/PokerGame.Abstractions/PokerGame.Abstractions.csproj (in 82 ms).
+         Restored /home/runner/workspace/PokerGame.Core/PokerGame.Core.csproj (in 85 ms).
+         Restored /home/runner/workspace/MSA.Foundation/MSA.Foundation.csproj (in 84 ms).
+         Assets file has not changed. Skipping assets file writing. Path: /home/runner/workspace/PokerGame.Tests.New/obj/project.assets.json
+         Restored /home/runner/workspace/PokerGame.Tests.New/PokerGame.Tests.New.csproj (in 114 ms).
+         
+         NuGet Config files used:
+             /home/runner/.nuget/NuGet/NuGet.Config
+         
+         Feeds used:
+             https://api.nuget.org/v3/index.json
+         All projects are up-to-date for restore.
+     1>Done Building Project "/home/runner/workspace/PokerGame.Tests.New/PokerGame.Tests.New.csproj" (Restore target(s)).

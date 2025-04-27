@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MSA.Foundation.Messaging;
 using MSA.Foundation.ServiceManagement;
-using PokerGame.Abstractions.Models;
+using PokerGame.Core.Models;
 using PokerGame.Core.Microservices;
 using Xunit;
 using FluentAssertions;

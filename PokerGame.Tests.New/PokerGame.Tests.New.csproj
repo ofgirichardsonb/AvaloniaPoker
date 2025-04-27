@@ -31,6 +31,14 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="MSA.Foundation.ServiceManagement.ExecutionContext" Alias="MSAEC" />
+    <Using Include="FluentAssertions" />
+    <Using Include="Moq" />
+    <Using Include="PokerGame.Core.Models" />
+    <Using Include="PokerGame.Core.Game" />
+    <Using Include="PokerGame.Core.Microservices" />
+    <Using Include="MSA.Foundation.Messaging" />
+    <Using Include="MSA.Foundation.ServiceManagement" />
   </ItemGroup>
 
 </Project>

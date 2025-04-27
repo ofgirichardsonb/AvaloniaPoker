@@ -1,5 +1,4 @@
 using System;
-using PokerGame.Abstractions.Models;
 using PokerGame.Core.Models;
 using Xunit;
 using FluentAssertions;

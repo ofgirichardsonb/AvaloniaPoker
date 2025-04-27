@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MSA.Foundation.Messaging;
 using MSA.Foundation.ServiceManagement;
-using PokerGame.Abstractions.Models;
+using PokerGame.Core.Models;
 using PokerGame.Core.Microservices;
 using Xunit;
 using FluentAssertions;
@@ -132,8 +132,7 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
-            var service = new GameEngineService(executionContext, mockBroker.Object);
+            var service = new GameEngineService(executionContext);
             
             // Add some players
             service.AddPlayer("player1", "Player One");
@@ -171,8 +170,7 @@ namespace PokerGame.Tests.Core.Microservices
         {
             // Arrange
             var executionContext = new ExecutionContext("test-service");
-            var mockBroker = new Mock<IMessageBroker>();
-            var service = new GameEngineService(executionContext, mockBroker.Object);
+            var service = new GameEngineService(executionContext);
             
             // Create a deck field through reflection (for testing purposes)
             var deckField = typeof(GameEngineService)
