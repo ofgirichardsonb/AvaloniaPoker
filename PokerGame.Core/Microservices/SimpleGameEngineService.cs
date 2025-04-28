@@ -72,7 +72,7 @@ namespace PokerGame.Core.Microservices
         private readonly List<Player> _players = new List<Player>();
         private readonly List<Card> _communityCards = new List<Card>();
         private readonly Random _random = new Random();
-        private GameState _gameState = GameState.Setup;
+        private Game.GameState _gameState = Game.GameState.Setup;
         private int _currentDealerIndex = 0;
         private int _currentPlayerIndex = 0;
         private int _pot = 0;
@@ -247,9 +247,9 @@ namespace PokerGame.Core.Microservices
         {
             _players.Clear();
             
-            _players.Add(new Player("Test Player 1", 1000));
-            _players.Add(new Player("Test Player 2", 1000));
-            _players.Add(new Player("Test Player 3", 1000));
+            _players.Add(new Player("player1", "Test Player 1", 1000));
+            _players.Add(new Player("player2", "Test Player 2", 1000));
+            _players.Add(new Player("player3", "Test Player 3", 1000));
             
             Logger.Log($"Added {_players.Count} test players");
         }
@@ -260,7 +260,7 @@ namespace PokerGame.Core.Microservices
         private void StartHand()
         {
             // Reset the game state
-            _gameState = GameState.Setup;
+            _gameState = Game.GameState.Setup;
             _pot = 0;
             _communityCards.Clear();
             
@@ -281,7 +281,7 @@ namespace PokerGame.Core.Microservices
             DealHoleCards();
             
             // Transition to pre-flop
-            _gameState = GameState.PreFlop;
+            _gameState = Game.GameState.PreFlop;
             
             // Broadcast the game state
             BroadcastGameState();
@@ -444,24 +444,24 @@ namespace PokerGame.Core.Microservices
                 // Process the dealt cards based on the current game state
                 switch (_gameState)
                 {
-                    case GameState.PreFlop:
+                    case Game.GameState.PreFlop:
                         // These are hole cards for a player
                         // In a real implementation, we would assign these cards to the appropriate player
                         break;
                         
-                    case GameState.Flop:
+                    case Game.GameState.Flop:
                         // These are the flop cards
                         _communityCards.AddRange(responsePayload.Cards);
                         Logger.Log($"Added {responsePayload.Cards.Count} cards to community cards (flop)");
                         break;
                         
-                    case GameState.Turn:
+                    case Game.GameState.Turn:
                         // This is the turn card
                         _communityCards.AddRange(responsePayload.Cards);
                         Logger.Log($"Added {responsePayload.Cards.Count} cards to community cards (turn)");
                         break;
                         
-                    case GameState.River:
+                    case Game.GameState.River:
                         // This is the river card
                         _communityCards.AddRange(responsePayload.Cards);
                         Logger.Log($"Added {responsePayload.Cards.Count} cards to community cards (river)");
@@ -622,7 +622,7 @@ namespace PokerGame.Core.Microservices
             // Reset current bets
             foreach (var player in _players)
             {
-                player.ResetCurrentBet();
+                player.ResetBetForNewRound();
             }
             
             // Set the current player to the one after the dealer
@@ -631,37 +631,37 @@ namespace PokerGame.Core.Microservices
             // Advance the game state
             switch (_gameState)
             {
-                case GameState.PreFlop:
+                case Game.GameState.PreFlop:
                     // Deal the flop
-                    _gameState = GameState.Flop;
+                    _gameState = Game.GameState.Flop;
                     DealFlop();
                     break;
                     
-                case GameState.Flop:
+                case Game.GameState.Flop:
                     // Deal the turn
-                    _gameState = GameState.Turn;
+                    _gameState = Game.GameState.Turn;
                     DealTurn();
                     break;
                     
-                case GameState.Turn:
+                case Game.GameState.Turn:
                     // Deal the river
-                    _gameState = GameState.River;
+                    _gameState = Game.GameState.River;
                     DealRiver();
                     break;
                     
-                case GameState.River:
+                case Game.GameState.River:
                     // Go to showdown
-                    _gameState = GameState.Showdown;
+                    _gameState = Game.GameState.Showdown;
                     HandleShowdown();
                     break;
                     
-                case GameState.Showdown:
+                case Game.GameState.Showdown:
                     // End the hand
-                    _gameState = GameState.Complete;
+                    _gameState = Game.GameState.Complete;
                     EndHand();
                     break;
                     
-                case GameState.Complete:
+                case Game.GameState.Complete:
                     // Start a new hand
                     StartHand();
                     break;

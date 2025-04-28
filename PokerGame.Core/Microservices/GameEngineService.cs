@@ -590,11 +590,11 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                         await CreateNewDeckAsync();
                         
                         // Force a state transition to Setup if still in WaitingToStart
-                        if (_gameEngine.State == GameState.WaitingToStart)
+                        if (_gameEngine.State == Game.GameState.WaitingToStart)
                         {
                             Console.WriteLine("Changing state from WaitingToStart to Setup");
                             // We can't set the state directly, so we'll use reflection
-                            typeof(PokerGameEngine).GetField("_gameState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(_gameEngine, GameState.Setup);
+                            typeof(PokerGameEngine).GetField("_gameState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(_gameEngine, Game.GameState.Setup);
                         }
                         
                         Console.WriteLine("Game started. Game state: " + _gameEngine.State);
@@ -769,9 +769,9 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                     var playerList = field.GetValue(_gameEngine) as List<Player>;
                                     if (playerList != null && playerList.Count == 0) 
                                     {
-                                        playerList.Add(new Player("Test Player 1", 1000));
-                                        playerList.Add(new Player("Test Player 2", 1000));
-                                        playerList.Add(new Player("Test Player 3", 1000));
+                                        playerList.Add(new Player { Name = "Test Player 1", Chips = 1000 });
+                                        playerList.Add(new Player { Name = "Test Player 2", Chips = 1000 });
+                                        playerList.Add(new Player { Name = "Test Player 3", Chips = 1000 });
                                         Console.WriteLine($"Added {playerList.Count} test players");
                                     }
                                     break;
@@ -790,7 +790,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                         await Task.Delay(500);
                         
                         // Ensure we start the hand if not already in progress
-                        if (_gameEngine.State == GameState.Setup || _gameEngine.State == GameState.WaitingToStart)
+                        if (_gameEngine.State == Game.GameState.Setup || _gameEngine.State == Game.GameState.WaitingToStart)
                         {
                             // Verify that we have enough players before starting
                             Console.WriteLine($"Starting hand with {_gameEngine.Players.Count} players (current state: {_gameEngine.State})");
@@ -800,11 +800,11 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 _gameEngine.StartHand();
                                 
                                 // Check if we changed state
-                                if (_gameEngine.State == GameState.Setup || _gameEngine.State == GameState.WaitingToStart)
+                                if (_gameEngine.State == Game.GameState.Setup || _gameEngine.State == Game.GameState.WaitingToStart)
                                 {
                                     // If not, force PreFlop state via reflection
                                     Console.WriteLine("Failed to transition state, forcing PreFlop state");
-                                    typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, GameState.PreFlop);
+                                    typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, Game.GameState.PreFlop);
                                     
                                     // Need to set up blinds and first player if forcing state
                                     int dealerPos = 0;
@@ -832,7 +832,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 
                                 // Force state change
                                 Console.WriteLine("Forcing state change after error");
-                                typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, GameState.PreFlop);
+                                typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, Game.GameState.PreFlop);
                             }
                         }
                     }
@@ -1336,12 +1336,12 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     Console.WriteLine("All players have hole cards from emergency deck, transitioning to PreFlop");
                     
                     // Force state transition
-                    if (_gameEngine.State != GameState.PreFlop)
+                    if (_gameEngine.State != Game.GameState.PreFlop)
                     {
                         try
                         {
                             typeof(PokerGameEngine).GetField("_gameState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                                ?.SetValue(_gameEngine, GameState.PreFlop);
+                                ?.SetValue(_gameEngine, Game.GameState.PreFlop);
                             Console.WriteLine($"Game state after force: {_gameEngine.State}");
                         }
                         catch (Exception ex)
@@ -1637,7 +1637,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     Console.WriteLine("All players have hole cards, transitioning to PreFlop");
                     
                     // Force state transition to PreFlop using reflection since regular StartHand might not work
-                    if (_gameEngine.State != GameState.PreFlop)
+                    if (_gameEngine.State != Game.GameState.PreFlop)
                     {
                         try
                         {
@@ -1648,7 +1648,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             
                             // Force state change to PreFlop
                             Console.WriteLine("Forcing state transition to PreFlop");
-                            typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, GameState.PreFlop);
+                            typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, Game.GameState.PreFlop);
                             Console.WriteLine($"Game state after force: {_gameEngine.State}");
                         }
                         catch (Exception ex)

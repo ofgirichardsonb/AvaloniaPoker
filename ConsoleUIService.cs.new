@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using PokerGame.Core.Game;
 using PokerGame.Core.Models;
 using PokerGame.Core.ServiceManagement;
-using MSA.Foundation.Messaging;
 
 namespace PokerGame.Core.Microservices
 {
@@ -36,18 +35,18 @@ namespace PokerGame.Core.Microservices
         }
         
         private bool _useEnhancedUI = false;
-        private object? _enhancedUiInstance = null;
-        private Task? _inputProcessingTask = null;
-        private string? _gameEngineServiceId = null;
+        private object _enhancedUiInstance = null;
+        private Task _inputProcessingTask = null;
+        private string _gameEngineServiceId = null;
         private bool _waitingForPlayerAction = false;
-        private string? _activePlayerId = null;
+        private string _activePlayerId = null;
         private Dictionary<string, Models.Player> _players = new Dictionary<string, Models.Player>();
-        private Models.GameState _currentGameState = Models.GameState.NotStarted;
+        private GameState _currentGameState = GameState.NotStarted;
         private List<Card> _communityCards = new List<Card>();
         private int _pot = 0;
         private int _currentBet = 0;
-        private new int _publisherPort;
-        private new int _subscriberPort;
+        private int _publisherPort;
+        private int _subscriberPort;
         
         /// <summary>
         /// Creates a new instance of the ConsoleUIService
@@ -56,7 +55,7 @@ namespace PokerGame.Core.Microservices
         /// <param name="subscriberPort">Subscriber port</param>
         /// <param name="enhancedUI">Whether to use enhanced UI mode (box drawing, etc)</param>
         public ConsoleUIService(int publisherPort, int subscriberPort, bool enhancedUI = false) 
-            : base(ServiceConstants.ServiceTypes.ConsoleUI, "ConsoleUIService", publisherPort, subscriberPort)
+            : base(publisherPort, subscriberPort)
         {
             _useEnhancedUI = enhancedUI;
             _publisherPort = publisherPort;
@@ -95,8 +94,7 @@ namespace PokerGame.Core.Microservices
         /// <param name="executionContext">The microservice execution context</param>
         /// <param name="enhancedUI">Whether to use enhanced UI mode</param>
         public ConsoleUIService(MSA.Foundation.ServiceManagement.ExecutionContext executionContext, bool enhancedUI = false)
-            : base(ServiceConstants.ServiceTypes.ConsoleUI, "ConsoleUIService", 
-                  new Messaging.ExecutionContext())
+            : base(executionContext)
         {
             _useEnhancedUI = enhancedUI;
             
@@ -213,7 +211,7 @@ namespace PokerGame.Core.Microservices
         /// <summary>
         /// Publishes service registration information
         /// </summary>
-        private new void PublishServiceRegistration()
+        private void PublishServiceRegistration()
         {
             // Socket management is handled by the base class and SocketCommunicationAdapter
             var message = Message.Create(MessageType.ServiceRegistration);
@@ -289,8 +287,7 @@ namespace PokerGame.Core.Microservices
                             var gameStatePayload = message.GetPayload<GameStatePayload>();
                             if (gameStatePayload != null)
                             {
-                                // Need to convert Game.GameState to Models.GameState
-                                _currentGameState = (Models.GameState)(int)gameStatePayload.CurrentState;
+                                _currentGameState = gameStatePayload.CurrentState;
                                 _communityCards = gameStatePayload.CommunityCards;
                                 _pot = gameStatePayload.Pot;
                                 _currentBet = gameStatePayload.CurrentBet;
@@ -378,25 +375,16 @@ namespace PokerGame.Core.Microservices
                         break;
                 }
                 
-                // Custom acknowledgment handling
-                try
+                // Acknowledgment handling (if needed)
+                if (message.RequireAcknowledgment)
                 {
-                    // Check if we need to send an acknowledgment back
-                    if (!string.IsNullOrEmpty(message.MessageId))
+                    var ackMessage = new Message(MessageType.Acknowledgment, _serviceId)
                     {
-                        // Create a Core message acknowledgment
-                        var ackMessage = Message.Create(MessageType.Acknowledgment);
-                        ackMessage.SenderId = _serviceId;
-                        ackMessage.ReceiverId = message.SenderId;
-                        ackMessage.InResponseTo = message.MessageId;
-                        
-                        // Send the acknowledgment
-                        base.Broadcast(ackMessage);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error handling acknowledgment: {ex.Message}");
+                        ReceiverId = message.SenderId,
+                        AcknowledgmentId = message.MessageId
+                    };
+                    
+                    SendTo(ackMessage, message.SenderId);
                 }
             }
             catch (Exception ex)
@@ -506,60 +494,60 @@ namespace PokerGame.Core.Microservices
             string symbol = "";
             switch (card.Suit)
             {
-                case Suit.Hearts:
+                case CardSuit.Hearts:
                     symbol = "♥";
                     break;
-                case Suit.Diamonds:
+                case CardSuit.Diamonds:
                     symbol = "♦";
                     break;
-                case Suit.Clubs:
+                case CardSuit.Clubs:
                     symbol = "♣";
                     break;
-                case Suit.Spades:
+                case CardSuit.Spades:
                     symbol = "♠";
                     break;
             }
             
             string value = "";
-            switch (card.Rank)
+            switch (card.Value)
             {
-                case Rank.Two:
+                case CardValue.Two:
                     value = "2";
                     break;
-                case Rank.Three:
+                case CardValue.Three:
                     value = "3";
                     break;
-                case Rank.Four:
+                case CardValue.Four:
                     value = "4";
                     break;
-                case Rank.Five:
+                case CardValue.Five:
                     value = "5";
                     break;
-                case Rank.Six:
+                case CardValue.Six:
                     value = "6";
                     break;
-                case Rank.Seven:
+                case CardValue.Seven:
                     value = "7";
                     break;
-                case Rank.Eight:
+                case CardValue.Eight:
                     value = "8";
                     break;
-                case Rank.Nine:
+                case CardValue.Nine:
                     value = "9";
                     break;
-                case Rank.Ten:
+                case CardValue.Ten:
                     value = "10";
                     break;
-                case Rank.Jack:
+                case CardValue.Jack:
                     value = "J";
                     break;
-                case Rank.Queen:
+                case CardValue.Queen:
                     value = "Q";
                     break;
-                case Rank.King:
+                case CardValue.King:
                     value = "K";
                     break;
-                case Rank.Ace:
+                case CardValue.Ace:
                     value = "A";
                     break;
             }

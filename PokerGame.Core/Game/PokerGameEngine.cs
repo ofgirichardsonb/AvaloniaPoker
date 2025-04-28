@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using PokerGame.Core.Models;
+using Hand = PokerGame.Core.Game.Hand;
+using HandEvaluator = PokerGame.Core.Game.HandEvaluator;
 using PokerGame.Core.Interfaces;
 
 namespace PokerGame.Core.Game
@@ -96,7 +98,7 @@ namespace PokerGame.Core.Game
             _players.Clear();
             foreach (var name in playerNames)
             {
-                _players.Add(new Player(name, startingChips));
+                _players.Add(new Player(Guid.NewGuid().ToString(), name, startingChips));
             }
             
             _ui.ShowMessage("Game started! Let's play Texas Hold'em Poker.");
@@ -417,28 +419,23 @@ namespace PokerGame.Core.Game
             else
             {
                 // Evaluate hands for all active players
+                var playerHandEvaluations = new Dictionary<Player, Hand>();
                 foreach (var player in activePlayers)
                 {
-                    List<Card> allCards = new List<Card>(player.HoleCards);
-                    allCards.AddRange(_communityCards);
-                    player.CurrentHand = PokerHandEvaluator.EvaluateBestHand(allCards);
+                    var bestHand = HandEvaluator.EvaluateBestHand(player.HoleCards, _communityCards, player.Id);
+                    playerHandEvaluations[player] = bestHand;
+                    _ui.ShowMessage($"{player.Name}: {bestHand.Description}");
                 }
                 
-                // Find the best hand(s)
-                List<Player> winners = FindWinners(activePlayers);
-                
-                // Show results
-                foreach (var player in activePlayers)
-                {
-                    _ui.ShowMessage($"{player.Name}: {player.CurrentHand}");
-                }
+                // Find the winner(s)
+                List<Player> winners = FindWinners(playerHandEvaluations);
                 
                 // Distribute the pot
                 int winAmount = _pot / winners.Count;
                 foreach (var winner in winners)
                 {
                     winner.AwardChips(winAmount);
-                    _ui.ShowMessage($"{winner.Name} wins {winAmount} chips with {winner.CurrentHand}.");
+                    _ui.ShowMessage($"{winner.Name} wins {winAmount} chips with {playerHandEvaluations[winner].Description}.");
                 }
             }
             
@@ -448,34 +445,50 @@ namespace PokerGame.Core.Game
         }
         
         /// <summary>
-        /// Finds the winner(s) from the given list of players
+        /// Finds the winner(s) from the dictionary of players and their evaluated hands
         /// </summary>
-        private List<Player> FindWinners(List<Player> players)
+        private List<Player> FindWinners(Dictionary<Player, Hand> playerHands)
         {
             List<Player> winners = new List<Player>();
             Player? bestPlayer = null;
             
-            foreach (var player in players)
+            foreach (var kvp in playerHands)
             {
+                var player = kvp.Key;
+                var hand = kvp.Value;
+                
                 if (bestPlayer == null || 
-                    (player.CurrentHand != null && 
-                     bestPlayer.CurrentHand != null && 
-                     player.CurrentHand.CompareTo(bestPlayer.CurrentHand) > 0))
+                    CompareHands(hand, playerHands[bestPlayer]) > 0)
                 {
                     bestPlayer = player;
                     winners.Clear();
                     winners.Add(player);
                 }
                 else if (bestPlayer != null && 
-                        player.CurrentHand != null && 
-                        bestPlayer.CurrentHand != null && 
-                        player.CurrentHand.CompareTo(bestPlayer.CurrentHand) == 0)
+                        CompareHands(hand, playerHands[bestPlayer]) == 0)
                 {
                     winners.Add(player);
                 }
             }
             
             return winners;
+        }
+        
+        /// <summary>
+        /// Finds the winner(s) from the given list of players (deprecated, for compatibility)
+        /// </summary>
+        private List<Player> FindWinners(List<Player> players)
+        {
+            // This is kept for compatibility with existing code
+            // It should evaluate the hands on the fly and find winners
+            var playerHands = new Dictionary<Player, Hand>();
+            foreach (var player in players)
+            {
+                var bestHand = HandEvaluator.EvaluateBestHand(player.HoleCards, _communityCards, player.Id);
+                playerHands[player] = bestHand;
+            }
+            
+            return FindWinners(playerHands);
         }
         
         /// <summary>
@@ -549,6 +562,18 @@ namespace PokerGame.Core.Game
         private List<Player> GetActivePlayers()
         {
             return _players.Where(p => p.IsActive).ToList();
+        }
+        
+        /// <summary>
+        /// Compares two poker hands
+        /// </summary>
+        /// <param name="hand1">The first hand</param>
+        /// <param name="hand2">The second hand</param>
+        /// <returns>A positive value if hand1 is better, 0 if they're equal, a negative value if hand2 is better</returns>
+        private int CompareHands(Hand hand1, Hand hand2)
+        {
+            // Use the Hand's built-in comparison functionality
+            return hand1.CompareTo(hand2);
         }
     }
 }
