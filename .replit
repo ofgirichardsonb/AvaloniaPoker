@@ -30,7 +30,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && ./poker-services.sh rebuild"
+args = "cd /home/runner/workspace && ./rebuild.sh"
 
 [[workflows.workflow]]
 name = "poker_enhanced_test"
@@ -47,7 +47,6 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
-waitForPort = 5000
 
 [deployment]
 run = ["sh", "-c", "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 200 --curses"]

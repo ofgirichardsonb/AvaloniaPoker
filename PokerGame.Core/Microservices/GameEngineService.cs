@@ -687,6 +687,11 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     Console.WriteLine($"Response message ID: {responseMessage.MessageId}");
                     Console.WriteLine($"Response in response to: {responseMessage.InResponseTo}");
                     
+                    // Log to file for debugging
+                    PokerGame.Core.Logging.FileLogger.Initialize("/home/runner/workspace/message_trace.log");
+                    PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
+                        $"SENDING StartHand RESPONSE - Original: {message.MessageId}, Response: {responseMessage.MessageId}");
+                    
                     // Create and set payload
                     var responsePayload = new GenericResponsePayload
                     {
@@ -696,6 +701,9 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     };
                     responseMessage.SetPayload(responsePayload);
                     
+                    PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
+                        $"Response payload: Success={responsePayload.Success}, Message={responsePayload.Message}");
+                        
                     Console.WriteLine($"Response payload set: Success={responsePayload.Success}, Message={responsePayload.Message}");
                     
                     if (!string.IsNullOrEmpty(message.SenderId))

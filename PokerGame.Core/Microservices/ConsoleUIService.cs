@@ -463,6 +463,11 @@ namespace PokerGame.Core.Microservices
                     Console.WriteLine($"In response to: {message.InResponseTo}");
                     Console.WriteLine($"From service: {message.SenderId}");
                     
+                    // Initialize file logger
+                    PokerGame.Core.Logging.FileLogger.Initialize("/home/runner/workspace/message_trace.log");
+                    PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                        $"RECEIVED GENERIC RESPONSE - ID: {message.MessageId}, InResponseTo: {message.InResponseTo}");
+                    
                     var genericResponse = message.GetPayload<GenericResponsePayload>();
                     if (genericResponse != null)
                     {
@@ -470,13 +475,20 @@ namespace PokerGame.Core.Microservices
                         Console.WriteLine($"Success: {genericResponse.Success}");
                         Console.WriteLine($"Message: {genericResponse.Message}");
                         
+                        PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                            $"Response payload: Type={genericResponse.OriginalMessageType}, Success={genericResponse.Success}, Message={genericResponse.Message}");
+                        
                         // Handle specific responses
                         if (genericResponse.OriginalMessageType == MessageType.StartHand)
                         {
                             Console.WriteLine("********* STARTHAND RESPONSE RECEIVED! *********");
+                            PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                                "********* STARTHAND RESPONSE RECEIVED! *********");
+                                
                             if (genericResponse.Success)
                             {
                                 Console.WriteLine("Hand started successfully!");
+                                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", "Hand started successfully!");
                                 
                                 // Acknowledge the message explicitly
                                 var ackMessage = Message.Create(MessageType.Acknowledgment);
@@ -484,17 +496,28 @@ namespace PokerGame.Core.Microservices
                                 ackMessage.ReceiverId = message.SenderId;
                                 ackMessage.InResponseTo = message.MessageId;
                                 Console.WriteLine($"Sending explicit acknowledgment for message {message.MessageId} to {message.SenderId}");
+                                
+                                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                                    $"Sending explicit acknowledgment for message {message.MessageId} to {message.SenderId}");
+                                    
                                 SendTo(ackMessage, message.SenderId);
+                                
+                                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                                    "Acknowledgment sent");
                             }
                             else
                             {
                                 Console.WriteLine($"Error starting hand: {genericResponse.Message}");
+                                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                                    $"Error starting hand: {genericResponse.Message}");
                             }
                         }
                     }
                     else
                     {
                         Console.WriteLine("Warning: Received GenericResponse with null payload");
+                        PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                            "Warning: Received GenericResponse with null payload");
                     }
                     Console.WriteLine("************************************************");
                     break;
@@ -611,6 +634,10 @@ namespace PokerGame.Core.Microservices
                         {
                             // Start a new hand with enhanced logging
                             Console.WriteLine("========== SENDING STARTHAND MESSAGE ==========");
+                            
+                            // Initialize file logger
+                            PokerGame.Core.Logging.FileLogger.Initialize("/home/runner/workspace/message_trace.log");
+                            
                             var message = Message.Create(MessageType.StartHand);
                             message.MessageId = Guid.NewGuid().ToString(); // Ensure unique message ID
                             message.SenderId = _serviceId; // Set sender ID explicitly
@@ -619,8 +646,16 @@ namespace PokerGame.Core.Microservices
                             Console.WriteLine($"StartHand sender ID: {message.SenderId}");
                             Console.WriteLine($"StartHand recipient ID: {_gameEngineServiceId}");
                             
+                            // Log to file
+                            PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                                $"SENDING STARTHAND MESSAGE - ID: {message.MessageId}, Recipient: {_gameEngineServiceId}");
+                            
                             Console.WriteLine("StartHand message sent, waiting for response...");
                             SendTo(message, _gameEngineServiceId);
+                            
+                            PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                                "StartHand message sent, waiting for response...");
+                                
                             Console.WriteLine("================================================");
                         }
                     }
