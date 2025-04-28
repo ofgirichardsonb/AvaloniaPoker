@@ -322,13 +322,35 @@ namespace PokerGame.Core.Messaging
                             // Handle service registration messages specially
                             if (message.Type == MessageType.ServiceRegistration)
                             {
-                                var payload = message.GetPayload<ServiceRegistrationPayload>();
-                                if (payload != null)
+                                try
                                 {
-                                    RegisterService(
-                                        payload.ServiceId, 
-                                        payload.ServiceName, 
-                                        payload.ServiceType);
+                                    var payload = message.GetPayload<ServiceRegistrationPayload>();
+                                    if (payload != null)
+                                    {
+                                        RegisterService(
+                                            payload.ServiceId, 
+                                            payload.ServiceName, 
+                                            payload.ServiceType);
+                                            
+                                        Console.WriteLine($"Successfully registered service {payload.ServiceName} ({payload.ServiceType}) with ID {payload.ServiceId}");
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("WARNING: Service registration payload was null");
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    // Try to extract service ID from message metadata if payload deserialization fails
+                                    string serviceId = message.SenderId ?? "unknown";
+                                    Console.WriteLine($"Error processing service registration from {serviceId}: {ex.Message}");
+                                    
+                                    // Try to register with limited information from message metadata
+                                    if (!string.IsNullOrEmpty(serviceId))
+                                    {
+                                        RegisterService(serviceId, $"Service-{serviceId}", "Unknown");
+                                        Console.WriteLine($"Registered service with limited metadata: {serviceId}");
+                                    }
                                 }
                             }
                             

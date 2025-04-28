@@ -193,6 +193,16 @@ namespace PokerGame.Core.Messaging
         /// Gets or sets the endpoint where the service can be reached
         /// </summary>
         public string? Endpoint { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the publisher port of the service
+        /// </summary>
+        public int PublisherPort { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the subscriber port of the service
+        /// </summary>
+        public int SubscriberPort { get; set; }
     }
     
     /// <summary>

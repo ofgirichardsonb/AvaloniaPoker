@@ -28,7 +28,7 @@ namespace PokerGame.Core.Messaging
                 SenderId = simpleMessage.SenderId,
                 ReceiverId = simpleMessage.ReceiverId,
                 InResponseTo = simpleMessage.InResponseTo,
-                Payload = simpleMessage.Payload,
+                Payload = simpleMessage.Payload?.ToString() ?? string.Empty,
                 Type = ToMessageType(simpleMessage.Type)
             };
         }

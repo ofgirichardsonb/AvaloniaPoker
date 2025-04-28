@@ -74,38 +74,38 @@ namespace PokerGame.Core.Messaging
         /// Gets or sets the unique identifier of the message
         /// </summary>
         [JsonPropertyName("id")]
-        public string MessageId { get; set; }
+        public string MessageId { get; set; } = string.Empty;
         
         /// <summary>
         /// Gets or sets the timestamp when the message was created
         /// </summary>
         [JsonPropertyName("timestamp")]
-        public DateTime Timestamp { get; set; }
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
         
         /// <summary>
         /// Gets or sets the ID of the service that sent the message
         /// </summary>
         [JsonPropertyName("sender")]
-        public string SenderId { get; set; }
+        public string SenderId { get; set; } = string.Empty;
         
         /// <summary>
         /// Gets or sets the ID of the service that should receive the message
         /// If null or empty, the message is broadcast to all services
         /// </summary>
         [JsonPropertyName("receiver")]
-        public string ReceiverId { get; set; }
+        public string ReceiverId { get; set; } = string.Empty;
         
         /// <summary>
         /// Gets or sets the ID of the message that this message is in response to
         /// </summary>
         [JsonPropertyName("inResponseTo")]
-        public string InResponseTo { get; set; }
+        public string InResponseTo { get; set; } = string.Empty;
         
         /// <summary>
         /// Gets or sets the payload of the message
         /// </summary>
         [JsonPropertyName("payload")]
-        public object Payload { get; set; }
+        public string Payload { get; set; } = string.Empty;
         
         /// <summary>
         /// Creates a new message with a random ID and the current timestamp
@@ -124,11 +124,14 @@ namespace PokerGame.Core.Messaging
         /// <returns>A new message</returns>
         public static NetworkMessage Create(MessageType type, object? payload = null)
         {
-            return new NetworkMessage
+            var message = new NetworkMessage { Type = type };
+            
+            if (payload != null)
             {
-                Type = type,
-                Payload = payload
-            };
+                message.Payload = payload is string str ? str : JsonSerializer.Serialize(payload);
+            }
+            
+            return message;
         }
         
         /// <summary>
@@ -142,14 +145,20 @@ namespace PokerGame.Core.Messaging
         {
             if (originalMessage == null)
                 throw new ArgumentNullException(nameof(originalMessage));
-                
-            return new NetworkMessage
+            
+            var message = new NetworkMessage
             {
                 Type = type,
                 InResponseTo = originalMessage.MessageId,
-                ReceiverId = originalMessage.SenderId,
-                Payload = payload
+                ReceiverId = originalMessage.SenderId
             };
+            
+            if (payload != null)
+            {
+                message.Payload = payload is string str ? str : JsonSerializer.Serialize(payload);
+            }
+            
+            return message;
         }
         
         /// <summary>
@@ -179,42 +188,53 @@ namespace PokerGame.Core.Messaging
         /// </summary>
         /// <typeparam name="T">The type to convert the payload to</typeparam>
         /// <returns>The payload as the specified type</returns>
-        public T GetPayload<T>()
+        public T? GetPayload<T>() where T : class
         {
-            if (Payload == null)
-                return default;
+            if (string.IsNullOrEmpty(Payload))
+                return null;
                 
-            if (Payload is JsonElement jsonElement)
+            try
             {
-                return JsonSerializer.Deserialize<T>(jsonElement.GetRawText());
+                return JsonSerializer.Deserialize<T>(Payload);
             }
-            
-            if (Payload is T typedPayload)
+            catch (Exception ex)
             {
-                return typedPayload;
+                Console.WriteLine($"Error deserializing payload to {typeof(T).Name}: {ex.Message}");
+                return null;
             }
-            
-            // Convert using JSON serialization as a fallback
-            string json = JsonSerializer.Serialize(Payload);
-            return JsonSerializer.Deserialize<T>(json);
         }
         
         /// <summary>
         /// Gets the payload as a string
         /// </summary>
         /// <returns>The payload as a string</returns>
-        public string? GetPayloadAsString()
+        public string GetPayloadAsString()
         {
-            if (Payload == null)
-                return null;
-                
-            if (Payload is string stringPayload)
-                return stringPayload;
-                
-            if (Payload is JsonElement jsonElement)
-                return jsonElement.GetRawText();
-                
-            return JsonSerializer.Serialize(Payload);
+            return Payload;
+        }
+        
+        /// <summary>
+        /// Sets the payload by serializing an object to JSON
+        /// </summary>
+        /// <typeparam name="T">The type of the payload</typeparam>
+        /// <param name="payload">The payload to serialize</param>
+        public void SetPayload<T>(T payload)
+        {
+            if (payload == null)
+            {
+                Payload = string.Empty;
+                return;
+            }
+            
+            try
+            {
+                Payload = JsonSerializer.Serialize(payload);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error serializing payload of type {typeof(T).Name}: {ex.Message}");
+                Payload = string.Empty;
+            }
         }
     }
     
