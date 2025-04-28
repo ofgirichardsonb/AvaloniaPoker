@@ -253,17 +253,8 @@ namespace PokerGame.Core.Microservices
         {
             if (e.Message != null)
             {
-                // Convert the message to a SimpleMessage format
-                var simpleMessage = new SimpleMessage
-                {
-                    MessageId = e.Message.Id,
-                    SenderId = e.Message.SenderId,
-                    Type = (SimpleMessageType)e.Message.Type,
-                    InResponseTo = e.Message.InResponseTo,
-                    Payload = e.Message.Payload
-                };
-                
-                HandleMessage(simpleMessage);
+                // The message is already a SimpleMessage, so we can just handle it directly
+                HandleMessage(e.Message);
             }
         }
         
