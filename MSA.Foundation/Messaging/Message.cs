@@ -102,6 +102,9 @@ namespace MSA.Foundation.Messaging
         /// <returns>The response message</returns>
         public Message CreateResponse(string receiverId, string? payload = null)
         {
+            var responseHeaders = new Dictionary<string, string>(Headers);
+            responseHeaders["OriginalMessageId"] = MessageId;
+            
             return new Message
             {
                 MessageId = Guid.NewGuid().ToString(),
@@ -110,7 +113,7 @@ namespace MSA.Foundation.Messaging
                 ReceiverId = SenderId,
                 Timestamp = DateTime.UtcNow,
                 Payload = payload,
-                Headers = new Dictionary<string, string>(Headers)
+                Headers = responseHeaders
             };
         }
         
