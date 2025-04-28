@@ -6,8 +6,6 @@ using System.Threading.Tasks;
 using PokerGame.Core.Game;
 using PokerGame.Core.Models;
 using PokerGame.Core.ServiceManagement;
-using NetMQ;
-using NetMQ.Sockets;
 
 namespace PokerGame.Core.Microservices
 {
@@ -42,14 +40,59 @@ namespace PokerGame.Core.Microservices
         private bool _waitingForPlayerAction = false;
         private string _activePlayerId = null;
         private Dictionary<string, Models.Player> _players = new Dictionary<string, Models.Player>();
-        private PokerGame.Core.Game.GameState _latestGameState = null;
+        private GameState _currentGameState = GameState.NotStarted;
+        private List<Card> _communityCards = new List<Card>();
+        private int _pot = 0;
+        private int _currentBet = 0;
+        private int _publisherPort;
+        private int _subscriberPort;
         
         /// <summary>
         /// Creates a new instance of the ConsoleUIService
         /// </summary>
-        /// <param name="executionContext">The microservice execution context</param>
+        /// <param name="publisherPort">Publisher port</param>
+        /// <param name="subscriberPort">Subscriber port</param>
         /// <param name="enhancedUI">Whether to use enhanced UI mode (box drawing, etc)</param>
-        public ConsoleUIService(MSA.Foundation.ServiceManagement.ExecutionContext executionContext, bool enhancedUI = false) 
+        public ConsoleUIService(int publisherPort, int subscriberPort, bool enhancedUI = false) 
+            : base(publisherPort, subscriberPort)
+        {
+            _useEnhancedUI = enhancedUI;
+            _publisherPort = publisherPort;
+            _subscriberPort = subscriberPort;
+            
+            // Try to load the CursesUI if enhanced mode is requested
+            if (_useEnhancedUI)
+            {
+                try
+                {
+                    // Look for the CursesUI type in all loaded assemblies
+                    var cursesUIType = AppDomain.CurrentDomain.GetAssemblies()
+                        .SelectMany(a => a.GetTypes())
+                        .FirstOrDefault(t => t.Name == "CursesUI");
+                    
+                    if (cursesUIType != null)
+                    {
+                        _enhancedUiInstance = Activator.CreateInstance(cursesUIType);
+                        Console.WriteLine("CursesUI loaded successfully");
+                    }
+                    else
+                    {
+                        Console.WriteLine("   ERROR: Curses UI requested but CursesUI class not found");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error loading CursesUI: {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Creates a new instance of the ConsoleUIService with MSA Foundation execution context
+        /// </summary>
+        /// <param name="executionContext">The microservice execution context</param>
+        /// <param name="enhancedUI">Whether to use enhanced UI mode</param>
+        public ConsoleUIService(MSA.Foundation.ServiceManagement.ExecutionContext executionContext, bool enhancedUI = false)
             : base(executionContext)
         {
             _useEnhancedUI = enhancedUI;
@@ -220,16 +263,32 @@ namespace PokerGame.Core.Microservices
                         // Process a game update
                         if (message.Data != null && _gameEngineServiceId == message.SenderId)
                         {
-                            if (message.Data.ContainsKey("GameState"))
+                            if (message.Data.ContainsKey("GameState") && message.Data["GameState"] is GameState gameState)
                             {
-                                _latestGameState = (PokerGame.Core.Game.GameState)message.Data["GameState"];
-                                await DisplayGameStateAsync(_latestGameState);
+                                _currentGameState = gameState;
+                            }
+                            
+                            if (message.Data.ContainsKey("CommunityCards") && message.Data["CommunityCards"] is List<Card> communityCards)
+                            {
+                                _communityCards = communityCards;
+                            }
+                            
+                            if (message.Data.ContainsKey("Pot") && message.Data["Pot"] is int pot)
+                            {
+                                _pot = pot;
+                            }
+                            
+                            if (message.Data.ContainsKey("CurrentBet") && message.Data["CurrentBet"] is int currentBet)
+                            {
+                                _currentBet = currentBet;
                             }
                             
                             if (message.Data.ContainsKey("Players") && message.Data["Players"] is Dictionary<string, Models.Player> players)
                             {
                                 _players = players;
                             }
+                            
+                            await DisplayGameStateAsync();
                         }
                         break;
                         
@@ -312,11 +371,8 @@ namespace PokerGame.Core.Microservices
         /// <summary>
         /// Displays the current game state
         /// </summary>
-        /// <param name="gameState">The game state to display</param>
-        private async Task DisplayGameStateAsync(PokerGame.Core.Game.GameState gameState)
+        private async Task DisplayGameStateAsync()
         {
-            if (gameState == null) return;
-            
             try
             {
                 // Clear the console for a fresh display
@@ -325,12 +381,12 @@ namespace PokerGame.Core.Microservices
                 if (_useEnhancedUI && _enhancedUiInstance != null)
                 {
                     // Enhanced UI with box drawing characters
-                    await DisplayGameStateEnhancedAsync(gameState);
+                    await DisplayGameStateEnhancedAsync();
                 }
                 else
                 {
                     // Simple text-based UI
-                    await DisplayGameStateSimpleAsync(gameState);
+                    await DisplayGameStateSimpleAsync();
                 }
             }
             catch (Exception ex)
@@ -367,15 +423,15 @@ namespace PokerGame.Core.Microservices
                                 Console.WriteLine("Auto-play mode detected. Making automatic decision...");
                                 
                                 // Logic for auto decision - typically call/check or fold with bad hands
-                                if (_latestGameState != null)
+                                if (_currentGameState != GameState.NotStarted)
                                 {
                                     // Simple auto-play logic: 
                                     // - Always call if bet is small (<= 10% of chips)
                                     // - Always check if possible
                                     // - Otherwise fold
                                     var playerInfo = _players[_activePlayerId];
-                                    bool canCheck = _latestGameState.CurrentBet == playerInfo.CurrentBet;
-                                    int betToCall = _latestGameState.CurrentBet - playerInfo.CurrentBet;
+                                    bool canCheck = _currentBet == playerInfo.CurrentBet;
+                                    int betToCall = _currentBet - playerInfo.CurrentBet;
                                     
                                     // Auto-decision making
                                     if (canCheck)
@@ -413,8 +469,7 @@ namespace PokerGame.Core.Microservices
                                     case "C":
                                         // This will be check or call depending on the current game state
                                         var playerInfo = _players[_activePlayerId];
-                                        bool canCheck = _latestGameState != null &&
-                                                      playerInfo.CurrentBet == _latestGameState.CurrentBet;
+                                        bool canCheck = _currentBet == playerInfo.CurrentBet;
                                         
                                         SendPlayerAction(canCheck ? "check" : "call");
                                         break;
@@ -437,8 +492,8 @@ namespace PokerGame.Core.Microservices
                                 }
                             }
                         }
-                        else if (_latestGameState?.CurrentState == GameState.HandComplete ||
-                                _latestGameState?.CurrentState == GameState.WaitingToStart)
+                        else if (_currentGameState == GameState.HandComplete ||
+                                _currentGameState == GameState.WaitingToStart)
                         {
                             // Ask to start a new hand
                             Console.WriteLine("Press Enter to start a new hand or 'Q' to quit.");
@@ -823,18 +878,17 @@ namespace PokerGame.Core.Microservices
         /// <summary>
         /// Displays the game state using a simple text-based UI
         /// </summary>
-        /// <param name="gameState">The game state to display</param>
-        private async Task DisplayGameStateSimpleAsync(PokerGame.Core.Game.GameState gameState)
+        private async Task DisplayGameStateSimpleAsync()
         {
             Console.WriteLine("=== POKER GAME ===");
-            Console.WriteLine($"Pot: {gameState.Pot}  Current Bet: {gameState.CurrentBet}");
-            Console.WriteLine($"Game State: {gameState.CurrentState}");
+            Console.WriteLine($"Pot: {_pot}  Current Bet: {_currentBet}");
+            Console.WriteLine($"Game State: {_currentGameState}");
             
             // Display community cards
             Console.Write("Community Cards: ");
-            if (gameState.CommunityCards != null && gameState.CommunityCards.Count > 0)
+            if (_communityCards != null && _communityCards.Count > 0)
             {
-                foreach (var card in gameState.CommunityCards)
+                foreach (var card in _communityCards)
                 {
                     Console.Write(FormatCard(card) + " ");
                 }
@@ -849,7 +903,7 @@ namespace PokerGame.Core.Microservices
             Console.WriteLine("\nPlayers:");
             foreach (var player in _players.Values)
             {
-                string status = player.IsOut ? "OUT" : player.IsFolded ? "FOLDED" : "IN";
+                string status = !player.IsActive ? "OUT" : player.HasFolded ? "FOLDED" : "IN";
                 string holeCards = "";
                 
                 if (player.HoleCards != null && player.HoleCards.Count > 0)
@@ -876,8 +930,7 @@ namespace PokerGame.Core.Microservices
         /// <summary>
         /// Displays the game state using an enhanced UI with box drawing characters
         /// </summary>
-        /// <param name="gameState">The game state to display</param>
-        private async Task DisplayGameStateEnhancedAsync(PokerGame.Core.Game.GameState gameState)
+        private async Task DisplayGameStateEnhancedAsync()
         {
             // Table border
             Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
@@ -885,18 +938,18 @@ namespace PokerGame.Core.Microservices
             Console.WriteLine("╠═════════════════════════════════════════════════════════╣");
             
             // Game state information
-            Console.WriteLine($"║  Pot: {gameState.Pot,-6}  Current Bet: {gameState.CurrentBet,-6}  State: {gameState.CurrentState,-12} ║");
+            Console.WriteLine($"║  Pot: {_pot,-6}  Current Bet: {_currentBet,-6}  State: {_currentGameState,-12} ║");
             
             // Community cards
             Console.Write("║  Community Cards: ");
-            if (gameState.CommunityCards != null && gameState.CommunityCards.Count > 0)
+            if (_communityCards != null && _communityCards.Count > 0)
             {
-                foreach (var card in gameState.CommunityCards)
+                foreach (var card in _communityCards)
                 {
                     Console.Write(FormatCard(card) + " ");
                 }
                 // Padding to align the box
-                int padding = 48 - (gameState.CommunityCards.Count * 5);
+                int padding = 48 - (_communityCards.Count * 5);
                 Console.Write(new string(' ', padding > 0 ? padding : 1));
             }
             else
@@ -913,7 +966,7 @@ namespace PokerGame.Core.Microservices
             
             foreach (var player in _players.Values)
             {
-                string status = player.IsOut ? "OUT" : player.IsFolded ? "FOLDED" : "IN";
+                string status = !player.IsActive ? "OUT" : player.HasFolded ? "FOLDED" : "IN";
                 
                 Console.WriteLine($"║  {player.Name,-15} Chips: {player.Chips,-6} Bet: {player.CurrentBet,-6} Status: {status,-8} ║");
                 
@@ -950,44 +1003,44 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         /// <param name="card">The card to format</param>
         /// <returns>A formatted string representation of the card</returns>
-        private string FormatCard(PokerGame.Core.Models.Card card)
+        private string FormatCard(Card card)
         {
             string rank;
             switch (card.Rank)
             {
-                case 14:
+                case Rank.Ace:
                     rank = "A";
                     break;
-                case 13:
+                case Rank.King:
                     rank = "K";
                     break;
-                case 12:
+                case Rank.Queen:
                     rank = "Q";
                     break;
-                case 11:
+                case Rank.Jack:
                     rank = "J";
                     break;
-                case 10:
+                case Rank.Ten:
                     rank = "T";
                     break;
                 default:
-                    rank = card.Rank.ToString();
+                    rank = ((int)card.Rank).ToString();
                     break;
             }
             
             string suit;
             switch (card.Suit)
             {
-                case PokerGame.Core.Models.CardSuit.Spades:
+                case Suit.Spades:
                     suit = "♠";
                     break;
-                case PokerGame.Core.Models.CardSuit.Hearts:
+                case Suit.Hearts:
                     suit = "♥";
                     break;
-                case PokerGame.Core.Models.CardSuit.Diamonds:
+                case Suit.Diamonds:
                     suit = "♦";
                     break;
-                case PokerGame.Core.Models.CardSuit.Clubs:
+                case Suit.Clubs:
                     suit = "♣";
                     break;
                 default:
