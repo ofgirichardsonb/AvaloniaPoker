@@ -687,7 +687,14 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     BroadcastGameState();
                     
                     // Send a direct response to the sender
-                    Console.WriteLine("========== SENDING STARTHAND RESPONSE ==========");
+                    Console.WriteLine("\n\n");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("*          GAME ENGINE SENDING STARTHAND RESPONSE        *");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("\n\n");
+                    
                     var responseMessage = Message.Create(MessageType.GenericResponse);
                     
                     // Set message ID to ensure uniqueness
@@ -696,18 +703,70 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     // Set in response to property for tracking the relationship
                     responseMessage.InResponseTo = message.MessageId;
                     
+                    // Set sender/receiver IDs for more reliable delivery
+                    responseMessage.SenderId = _serviceId;
+                    if (!string.IsNullOrEmpty(message.SenderId))
+                    {
+                        responseMessage.ReceiverId = message.SenderId;
+                    }
+                    
+                    // Make sure the sender ID is set to our service ID
+                    responseMessage.SenderId = _serviceId;
+                    
+                    // IMPORTANT: Set the receiver ID to the original sender
+                    responseMessage.ReceiverId = message.SenderId;
+                    
                     Console.WriteLine($"Original message ID: {message.MessageId}");
+                    Console.WriteLine($"Original sender ID: {message.SenderId}");
                     Console.WriteLine($"Response message ID: {responseMessage.MessageId}");
+                    Console.WriteLine($"Response sender ID: {responseMessage.SenderId}");
+                    Console.WriteLine($"Response receiver ID: {responseMessage.ReceiverId}");
                     Console.WriteLine($"Response in response to: {responseMessage.InResponseTo}");
+                    
+                    // Super visible debug message
+                    Console.WriteLine("\n\n");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("*  GAME ENGINE SENDING STARTHAND RESPONSE TO CONSOLE UI  *");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("\n\n");
                     
                     // Log to file for debugging - no need to specify path with enhanced FileLogger
                     PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
-                        $"SENDING StartHand RESPONSE - Original: {message.MessageId}, Response: {responseMessage.MessageId}");
+                        $"SENDING StartHand RESPONSE - Original: {message.MessageId}, Response: {responseMessage.MessageId}, To: {message.SenderId}");
                     
                     // Also echo to console with more visibility
-                    Console.WriteLine($">>>>>> MESSAGE TRACE: [GameEngine] SENDING StartHand RESPONSE - Original: {message.MessageId}, Response: {responseMessage.MessageId} <<<<<<");
+                    Console.WriteLine($">>>>>> MESSAGE TRACE: [GameEngine] SENDING StartHand RESPONSE - Original: {message.MessageId}, Response: {responseMessage.MessageId}, To: {message.SenderId} <<<<<<");
                     
-                    // Create and set payload
+                    // First, send a direct acknowledgment for the original message
+                    // This is extremely important for reliable communication
+                    Console.WriteLine("\n\n");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("*    GAME ENGINE SENDING DIRECT ACKNOWLEDGMENT FIRST     *");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("\n\n");
+                    
+                    // Create explicit acknowledgment message
+                    var ackMessage = Message.Create(MessageType.Acknowledgment);
+                    ackMessage.SenderId = _serviceId;
+                    ackMessage.ReceiverId = message.SenderId;
+                    ackMessage.InResponseTo = message.MessageId;
+                    
+                    Console.WriteLine($"Sending DIRECT acknowledgment for message {message.MessageId} to {message.SenderId}");
+                    // Send acknowledgment via multiple methods for redundancy
+                    SendTo(ackMessage, message.SenderId);
+                    Broadcast(ackMessage);
+                    
+                    PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
+                        $"SENT DIRECT ACKNOWLEDGMENT - For: {message.MessageId}, To: {message.SenderId}");
+                        
+                    // Add small delay after acknowledgment to ensure it's processed first
+                    await Task.Delay(100);
+                    
+                    // Now set up the main response payload
                     var responsePayload = new GenericResponsePayload
                     {
                         Success = true,
@@ -726,9 +785,20 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                         Console.WriteLine($"Sending StartHand response directly to {message.SenderId}");
                         Console.WriteLine($"RESPONSE PAYLOAD: {responseMessage.GetPayload<GenericResponsePayload>()?.Message}");
                         
-                        // Try the more reliable method first (with acknowledgment)
+                        // Try multiple approaches to ensure delivery
+                        
+                        // 1. First, broadcast the message (ensures it's visible to all services)
+                        Console.WriteLine("1. Broadcasting response message to all services");
+                        Broadcast(responseMessage);
+                        
+                        // 2. Then, direct send (explicit targeting)
+                        Console.WriteLine($"2. Direct sending response to {message.SenderId}");
+                        SendTo(responseMessage, message.SenderId);
+                        
+                        // 3. Finally, try the most reliable method (with acknowledgment)
                         try
                         {
+                            Console.WriteLine("3. Attempting send with acknowledgment");
                             bool sent = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
                                 this, 
                                 responseMessage, 
@@ -744,23 +814,20 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             else
                             {
                                 Console.WriteLine("Failed to send StartHand response with acknowledgment after retries");
-                                Console.WriteLine("Falling back to direct send...");
-                                SendTo(responseMessage, message.SenderId);
                             }
                         }
                         catch (Exception ex)
                         {
                             Console.WriteLine($"Error sending with acknowledgment: {ex.Message}");
-                            Console.WriteLine("Falling back to direct send...");
-                            SendTo(responseMessage, message.SenderId);
+                            Console.WriteLine(ex.StackTrace);
                         }
                         
-                        Console.WriteLine("StartHand response sent!");
+                        Console.WriteLine("StartHand response sent using multiple delivery methods!");
                     }
                     else
                     {
-                        Console.WriteLine("WARNING: Cannot send StartHand response - sender ID is missing");
-                        Console.WriteLine("Falling back to broadcast for StartHand response");
+                        Console.WriteLine("WARNING: Cannot send targeted StartHand response - sender ID is missing");
+                        Console.WriteLine("Falling back to broadcast-only for StartHand response");
                         Broadcast(responseMessage); // Fallback to broadcast
                         Console.WriteLine("StartHand response broadcasted!");
                     }
@@ -872,6 +939,29 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     {
                         Console.WriteLine("Failed to create deck according to confirmation message");
                     }
+                    break;
+                
+                case MessageType.Acknowledgment:
+                    Console.WriteLine("\n\n");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("*         GAME ENGINE RECEIVED ACKNOWLEDGMENT            *");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("\n\n");
+                    
+                    Console.WriteLine($"Acknowledgment message ID: {message.MessageId}");
+                    Console.WriteLine($"In response to message: {message.InResponseTo}");
+                    Console.WriteLine($"From: {message.SenderId}");
+                    Console.WriteLine($"To: {message.ReceiverId ?? "broadcast"}");
+                    
+                    // Use FileLogger for better tracing
+                    PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
+                        $"RECEIVED ACKNOWLEDGMENT - ID: {message.MessageId}, For: {message.InResponseTo}, From: {message.SenderId}");
+                    
+                    // Don't need to respond to acknowledgments - that would create an infinite loop
+                    Console.WriteLine("Acknowledgment processed successfully.");
+                    Console.WriteLine("================================================");
                     break;
                 
                 // Add more message handlers as needed

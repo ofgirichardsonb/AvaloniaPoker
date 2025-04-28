@@ -474,18 +474,58 @@ namespace PokerGame.Core.Microservices
                     }
                     break;
                     
+                case MessageType.Acknowledgment:
+                    Console.WriteLine("\n\n");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("*         CONSOLE UI RECEIVED ACKNOWLEDGMENT             *");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("\n\n");
+                    
+                    Console.WriteLine($"Acknowledgment message ID: {message.MessageId}");
+                    Console.WriteLine($"In response to message: {message.InResponseTo}");
+                    Console.WriteLine($"From: {message.SenderId}");
+                    Console.WriteLine($"To: {message.ReceiverId ?? "broadcast"}");
+                    
+                    // Use FileLogger for better tracing
+                    PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                        $"RECEIVED ACKNOWLEDGMENT - ID: {message.MessageId}, For: {message.InResponseTo}, From: {message.SenderId}");
+                    
+                    // Don't need to respond to acknowledgments - that would create an infinite loop
+                    Console.WriteLine("Acknowledgment processed successfully.");
+                    Console.WriteLine("================================================");
+                    break;
+                    
                 case MessageType.GenericResponse:
+                    Console.WriteLine("\n\n");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("*         CONSOLE UI RECEIVED GENERIC RESPONSE           *");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("\n\n");
+                    
                     Console.WriteLine("********** RECEIVED GENERIC RESPONSE **********");
                     Console.WriteLine($"Message ID: {message.MessageId}");
                     Console.WriteLine($"In response to: {message.InResponseTo}");
                     Console.WriteLine($"From service: {message.SenderId}");
+                    Console.WriteLine($"To service: {message.ReceiverId}");
+                    Console.WriteLine($"Our service ID: {_serviceId}");
+                    
+                    // Check if this message is actually for us
+                    if (!string.IsNullOrEmpty(message.ReceiverId) && message.ReceiverId != _serviceId)
+                    {
+                        Console.WriteLine($"WARNING: This message is not for us! It's for {message.ReceiverId}, but we are {_serviceId}");
+                        // Still process the message anyway, as it might be a broadcast or incorrectly addressed
+                    }
                     
                     // Use improved file logger - no need to specify path
                     PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                        $"RECEIVED GENERIC RESPONSE - ID: {message.MessageId}, InResponseTo: {message.InResponseTo}");
+                        $"RECEIVED GENERIC RESPONSE - ID: {message.MessageId}, InResponseTo: {message.InResponseTo}, From: {message.SenderId}, To: {message.ReceiverId}");
                     
                     // Also echo to console with more visibility
-                    Console.WriteLine($">>>>>> MESSAGE TRACE: [ConsoleUI] RECEIVED GENERIC RESPONSE - ID: {message.MessageId}, InResponseTo: {message.InResponseTo} <<<<<<");
+                    Console.WriteLine($">>>>>> MESSAGE TRACE: [ConsoleUI] RECEIVED GENERIC RESPONSE - ID: {message.MessageId}, InResponseTo: {message.InResponseTo}, From: {message.SenderId} <<<<<<");
                     
                     var genericResponse = message.GetPayload<GenericResponsePayload>();
                     if (genericResponse != null)
@@ -500,9 +540,35 @@ namespace PokerGame.Core.Microservices
                         // Handle specific responses
                         if (genericResponse.OriginalMessageType == MessageType.StartHand)
                         {
-                            Console.WriteLine("********* STARTHAND RESPONSE RECEIVED! *********");
+                            Console.WriteLine("\n\n");
+                            Console.WriteLine("**********************************************************");
+                            Console.WriteLine("*                                                        *");
+                            Console.WriteLine("*             STARTHAND RESPONSE RECEIVED                *");
+                            Console.WriteLine("*                                                        *");
+                            Console.WriteLine("**********************************************************");
+                            Console.WriteLine("\n\n");
+                            
                             PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
                                 "********* STARTHAND RESPONSE RECEIVED! *********");
+                                
+                            // Send an acknowledgment response for the message
+                            Console.WriteLine("Sending acknowledgment for the StartHand response");
+                            
+                            var initialAckMessage = Message.Create(MessageType.Acknowledgment);
+                            initialAckMessage.MessageId = Guid.NewGuid().ToString();
+                            initialAckMessage.SenderId = _serviceId;
+                            initialAckMessage.ReceiverId = message.SenderId;
+                            initialAckMessage.InResponseTo = message.MessageId;
+                            
+                            // Try multiple delivery methods
+                            Console.WriteLine($"Sending acknowledgment to {message.SenderId}");
+                            SendTo(initialAckMessage, message.SenderId);
+                            Broadcast(initialAckMessage); // Also broadcast for redundancy
+                            
+                            // Also update the startHand message tracking
+                            Console.WriteLine("Updating StartHand tracking - response received");
+                            PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                                "StartHand message flow complete - response received and acknowledged!");
                                 
                             if (genericResponse.Success)
                             {
@@ -510,19 +576,27 @@ namespace PokerGame.Core.Microservices
                                 PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", "Hand started successfully!");
                                 
                                 // Acknowledge the message explicitly
-                                var ackMessage = Message.Create(MessageType.Acknowledgment);
-                                ackMessage.SenderId = _serviceId;
-                                ackMessage.ReceiverId = message.SenderId;
-                                ackMessage.InResponseTo = message.MessageId;
+                                var successAckMessage = Message.Create(MessageType.Acknowledgment);
+                                successAckMessage.SenderId = _serviceId;
+                                successAckMessage.ReceiverId = message.SenderId;
+                                successAckMessage.InResponseTo = message.MessageId;
                                 Console.WriteLine($"Sending explicit acknowledgment for message {message.MessageId} to {message.SenderId}");
                                 
                                 PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
                                     $"Sending explicit acknowledgment for message {message.MessageId} to {message.SenderId}");
                                     
-                                SendTo(ackMessage, message.SenderId);
+                                // Try multiple approaches to ensure delivery
+                                
+                                // 1. Broadcast the ack first
+                                Console.WriteLine("1. Broadcasting acknowledgment to all services");
+                                Broadcast(successAckMessage);
+                                
+                                // 2. Then direct send for targeted delivery
+                                Console.WriteLine($"2. Direct sending acknowledgment to {message.SenderId}");
+                                SendTo(successAckMessage, message.SenderId);
                                 
                                 PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                                    "Acknowledgment sent");
+                                    "Acknowledgment sent using multiple delivery methods");
                             }
                             else
                             {
@@ -652,11 +726,18 @@ namespace PokerGame.Core.Microservices
                         else if (string.IsNullOrWhiteSpace(input) && _gameEngineServiceId != null)
                         {
                             // Start a new hand with enhanced logging
-                            Console.WriteLine("========== SENDING STARTHAND MESSAGE ==========");
+                            Console.WriteLine("\n\n");
+                            Console.WriteLine("**********************************************************");
+                            Console.WriteLine("*                                                        *");
+                            Console.WriteLine("*            CONSOLE UI SENDING STARTHAND                *");
+                            Console.WriteLine("*                                                        *");
+                            Console.WriteLine("**********************************************************");
+                            Console.WriteLine("\n\n");
                             
                             var message = Message.Create(MessageType.StartHand);
                             message.MessageId = Guid.NewGuid().ToString(); // Ensure unique message ID
                             message.SenderId = _serviceId; // Set sender ID explicitly
+                            message.ReceiverId = _gameEngineServiceId; // Explicitly target the game engine
                             
                             Console.WriteLine($"StartHand message ID: {message.MessageId}");
                             Console.WriteLine($"StartHand sender ID: {message.SenderId}");
@@ -669,11 +750,46 @@ namespace PokerGame.Core.Microservices
                             // Also echo to console with more visibility
                             Console.WriteLine($">>>>>> MESSAGE TRACE: [ConsoleUI] SENDING STARTHAND MESSAGE - ID: {message.MessageId}, Recipient: {_gameEngineServiceId} <<<<<<");
                             
-                            Console.WriteLine("StartHand message sent, waiting for response...");
+                            // Try multiple delivery methods to ensure reliability
+                            Console.WriteLine("1. Broadcasting StartHand message to all services");
+                            Broadcast(message);
+                            
+                            Console.WriteLine("2. Direct sending StartHand to " + _gameEngineServiceId);
                             SendTo(message, _gameEngineServiceId);
                             
+                            // Also try the most reliable method with acknowledgment
+                            try 
+                            {
+                                Console.WriteLine("3. Attempting send with acknowledgment");
+                                bool sent = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
+                                    this, 
+                                    message, 
+                                    _gameEngineServiceId, 
+                                    timeoutMs: 5000, 
+                                    maxRetries: 3,
+                                    useExponentialBackoff: true);
+                                    
+                                if (sent)
+                                {
+                                    Console.WriteLine("StartHand sent with acknowledgment!");
+                                }
+                                else
+                                {
+                                    Console.WriteLine("Failed to send StartHand with acknowledgment after retries");
+                                    Console.WriteLine("But don't worry, we already tried broadcast and direct send methods");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Error sending with acknowledgment: {ex.Message}");
+                                // Stack trace might be too verbose, but helpful for debugging
+                                Console.WriteLine(ex.StackTrace);
+                            }
+                            
+                            Console.WriteLine("StartHand message sent using multiple delivery methods, waiting for response...");
+                            
                             PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                                "StartHand message sent, waiting for response...");
+                                "StartHand message sent using multiple delivery methods, waiting for response...");
                                 
                             Console.WriteLine("================================================");
                         }
@@ -1005,10 +1121,19 @@ namespace PokerGame.Core.Microservices
             await Task.Delay(1000);
             
             // Now send a message to start the hand
+            Console.WriteLine("\n\n");
+            Console.WriteLine("**********************************************************");
+            Console.WriteLine("*                                                        *");
+            Console.WriteLine("*            CONSOLE UI SENDING STARTHAND                *");
+            Console.WriteLine("*                                                        *");
+            Console.WriteLine("**********************************************************");
+            Console.WriteLine("\n\n");
+        
             Console.WriteLine($"Sending StartHand message to {_gameEngineServiceId}");
             var startHandMessage = Message.Create(MessageType.StartHand);
             startHandMessage.MessageId = Guid.NewGuid().ToString(); // Ensure unique message ID
             startHandMessage.SenderId = _serviceId; // Set sender ID explicitly
+            startHandMessage.ReceiverId = _gameEngineServiceId; // Explicitly set receiver ID
             
             Console.WriteLine($"StartHand message ID: {startHandMessage.MessageId}");
             Console.WriteLine($"StartHand sender ID: {startHandMessage.SenderId}");
@@ -1021,11 +1146,47 @@ namespace PokerGame.Core.Microservices
             // Also echo to console with more visibility
             Console.WriteLine($">>>>>> MESSAGE TRACE: [ConsoleUI] SENDING STARTHAND MESSAGE - ID: {startHandMessage.MessageId}, Recipient: {_gameEngineServiceId} <<<<<<");
             
+            // Try multiple approaches to ensure delivery
+            
+            // 1. First, broadcast the message (ensures it's visible to all services)
+            Console.WriteLine("1. Broadcasting StartHand message to all services");
+            Broadcast(startHandMessage);
+            
+            // 2. Then, direct send (explicit targeting)
+            Console.WriteLine($"2. Direct sending StartHand to {_gameEngineServiceId}");
             SendTo(startHandMessage, _gameEngineServiceId);
             
-            Console.WriteLine("StartHand message sent, waiting for response");
+            // 3. Finally, try the most reliable method (with acknowledgment)
+            try
+            {
+                Console.WriteLine("3. Attempting send with acknowledgment");
+                bool sent = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
+                    this, 
+                    startHandMessage, 
+                    _gameEngineServiceId, 
+                    timeoutMs: 5000,
+                    maxRetries: 3,
+                    useExponentialBackoff: true);
+                    
+                if (sent)
+                {
+                    Console.WriteLine("StartHand sent with acknowledgment!");
+                }
+                else
+                {
+                    Console.WriteLine("Failed to send StartHand with acknowledgment after retries");
+                    Console.WriteLine("But don't worry, we already tried broadcast and direct send methods");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending with acknowledgment: {ex.Message}");
+                Console.WriteLine("But don't worry, we already tried broadcast and direct send methods");
+            }
+            
+            Console.WriteLine("StartHand message sent using multiple delivery methods, waiting for response");
             PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                "StartHand message sent, waiting for response...");
+                "StartHand message sent using multiple delivery methods, waiting for response...");
                 
             // Give some time for processing
             await Task.Delay(1000);

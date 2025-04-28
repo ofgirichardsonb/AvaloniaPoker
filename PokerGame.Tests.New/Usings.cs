@@ -13,4 +13,4 @@ global using System.Net.Http;
 global using System.Threading;
 global using System.Threading.Tasks;
 global using Xunit;
-global using MSAEC = MSA.Foundation.ServiceManagement.ExecutionContext;
+// Alias is auto-generated in the GlobalUsings.g.cs file, don't duplicate here
