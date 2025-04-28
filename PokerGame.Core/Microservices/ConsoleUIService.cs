@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using PokerGame.Core.Game;
 using PokerGame.Core.Models;
@@ -794,46 +795,205 @@ namespace PokerGame.Core.Microservices
             Console.WriteLine($"Connection established with game engine service: {_gameEngineServiceId}");
             Console.WriteLine("=================================================");
             
-            // Get number of players
-            int numPlayers = 0;
-            bool validInput = false;
-            
-            // Try up to 3 times to get valid input, then default to 3 players
-            int maxAttempts = 3;
-            int attempts = 0;
-            
-            while (!validInput && attempts < maxAttempts)
+            // Get player information using the Curses UI if available, otherwise fallback to console
+            string[] playerNames;
+            int numPlayers = 3; // Default
+
+            if (_useEnhancedUI && _enhancedUiInstance != null)
             {
-                Console.Write("Enter number of players (2-8): ");
-                string input = Console.ReadLine() ?? "";
-                
-                if (int.TryParse(input, out numPlayers) && numPlayers >= 2 && numPlayers <= 8)
+                try
                 {
-                    validInput = true;
-                }
-                else
-                {
-                    attempts++;
-                    Console.WriteLine("Please enter a number between 2 and 8.");
+                    Console.WriteLine("Using Curses UI for player setup...");
+                    PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", "Using Curses UI for player setup");
                     
-                    // If this is the last attempt, set a default
-                    if (attempts >= maxAttempts)
+                    // Get the CursesUI type via reflection
+                    var cursesUIType = _enhancedUiInstance.GetType();
+                    
+                    // First, make sure we're in a clean state
+                    var clearMethod = cursesUIType.GetMethod("ClearScreen");
+                    if (clearMethod != null)
                     {
-                        numPlayers = 3; // Default to 3 players
-                        Console.WriteLine("Using default: 3 players");
-                        validInput = true;
+                        clearMethod.Invoke(_enhancedUiInstance, null);
+                    }
+
+                    // Try to get the GetPlayerSetup method
+                    var setupMethod = cursesUIType.GetMethod("GetPlayerSetup");
+                    if (setupMethod != null)
+                    {
+                        PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", "Calling GetPlayerSetup method on Curses UI");
+                        var result = setupMethod.Invoke(_enhancedUiInstance, null);
+                        
+                        if (result is Tuple<int, string[]> setupResult)
+                        {
+                            numPlayers = setupResult.Item1;
+                            playerNames = setupResult.Item2;
+                            PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", $"Got {numPlayers} players from Curses UI");
+                        }
+                        else
+                        {
+                            // Fallback in case of unexpected return type
+                            PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", "Unexpected return type from GetPlayerSetup, using defaults");
+                            numPlayers = 3;
+                            playerNames = new string[numPlayers];
+                            for (int i = 0; i < numPlayers; i++)
+                            {
+                                playerNames[i] = $"Player {i+1}";
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // If method not found, try the alternative approach - creating our own UI in Curses
+                        var drawTextMethod = cursesUIType.GetMethod("DrawText");
+                        var drawBorderMethod = cursesUIType.GetMethod("DrawBorder");
+                        var readInputMethod = cursesUIType.GetMethod("ReadInput");
+                        var refreshMethod = cursesUIType.GetMethod("Refresh");
+                        
+                        if (drawTextMethod != null && readInputMethod != null && refreshMethod != null)
+                        {
+                            // Create our own player setup screen with the Curses primitives
+                            if (clearMethod != null)
+                                clearMethod.Invoke(_enhancedUiInstance, null);
+                                
+                            if (drawBorderMethod != null)
+                                drawBorderMethod.Invoke(_enhancedUiInstance, new object[] { 1, 1, 78, 20 });
+                                
+                            drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 30, 2, "POKER GAME SETUP", System.Drawing.Color.Yellow });
+                            drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 10, 5, "How many players? (2-8):", System.Drawing.Color.White });
+                            refreshMethod.Invoke(_enhancedUiInstance, null);
+                            
+                            var numPlayersInput = readInputMethod.Invoke(_enhancedUiInstance, new object[] { 40, 5, 2 });
+                            if (numPlayersInput is string numStr && int.TryParse(numStr, out int result) && result >= 2 && result <= 8)
+                            {
+                                numPlayers = result;
+                            }
+                            else
+                            {
+                                numPlayers = 3; // Default
+                                drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 10, 6, "Invalid input. Using default: 3 players", System.Drawing.Color.Red });
+                                refreshMethod.Invoke(_enhancedUiInstance, null);
+                                Thread.Sleep(1500); // Show the message briefly
+                            }
+                            
+                            playerNames = new string[numPlayers];
+                            
+                            if (clearMethod != null)
+                                clearMethod.Invoke(_enhancedUiInstance, null);
+                                
+                            if (drawBorderMethod != null)
+                                drawBorderMethod.Invoke(_enhancedUiInstance, new object[] { 1, 1, 78, 20 });
+                                
+                            drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 30, 2, "PLAYER SETUP", System.Drawing.Color.Yellow });
+                            
+                            for (int i = 0; i < numPlayers; i++)
+                            {
+                                drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 10, 5 + (i * 2), $"Enter name for Player {i+1}: ", System.Drawing.Color.White });
+                                refreshMethod.Invoke(_enhancedUiInstance, null);
+                                
+                                var nameInput = readInputMethod.Invoke(_enhancedUiInstance, new object[] { 40, 5 + (i * 2), 15 });
+                                string defaultName = $"Player {i+1}";
+                                
+                                if (nameInput is string name && !string.IsNullOrWhiteSpace(name))
+                                {
+                                    playerNames[i] = name;
+                                }
+                                else
+                                {
+                                    playerNames[i] = defaultName;
+                                }
+                            }
+                            
+                            // Show summary
+                            if (clearMethod != null)
+                                clearMethod.Invoke(_enhancedUiInstance, null);
+                                
+                            if (drawBorderMethod != null)
+                                drawBorderMethod.Invoke(_enhancedUiInstance, new object[] { 1, 1, 78, 20 });
+                                
+                            drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 25, 2, "GAME READY TO START", System.Drawing.Color.Green });
+                            drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 10, 4, $"Players: {numPlayers}", System.Drawing.Color.White });
+                            
+                            for (int i = 0; i < numPlayers; i++)
+                            {
+                                drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 10, 6 + i, $"Player {i+1}: {playerNames[i]}", System.Drawing.Color.Cyan });
+                            }
+                            
+                            drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 10, 7 + numPlayers, "Press Enter to start the game...", System.Drawing.Color.Yellow });
+                            refreshMethod.Invoke(_enhancedUiInstance, null);
+                            
+                            // Wait for Enter
+                            readInputMethod.Invoke(_enhancedUiInstance, new object[] { 10, 20, 1 });
+                        }
+                        else
+                        {
+                            // Fallback if we can't create our UI
+                            PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", "Required Curses methods not found, using defaults");
+                            numPlayers = 3;
+                            playerNames = new string[numPlayers];
+                            for (int i = 0; i < numPlayers; i++)
+                            {
+                                playerNames[i] = $"Player {i+1}";
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log the exception and fall back to defaults
+                    Console.WriteLine($"Error using Curses UI for player setup: {ex.Message}");
+                    PokerGame.Core.Logging.FileLogger.Error("ConsoleUI", $"Error in Curses UI player setup: {ex.Message}");
+                    PokerGame.Core.Logging.FileLogger.Error("ConsoleUI", ex.StackTrace);
+                    
+                    numPlayers = 3;
+                    playerNames = new string[numPlayers];
+                    for (int i = 0; i < numPlayers; i++)
+                    {
+                        playerNames[i] = $"Player {i+1}";
                     }
                 }
             }
-            
-            // Get player names
-            string[] playerNames = new string[numPlayers];
-            for (int i = 0; i < numPlayers; i++)
+            else
             {
-                string defaultName = $"Player {i+1}";
-                Console.Write($"Enter name for player {i+1} (or press Enter for '{defaultName}'): ");
-                string name = Console.ReadLine() ?? "";
-                playerNames[i] = string.IsNullOrWhiteSpace(name) ? defaultName : name;
+                // Fallback to console input if enhanced UI is not available
+                Console.WriteLine("Enhanced UI not available, using console input");
+                
+                // Get number of players from console
+                bool validInput = false;
+                int maxAttempts = 3;
+                int attempts = 0;
+                
+                while (!validInput && attempts < maxAttempts)
+                {
+                    Console.Write("Enter number of players (2-8): ");
+                    string input = Console.ReadLine() ?? "";
+                    
+                    if (int.TryParse(input, out numPlayers) && numPlayers >= 2 && numPlayers <= 8)
+                    {
+                        validInput = true;
+                    }
+                    else
+                    {
+                        attempts++;
+                        Console.WriteLine("Please enter a number between 2 and 8.");
+                        
+                        if (attempts >= maxAttempts)
+                        {
+                            numPlayers = 3; // Default to 3 players
+                            Console.WriteLine("Using default: 3 players");
+                            validInput = true;
+                        }
+                    }
+                }
+                
+                // Get player names from console
+                playerNames = new string[numPlayers];
+                for (int i = 0; i < numPlayers; i++)
+                {
+                    string defaultName = $"Player {i+1}";
+                    Console.Write($"Enter name for player {i+1} (or press Enter for '{defaultName}'): ");
+                    string name = Console.ReadLine() ?? "";
+                    playerNames[i] = string.IsNullOrWhiteSpace(name) ? defaultName : name;
+                }
             }
             
             // Start the game
