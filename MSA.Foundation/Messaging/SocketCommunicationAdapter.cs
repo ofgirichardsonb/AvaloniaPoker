@@ -12,7 +12,7 @@ namespace MSA.Foundation.Messaging
     /// <summary>
     /// Socket communication adapter using NetMQ for message transport
     /// </summary>
-    public class SocketCommunicationAdapter : IDisposable
+    public class SocketCommunicationAdapter : ISocketCommunicationAdapter
     {
         private readonly string _address;
         private readonly int _port;

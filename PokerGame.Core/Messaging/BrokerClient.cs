@@ -36,7 +36,8 @@ namespace PokerGame.Core.Messaging
         private long _messagesReceived = 0;
         private long _requestsSent = 0;
         private long _responseReceived = 0;
-        private long _acknowledgmentsSent = 0;
+        // Tracking for acknowledgments (uncommented when implemented)
+        // private long _acknowledgmentsSent = 0;
         private long _acknowledgementsReceived = 0;
         
         // Event for received messages

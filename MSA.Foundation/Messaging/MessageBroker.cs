@@ -11,7 +11,7 @@ namespace MSA.Foundation.Messaging
     /// </summary>
     public class MessageBroker : IMessageBroker
     {
-        private readonly SocketCommunicationAdapter _socketAdapter;
+        private readonly ISocketCommunicationAdapter _socketAdapter;
         private readonly ConcurrentDictionary<string, Subscription> _subscriptions;
         private readonly string _brokerId;
         private bool _isRunning;
@@ -23,8 +23,17 @@ namespace MSA.Foundation.Messaging
         /// <param name="port">The port to bind to</param>
         /// <param name="verbose">Whether to enable verbose logging</param>
         public MessageBroker(string address = "127.0.0.1", int port = 25555, bool verbose = false)
+            : this(new SocketCommunicationAdapter(address, port, verbose))
         {
-            _socketAdapter = new SocketCommunicationAdapter(address, port, verbose);
+        }
+        
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MessageBroker"/> class with a custom socket adapter
+        /// </summary>
+        /// <param name="socketAdapter">The socket adapter to use</param>
+        public MessageBroker(ISocketCommunicationAdapter socketAdapter)
+        {
+            _socketAdapter = socketAdapter ?? throw new ArgumentNullException(nameof(socketAdapter));
             _subscriptions = new ConcurrentDictionary<string, Subscription>();
             _brokerId = $"MessageBroker_{Guid.NewGuid()}";
             _isRunning = false;

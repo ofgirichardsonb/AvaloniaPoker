@@ -424,7 +424,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                         SendTargetedRegistrationTo(message.SenderId);
                         
                         // Send multiple times for reliability
-                        Task.Run(async () => {
+                        _ = Task.Run(async () => {
                             for (int i = 0; i < 3; i++)
                             {
                                 await Task.Delay(200 * (i + 1));
@@ -439,7 +439,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     PublishServiceRegistration();
                     
                     // Send multiple broadcasts for reliability
-                    Task.Run(async () => {
+                    _ = Task.Run(async () => {
                         for (int i = 0; i < 2; i++)
                         {
                             await Task.Delay(300 * (i + 1));
@@ -1354,7 +1354,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                 Console.WriteLine("Game engine service started successfully");
                 
                 // Broadcast our existence aggressively with a dedicated background task
-                Task.Run(async () => 
+                _ = Task.Run(async () => 
                 {
                     // Wait a moment for everything to initialize
                     await Task.Delay(1000);

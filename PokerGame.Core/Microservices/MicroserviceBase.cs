@@ -237,7 +237,7 @@ namespace PokerGame.Core.Microservices
             
             // Send multiple registrations with increasing delays for improved reliability
             Console.WriteLine($"====> [{_serviceType} {_serviceId}] Enhanced service discovery: sending multiple registrations");
-            Task.Run(async () => {
+            _ = Task.Run(async () => {
                 for (int i = 0; i < 5; i++)
                 {
                     await Task.Delay(100 * (i + 1));

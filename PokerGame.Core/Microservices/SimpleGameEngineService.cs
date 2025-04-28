@@ -76,7 +76,8 @@ namespace PokerGame.Core.Microservices
         private string _cardDeckServiceId = string.Empty;
         private bool _useLocalDeck = false;
         private Deck _localDeck = null;
-        private int _maxRetries = 3;
+        // Maximum number of retries for operations (will be implemented later)
+        // private int _maxRetries = 3;
         private bool _microservicesMode = false;
         
         // Timeout values

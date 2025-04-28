@@ -6,6 +6,7 @@ using Moq;
 using Xunit;
 using FluentAssertions;
 using System.Threading;
+using System.Reflection;
 
 namespace MSA.Foundation.Tests.Messaging
 {
@@ -124,7 +125,9 @@ namespace MSA.Foundation.Tests.Messaging
         public async Task PublishMessage_ShouldReturnTrue_WhenMessageIsSent()
         {
             // Arrange
-            var messageBroker = CreateMessageBrokerWithMockedSocket();
+            var mock = new Mock<ISocketCommunicationAdapter>();
+            mock.Setup(m => m.SendMessage(It.IsAny<string>(), It.IsAny<string>())).Returns(true);
+            var messageBroker = CreateMessageBrokerWithMock(mock.Object);
             var message = new Message(MessageType.Command, "testSender", "testPayload");
             
             messageBroker.Start();
@@ -134,6 +137,7 @@ namespace MSA.Foundation.Tests.Messaging
             
             // Assert
             result.Should().BeTrue("PublishMessage should return true when successful");
+            mock.Verify(m => m.SendMessage(It.IsAny<string>(), It.IsAny<string>()), Times.Once);
             
             // Cleanup
             messageBroker.Stop();
@@ -143,7 +147,9 @@ namespace MSA.Foundation.Tests.Messaging
         public async Task PublishMessageAsync_ShouldCompleteSuccessfully()
         {
             // Arrange
-            var messageBroker = CreateMessageBrokerWithMockedSocket();
+            var mock = new Mock<ISocketCommunicationAdapter>();
+            mock.Setup(m => m.SendMessage(It.IsAny<string>(), It.IsAny<string>())).Returns(true);
+            var messageBroker = CreateMessageBrokerWithMock(mock.Object);
             var message = new Message(MessageType.Command, "testSender", "testPayload");
             
             messageBroker.Start();
@@ -155,6 +161,7 @@ namespace MSA.Foundation.Tests.Messaging
             await publishAction.Should().NotThrowAsync();
             var result = await messageBroker.PublishMessageAsync(message);
             result.Should().BeTrue("PublishMessageAsync should return true when successful");
+            mock.Verify(m => m.SendMessage(It.IsAny<string>(), It.IsAny<string>()), Times.Once);
             
             // Cleanup
             messageBroker.Stop();
@@ -164,18 +171,21 @@ namespace MSA.Foundation.Tests.Messaging
         public void AcknowledgmentMessages_ShouldBeSentAutomatically_WhenRequireAcknowledgmentIsTrue()
         {
             // Arrange
-            var messageBroker = CreateMessageBrokerWithMockedSocket();
+            var mock = new Mock<ISocketCommunicationAdapter>();
+            mock.Setup(m => m.SendMessage(It.IsAny<string>(), It.IsAny<string>())).Returns(true);
+            var messageBroker = CreateMessageBrokerWithMock(mock.Object);
             var ackReceived = new ManualResetEventSlim(false);
             
             // Create a message that requires acknowledgment
             var message = new Message(MessageType.Command, "testSender", "testPayload")
             {
-                RequireAcknowledgment = true
+                RequireAcknowledgment = true,
+                ReceiverId = "MessageBroker_" // This will be matched with the broker ID prefix
             };
             
             messageBroker.Start();
             
-            // Subscribe to acknowledgments directly here
+            // Subscribe to acknowledgments
             messageBroker.Subscribe(MessageType.Acknowledgment, msg => {
                 ackReceived.Set();
             });
@@ -188,6 +198,7 @@ namespace MSA.Foundation.Tests.Messaging
             
             // Assert
             wasSignaled.Should().BeTrue("An acknowledgment should be sent for messages with RequireAcknowledgment=true");
+            mock.Verify(m => m.SendMessage(MessageType.Acknowledgment.ToString(), It.IsAny<string>()), Times.Once);
             
             // Cleanup
             messageBroker.Stop();
@@ -197,9 +208,20 @@ namespace MSA.Foundation.Tests.Messaging
         
         private MessageBroker CreateMessageBrokerWithMockedSocket()
         {
-            // For testing purposes, we create a real MessageBroker but we'll
-            // control the message flow through a simulated socket adapter
+            // Create a real MessageBroker for tests that don't need to verify socket interactions
             var broker = new MessageBroker("localhost", 5000, true);
+            return broker;
+        }
+        
+        private MessageBroker CreateMessageBrokerWithMock(ISocketCommunicationAdapter mockAdapter)
+        {
+            // Create a MessageBroker with a mocked socket adapter for testing
+            var broker = new MessageBroker("localhost", 5000, true);
+            
+            // Use reflection to replace the socket adapter with our mock
+            var field = typeof(MessageBroker).GetField("_socketAdapter", BindingFlags.NonPublic | BindingFlags.Instance);
+            field?.SetValue(broker, mockAdapter);
+            
             return broker;
         }
         
@@ -210,16 +232,16 @@ namespace MSA.Foundation.Tests.Messaging
             string topic = message.MessageType.ToString();
             string payload = message.ToJson();
             
-            // This is where we'd normally need to use reflection to access private methods
-            // For simplicity in this example, we're just using a public method or property
-            // that lets us inject messages for testing
+            // Use reflection to access the private OnMessageReceived method
+            var method = typeof(MessageBroker).GetMethod("OnMessageReceived", 
+                BindingFlags.NonPublic | BindingFlags.Instance);
+                
+            if (method == null)
+            {
+                throw new InvalidOperationException("Could not find OnMessageReceived method via reflection");
+            }
             
-            // This is simplified - in a real test you'd use reflection or 
-            // modify the MessageBroker to have a test hook
-            typeof(MessageBroker).GetMethod("OnMessageReceived", 
-                System.Reflection.BindingFlags.NonPublic | 
-                System.Reflection.BindingFlags.Instance)
-                ?.Invoke(messageBroker, new object[] { topic, payload });
+            method.Invoke(messageBroker, new object[] { topic, payload });
         }
     }
 }

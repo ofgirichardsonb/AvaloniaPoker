@@ -8,6 +8,7 @@ using MSA.Foundation.Telemetry;
 using Xunit;
 using FluentAssertions;
 using System.Collections.Generic;
+using Moq;
 
 // Using alias to avoid ambiguity with System.Threading.ExecutionContext
 using MSAEC = MSA.Foundation.ServiceManagement.ExecutionContext;
@@ -161,6 +162,135 @@ namespace MSA.Foundation.Tests.Integration
             messageBroker.Stop();
             telemetryService.Flush();
             executionContext.Cancel();
+        }
+        
+        [Fact]
+        public async Task MessageBroker_WithMockedAdapter_ShouldReceiveMessages()
+        {
+            // Arrange
+            var mockAdapter = new Mock<ISocketCommunicationAdapter>();
+            var executionContext = new MSAEC("test-mocked-service");
+            var receivedMessages = new List<Message>();
+            var messageReceived = new ManualResetEventSlim(false);
+            
+            // Configure the mock adapter to call back when subscribed
+            Action<string, string> capturedCallback = null;
+            
+            mockAdapter.Setup(m => m.Start()).Verifiable();
+            mockAdapter.Setup(m => m.SendMessage(It.IsAny<string>(), It.IsAny<string>())).Returns(true).Verifiable();
+            mockAdapter.Setup(m => m.SubscribeAll(It.IsAny<Action<string, string>>()))
+                .Callback<Action<string, string>>(callback => {
+                    capturedCallback = callback;
+                })
+                .Returns("test-subscription-id")
+                .Verifiable();
+            
+            var messageBroker = new MessageBroker(mockAdapter.Object);
+            
+            // Act
+            messageBroker.Start();
+            string subscriptionId = messageBroker.Subscribe(MessageType.Command, msg => {
+                receivedMessages.Add(msg);
+                messageReceived.Set();
+            });
+            
+            // Publish a message
+            var message = new Message(MessageType.Command, executionContext.ServiceId, "test mocked payload");
+            bool publishResult = messageBroker.PublishMessage(message);
+            
+            // Simulate receiving a message through the adapter
+            if (capturedCallback != null)
+            {
+                string topic = MessageType.Command.ToString();
+                string payload = message.ToJson();
+                capturedCallback(topic, payload);
+            }
+            
+            bool wasSignaled = messageReceived.Wait(TimeSpan.FromSeconds(1));
+            
+            // Assert
+            mockAdapter.Verify(m => m.Start(), Times.Once);
+            mockAdapter.Verify(m => m.SubscribeAll(It.IsAny<Action<string, string>>()), Times.Once);
+            mockAdapter.Verify(m => m.SendMessage(It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+            
+            publishResult.Should().BeTrue("Publishing a message should succeed");
+            wasSignaled.Should().BeTrue("The message handler should be called");
+            receivedMessages.Should().ContainSingle("A single message should be received");
+            receivedMessages[0].MessageType.Should().Be(MessageType.Command);
+            receivedMessages[0].SenderId.Should().Be(executionContext.ServiceId);
+            receivedMessages[0].Payload.Should().Be("test mocked payload");
+            
+            // Clean up
+            messageBroker.Stop();
+            mockAdapter.Verify(m => m.Stop(), Times.Once);
+        }
+        
+        [Fact]
+        public async Task MessageBroker_WithAcknowledgment_ShouldSendAckMessages()
+        {
+            // Arrange
+            var mockAdapter = new Mock<ISocketCommunicationAdapter>();
+            var executionContext = new MSAEC("test-ack-service");
+            var ackReceived = new ManualResetEventSlim(false);
+            
+            // Configure the mock adapter
+            Action<string, string> capturedCallback = null;
+            var sentMessages = new List<Tuple<string, string>>();
+            
+            mockAdapter.Setup(m => m.Start()).Verifiable();
+            mockAdapter.Setup(m => m.SendMessage(It.IsAny<string>(), It.IsAny<string>()))
+                .Callback<string, string>((topic, payload) => {
+                    sentMessages.Add(Tuple.Create(topic, payload));
+                    
+                    // If this is an acknowledgment message, signal it
+                    if (topic == MessageType.Acknowledgment.ToString())
+                    {
+                        ackReceived.Set();
+                    }
+                })
+                .Returns(true)
+                .Verifiable();
+                
+            mockAdapter.Setup(m => m.SubscribeAll(It.IsAny<Action<string, string>>()))
+                .Callback<Action<string, string>>(callback => {
+                    capturedCallback = callback;
+                })
+                .Returns("test-subscription-id")
+                .Verifiable();
+            
+            var messageBroker = new MessageBroker(mockAdapter.Object);
+            
+            // Act
+            messageBroker.Start();
+            
+            // Create a message requiring acknowledgment
+            var brokerId = "MessageBroker_"; // Partial broker ID for matching
+            var message = new Message(MessageType.Command, executionContext.ServiceId, "test ack payload")
+            {
+                RequireAcknowledgment = true,
+                ReceiverId = brokerId
+            };
+            
+            // Simulate receiving this message
+            if (capturedCallback != null)
+            {
+                string topic = MessageType.Command.ToString();
+                string payload = message.ToJson();
+                capturedCallback(topic, payload);
+            }
+            
+            bool wasAckSignaled = ackReceived.Wait(TimeSpan.FromSeconds(1));
+            
+            // Assert
+            mockAdapter.Verify(m => m.Start(), Times.Once);
+            mockAdapter.Verify(m => m.SubscribeAll(It.IsAny<Action<string, string>>()), Times.Once);
+            
+            wasAckSignaled.Should().BeTrue("An acknowledgment message should be sent");
+            sentMessages.Should().Contain(m => m.Item1 == MessageType.Acknowledgment.ToString());
+            
+            // Clean up
+            messageBroker.Stop();
+            mockAdapter.Verify(m => m.Stop(), Times.Once);
         }
     }
 }
