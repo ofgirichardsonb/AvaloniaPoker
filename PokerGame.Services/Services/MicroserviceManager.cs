@@ -64,6 +64,23 @@ namespace PokerGame.Services
             if (service == null)
                 throw new ArgumentNullException(nameof(service));
                 
+            // Check if we already have a service with this ID
+            bool alreadyRegistered = _services.Any(s => s.ServiceId == service.ServiceId);
+            if (alreadyRegistered)
+            {
+                Console.WriteLine($"WARNING: Service with ID {service.ServiceId} is already registered. Skipping registration.");
+                _telemetryService.TrackEvent("ServiceRegistrationSkipped", new Dictionary<string, string>
+                {
+                    ["ServiceId"] = service.ServiceId,
+                    ["ServiceName"] = service.ServiceName,
+                    ["ServiceType"] = service.ServiceType,
+                    ["Reason"] = "AlreadyRegistered"
+                });
+                
+                // Return the already registered service for consistency
+                return _services.First(s => s.ServiceId == service.ServiceId);
+            }
+                
             // Apply telemetry decoration
             var decoratedService = TelemetryDecoratorFactory.CreateMicroserviceWithTelemetry(service);
             
@@ -73,6 +90,7 @@ namespace PokerGame.Services
             // Special handling for GameEngineService
             if (service is GameEngineService gameEngineService)
             {
+                Console.WriteLine($"Registering GameEngineService with ID {service.ServiceId}");
                 var decoratedGameEngine = TelemetryDecoratorFactory.CreateGameEngineServiceWithTelemetry(gameEngineService);
                 _gameEngineServices[service.ServiceId] = decoratedGameEngine;
             }

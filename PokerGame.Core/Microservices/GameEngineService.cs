@@ -14,7 +14,7 @@ namespace PokerGame.Core.Microservices
     /// <summary>
     /// Microservice that runs the core game logic
     /// </summary>
-    public class GameEngineService : MicroserviceBase, IGameEngineService
+    public class GameEngineService : MicroserviceBase, PokerGame.Abstractions.IGameEngineService
     {
         // Test logging line to verify build
         static GameEngineService() {

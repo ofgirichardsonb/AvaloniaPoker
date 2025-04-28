@@ -200,6 +200,32 @@ namespace PokerGame.Core.Microservices
         {
             Console.WriteLine($"====> [{_serviceType} {_serviceId}] Starting microservice: {_serviceName}");
             
+            // Initialize and ensure BrokerManager is started
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Ensuring BrokerManager is started...");
+            BrokerManager.Instance.Start();
+            
+            // Try to access the central broker with multiple attempts
+            bool centralBrokerFound = false;
+            CentralMessageBroker? centralBroker = null;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                centralBroker = BrokerManager.Instance.CentralBroker;
+                if (centralBroker != null)
+                {
+                    centralBrokerFound = true;
+                    Console.WriteLine($"====> [{_serviceType} {_serviceId}] Successfully connected to central broker");
+                    break;
+                }
+                
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Central broker not found on attempt {attempt+1}/3, waiting...");
+                Thread.Sleep(100);
+            }
+            
+            if (!centralBrokerFound)
+            {
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] WARNING: Could not find central broker, will use direct communication fallback");
+            }
+            
             // Start the message processing task
             _processingTask = Task.Run(ProcessMessagesAsync, _cancellationTokenSource?.Token ?? CancellationToken.None);
             
@@ -419,8 +445,48 @@ namespace PokerGame.Core.Microservices
                 // Convert to NetworkMessage
                 var networkMessage = message.ToNetworkMessage();
                 
-                // Get the central broker and publish
-                var centralBroker = BrokerManager.Instance.CentralBroker;
+                // We need to be more persistent in finding the central broker
+                // Try multiple times with a short delay
+                CentralMessageBroker? centralBroker = null;
+                int maxAttempts = 3;
+                
+                for (int attempt = 0; attempt < maxAttempts; attempt++)
+                {
+                    centralBroker = BrokerManager.Instance.CentralBroker;
+                    if (centralBroker != null)
+                    {
+                        break;
+                    }
+                    
+                    // If not found on first attempt, try to initialize it
+                    if (attempt == 0)
+                    {
+                        Console.WriteLine($"Central broker not found on first attempt, trying to initialize BrokerManager...");
+                        try 
+                        {
+                            // Make sure BrokerManager is started
+                            BrokerManager.Instance.Start();
+                            
+                            // Try to access the broker again
+                            centralBroker = BrokerManager.Instance.CentralBroker;
+                            if (centralBroker != null)
+                            {
+                                Console.WriteLine($"Successfully found central broker after initialization");
+                                break;
+                            }
+                        }
+                        catch (Exception brokerInitEx)
+                        {
+                            Console.WriteLine($"Error initializing broker manager: {brokerInitEx.Message}");
+                        }
+                    }
+                    
+                    // Wait before trying again
+                    Console.WriteLine($"Central broker not found on attempt {attempt+1}, waiting before retry...");
+                    Thread.Sleep(100);
+                }
+                
+                // If we found the central broker, use it
                 if (centralBroker != null)
                 {
                     centralBroker.Publish(networkMessage);
@@ -428,7 +494,7 @@ namespace PokerGame.Core.Microservices
                 }
                 
                 // Fallback to direct socket if central broker isn't available
-                Console.WriteLine($"WARNING: Central broker not available, using fallback direct socket for message {message.MessageId}");
+                Console.WriteLine($"WARNING: Central broker not available after {maxAttempts} attempts, using fallback direct socket for message {message.MessageId}");
                 _publisherSocket?.SendFrame(message.ToJson());
             }
             catch (Exception ex)
@@ -480,8 +546,48 @@ namespace PokerGame.Core.Microservices
                 // Convert to NetworkMessage
                 var networkMessage = message.ToNetworkMessage();
                 
-                // Get the central broker and publish
-                var centralBroker = BrokerManager.Instance.CentralBroker;
+                // We need to be more persistent in finding the central broker
+                // Try multiple times with a short delay
+                CentralMessageBroker? centralBroker = null;
+                int maxAttempts = 3;
+                
+                for (int attempt = 0; attempt < maxAttempts; attempt++)
+                {
+                    centralBroker = BrokerManager.Instance.CentralBroker;
+                    if (centralBroker != null)
+                    {
+                        break;
+                    }
+                    
+                    // If not found on first attempt, try to initialize it
+                    if (attempt == 0)
+                    {
+                        Console.WriteLine($"[SendTo] Central broker not found on first attempt, trying to initialize BrokerManager...");
+                        try 
+                        {
+                            // Make sure BrokerManager is started
+                            BrokerManager.Instance.Start();
+                            
+                            // Try to access the broker again
+                            centralBroker = BrokerManager.Instance.CentralBroker;
+                            if (centralBroker != null)
+                            {
+                                Console.WriteLine($"[SendTo] Successfully found central broker after initialization");
+                                break;
+                            }
+                        }
+                        catch (Exception brokerInitEx)
+                        {
+                            Console.WriteLine($"[SendTo] Error initializing broker manager: {brokerInitEx.Message}");
+                        }
+                    }
+                    
+                    // Wait before trying again
+                    Console.WriteLine($"[SendTo] Central broker not found on attempt {attempt+1}, waiting before retry...");
+                    Thread.Sleep(100);
+                }
+                
+                // If we found the central broker, use it
                 if (centralBroker != null)
                 {
                     centralBroker.Publish(networkMessage);
@@ -489,7 +595,7 @@ namespace PokerGame.Core.Microservices
                 }
                 
                 // Fallback to direct socket if central broker isn't available
-                Console.WriteLine($"WARNING: Central broker not available, using fallback direct socket for message {message.MessageId}");
+                Console.WriteLine($"WARNING: Central broker not available after {maxAttempts} attempts, using fallback direct socket for message {message.MessageId}");
                 string serialized = message.ToJson();
                 _publisherSocket?.SendFrame(serialized);
                 

@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\MSA.Foundation\MSA.Foundation.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -1,5 +1,6 @@
-using System;
 using System.Threading.Tasks;
+using PokerGame.Core.Microservices;
+using PokerGame.Core.Models;
 
 namespace PokerGame.Abstractions
 {
@@ -32,7 +33,7 @@ namespace PokerGame.Abstractions
         /// Adds a player to the game
         /// </summary>
         /// <param name="player">The player to add</param>
-        void AddPlayer(object player);
+        void AddPlayer(Player player);
         
         /// <summary>
         /// Removes a player from the game
@@ -41,38 +42,42 @@ namespace PokerGame.Abstractions
         void RemovePlayer(string playerId);
         
         /// <summary>
-        /// Starts a new hand
-        /// </summary>
-        Task StartHandAsync();
-        
-        /// <summary>
         /// Processes a player action
         /// </summary>
-        /// <param name="playerId">The ID of the player</param>
-        /// <param name="action">The action to process</param>
-        /// <param name="amount">The amount of the action</param>
-        /// <returns>True if the action was processed successfully; otherwise, false</returns>
+        /// <param name="playerId">The ID of the player taking the action</param>
+        /// <param name="action">The action to take</param>
+        /// <param name="amount">The amount of the action (if applicable)</param>
+        /// <returns>A task that completes when the action is processed</returns>
         Task<bool> ProcessPlayerActionAsync(string playerId, string action, int amount);
         
         /// <summary>
-        /// Handles a message
+        /// Starts a new hand
         /// </summary>
-        /// <param name="message">The message to handle</param>
-        Task HandleMessageAsync(object message);
-        
-        /// <summary>
-        /// Broadcasts the current game state to all connected clients
-        /// </summary>
-        void BroadcastGameState();
+        /// <returns>A task that completes when the hand is started</returns>
+        Task StartHandAsync();
         
         /// <summary>
         /// Starts the service
         /// </summary>
+        /// <returns>A task that completes when the service is started</returns>
         Task StartAsync();
         
         /// <summary>
         /// Stops the service
         /// </summary>
+        /// <returns>A task that completes when the service is stopped</returns>
         Task StopAsync();
+        
+        /// <summary>
+        /// Broadcasts the current game state to all clients
+        /// </summary>
+        void BroadcastGameState();
+        
+        /// <summary>
+        /// Handles a message received from another service
+        /// </summary>
+        /// <param name="message">The message to handle</param>
+        /// <returns>A task that completes when the message is handled</returns>
+        Task HandleMessageAsync(Message message);
     }
 }
