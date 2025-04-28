@@ -191,7 +191,7 @@ namespace PokerGame.Core.Microservices
         /// Sends a targeted registration message directly to a specific service ID
         /// </summary>
         /// <param name="targetServiceId">The ID of the service to send registration to</param>
-        private void SendTargetedRegistrationTo(string targetServiceId)
+        private new void SendTargetedRegistrationTo(string targetServiceId)
         {
             try
             {
@@ -267,8 +267,14 @@ namespace PokerGame.Core.Microservices
         /// Handles messages received from other microservices
         /// </summary>
         /// <param name="message">The message to handle</param>
-        protected override async Task HandleMessageAsync(Message message)
+        public override async Task HandleMessageAsync(Message message)
         {
+            if (message == null)
+            {
+                throw new ArgumentNullException(nameof(message));
+            }
+            
+            // Call our object-based implementation to handle the message
             await HandleMessageAsync((object)message);
         }
 
@@ -370,7 +376,9 @@ public async Task StartHandAsync()
     
     // Create a StartHand message and handle it
     var startHandMessage = Message.Create(MessageType.StartHand);
-    await HandleMessageAsync(startHandMessage);
+    
+    // Use our override implementation to process the message
+    await base.HandleMessageAsync(startHandMessage);
 }
 
 /// <summary>
@@ -395,15 +403,15 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
     // Create and handle the player action message
     var actionMessage = Message.Create(MessageType.PlayerAction, payload);
     
-    // Process the action
-    await HandleMessageAsync(actionMessage);
+    // Process the action using our base class method
+    await base.HandleMessageAsync(actionMessage);
     
     // For now, assume success
     return true;
 }
 
 /// <summary>
-        /// Handles messages received from other services
+        /// Handles messages received from other services - implementation of IGameEngineService interface
         /// </summary>
         /// <param name="messageObj">The message to handle</param>
         public async Task HandleMessageAsync(object messageObj)
@@ -1422,7 +1430,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
         /// <summary>
         /// Starts the service
         /// </summary>
-        public async Task StartAsync()
+        public override async Task StartAsync()
         {
             if (IsRunning)
             {
@@ -1529,7 +1537,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
         /// <summary>
         /// Stops the service
         /// </summary>
-        public async Task StopAsync()
+        public override async Task StopAsync()
         {
             if (!IsRunning)
             {

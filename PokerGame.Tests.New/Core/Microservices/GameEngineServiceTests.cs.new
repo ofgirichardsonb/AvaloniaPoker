@@ -19,7 +19,7 @@ namespace PokerGame.Tests.New.Core.Microservices
         public void Constructor_WithValidParameters_ShouldInitializeCorrectly()
         {
             // Arrange
-            var executionContext = new MSAEC("test-service");
+            var executionContext = new MSAFoundationEC("test-service");
             
             // Act
             var service = new GameEngineService(executionContext);
@@ -32,7 +32,7 @@ namespace PokerGame.Tests.New.Core.Microservices
         public void AddPlayer_ShouldAddPlayerToGame()
         {
             // Arrange
-            var executionContext = new MSAEC("test-service");
+            var executionContext = new MSAFoundationEC("test-service");
             var service = new GameEngineService(executionContext);
             string playerId = "player1";
             string playerName = "Test Player";
@@ -55,7 +55,7 @@ namespace PokerGame.Tests.New.Core.Microservices
         public void RemovePlayer_WithExistingPlayer_ShouldRemovePlayerFromGame()
         {
             // Arrange
-            var executionContext = new MSAEC("test-service");
+            var executionContext = new MSAFoundationEC("test-service");
             var service = new GameEngineService(executionContext);
             string playerId = "player1";
             string playerName = "Test Player";
@@ -78,7 +78,7 @@ namespace PokerGame.Tests.New.Core.Microservices
         public void GetPlayerCount_ShouldReturnCorrectCount()
         {
             // Arrange
-            var executionContext = new MSAEC("test-service");
+            var executionContext = new MSAFoundationEC("test-service");
             var service = new GameEngineService(executionContext);
             
             // Add some players
@@ -97,7 +97,7 @@ namespace PokerGame.Tests.New.Core.Microservices
         public void GetPlayerById_WithExistingPlayer_ShouldReturnPlayer()
         {
             // Arrange
-            var executionContext = new MSAEC("test-service");
+            var executionContext = new MSAFoundationEC("test-service");
             var service = new GameEngineService(executionContext);
             string playerId = "player1";
             string playerName = "Test Player";
@@ -118,7 +118,7 @@ namespace PokerGame.Tests.New.Core.Microservices
         public void GetPlayerById_WithNonExistingPlayer_ShouldReturnNull()
         {
             // Arrange
-            var executionContext = new MSAEC("test-service");
+            var executionContext = new MSAFoundationEC("test-service");
             var service = new GameEngineService(executionContext);
             
             // Act
@@ -132,7 +132,7 @@ namespace PokerGame.Tests.New.Core.Microservices
         public void DealHoleCards_ShouldDealTwoCardsToAllPlayers()
         {
             // Arrange
-            var executionContext = new MSAEC("test-service");
+            var executionContext = new MSAFoundationEC("test-service");
             var service = new GameEngineService(executionContext);
             
             // Add some players
@@ -181,7 +181,7 @@ namespace PokerGame.Tests.New.Core.Microservices
         public void DealCommunityCards_ShouldDealCorrectNumberOfCards()
         {
             // Arrange
-            var executionContext = new MSAEC("test-service");
+            var executionContext = new MSAFoundationEC("test-service");
             var service = new GameEngineService(executionContext);
             
             // Create a deck field through reflection (for testing purposes)
