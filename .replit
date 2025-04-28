@@ -18,15 +18,27 @@ args = "rebuild_test"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "poker_enhanced_test"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "poker-game"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "poker-game-5000"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "poker-game-updated"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "message-flow-test"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "server-test"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "poker-test"
 
 [[workflows.workflow]]
 name = "rebuild_test"
@@ -37,20 +49,13 @@ task = "shell.exec"
 args = "cd /home/runner/workspace && ./rebuild.sh"
 
 [[workflows.workflow]]
-name = "poker_enhanced_test"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
-
-[[workflows.workflow]]
 name = "poker-game"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
+args = "cd /home/runner/workspace && ./rebuild.sh && ./poker-services.sh start --port-offset 0 --verbose --curses"
+waitForPort = 5000
 
 [[workflows.workflow]]
 name = "poker-game-5000"
@@ -60,6 +65,39 @@ author = "agent"
 task = "shell.exec"
 args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
 waitForPort = 5000
+
+[[workflows.workflow]]
+name = "poker-game-updated"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "message-flow-test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && dotnet test MSA.Foundation.Tests"
+
+[[workflows.workflow]]
+name = "server-test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && ./rebuild.sh && dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj -- start-console --port-offset 0 --verbose"
+
+[[workflows.workflow]]
+name = "poker-test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && ./rebuild.sh && dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj -- start-client --port-offset 0 --verbose"
 
 [deployment]
 run = ["sh", "-c", "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 200 --curses"]

@@ -530,13 +530,60 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     break;
                     
                 case MessageType.StartHand:
-                    Console.WriteLine("********************************************************************************");
-                    Console.WriteLine("* GAME ENGINE: Received StartHand message (ID: " + message.MessageId + ")");
-                    Console.WriteLine("* From: " + message.SenderId);
-                    Console.WriteLine("********************************************************************************");
+                    Console.WriteLine("\n\n");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("*             GAME ENGINE RECEIVED STARTHAND             *");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine($"* GAME ENGINE: Received StartHand message (ID: {message.MessageId})");
+                    Console.WriteLine($"* From: {message.SenderId}");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("\n\n");
                     
                     // Log to the file system too
-                    PokerGame.Core.Logging.FileLogger.Info("GameEngine", $"Received StartHand message (ID: {message.MessageId}) from {message.SenderId}");
+                    PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
+                        $"RECEIVED STARTHAND - From: {message.SenderId}, MessageID: {message.MessageId}");
+                    
+                    // FIRST, send an immediate acknowledgment before doing any processing
+                    // This is critical for reliable communication
+                    Console.WriteLine("\n\n");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("*       IMMEDIATELY SENDING STARTHAND ACKNOWLEDGMENT     *");
+                    Console.WriteLine("*                                                        *");
+                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("\n\n");
+                    
+                    // Create acknowledgment message
+                    var ackMessage = Message.Create(MessageType.Acknowledgment);
+                    ackMessage.InResponseTo = message.MessageId;
+                    ackMessage.SenderId = _serviceId;
+                    ackMessage.ReceiverId = message.SenderId;
+                    
+                    // Log details of the acknowledgment message
+                    Console.WriteLine($"ACK Message ID: {ackMessage.MessageId}");
+                    Console.WriteLine($"ACK In Response To: {ackMessage.InResponseTo}");
+                    Console.WriteLine($"ACK From: {ackMessage.SenderId}");
+                    Console.WriteLine($"ACK To: {ackMessage.ReceiverId}");
+                    
+                    try {
+                        // Send using all available methods for maximum reliability
+                        Console.WriteLine("1. Direct sending acknowledgment to original sender");
+                        SendTo(ackMessage, message.SenderId);
+                        
+                        Console.WriteLine("2. Broadcasting acknowledgment as backup");
+                        Broadcast(ackMessage);
+                        
+                        // Log the acknowledgment
+                        PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
+                            $"SENT ACKNOWLEDGMENT - For: {message.MessageId}, To: {message.SenderId}, AckID: {ackMessage.MessageId}");
+                    }
+                    catch (Exception ex) {
+                        Console.WriteLine($"ERROR sending acknowledgment: {ex.Message}");
+                        PokerGame.Core.Logging.FileLogger.Error("GameEngine", 
+                            $"FAILED TO SEND ACKNOWLEDGMENT: {ex.Message}");
+                    }
                     
                     try
                     {
@@ -749,19 +796,35 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     Console.WriteLine("**********************************************************");
                     Console.WriteLine("\n\n");
                     
-                    // Create explicit acknowledgment message
-                    var ackMessage = Message.Create(MessageType.Acknowledgment);
-                    ackMessage.SenderId = _serviceId;
-                    ackMessage.ReceiverId = message.SenderId;
-                    ackMessage.InResponseTo = message.MessageId;
+                    // Create explicit acknowledgment message for the response
+                    var responseAckMessage = Message.Create(MessageType.Acknowledgment);
+                    responseAckMessage.SenderId = _serviceId;
+                    responseAckMessage.ReceiverId = message.SenderId;
+                    responseAckMessage.InResponseTo = message.MessageId;
                     
-                    Console.WriteLine($"Sending DIRECT acknowledgment for message {message.MessageId} to {message.SenderId}");
-                    // Send acknowledgment via multiple methods for redundancy
-                    SendTo(ackMessage, message.SenderId);
-                    Broadcast(ackMessage);
+                    // Log details of response acknowledgment
+                    Console.WriteLine($"RESPONSE ACK Message ID: {responseAckMessage.MessageId}");
+                    Console.WriteLine($"RESPONSE ACK In Response To: {responseAckMessage.InResponseTo}");
+                    Console.WriteLine($"RESPONSE ACK From: {responseAckMessage.SenderId}");
+                    Console.WriteLine($"RESPONSE ACK To: {responseAckMessage.ReceiverId}");
                     
-                    PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
-                        $"SENT DIRECT ACKNOWLEDGMENT - For: {message.MessageId}, To: {message.SenderId}");
+                    try {
+                        // Send using multiple delivery methods for redundancy
+                        Console.WriteLine("1. Direct sending RESPONSE acknowledgment");
+                        SendTo(responseAckMessage, message.SenderId);
+                        
+                        Console.WriteLine("2. Broadcasting RESPONSE acknowledgment as backup");
+                        Broadcast(responseAckMessage);
+                        
+                        // Log the acknowledgment to trace log
+                        PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
+                            $"SENT RESPONSE ACKNOWLEDGMENT - For: {message.MessageId}, To: {message.SenderId}, AckID: {responseAckMessage.MessageId}");
+                    }
+                    catch (Exception ex) {
+                        Console.WriteLine($"ERROR sending response acknowledgment: {ex.Message}");
+                        PokerGame.Core.Logging.FileLogger.Error("GameEngine", 
+                            $"FAILED TO SEND RESPONSE ACKNOWLEDGMENT: {ex.Message}");
+                    }
                         
                     // Add small delay after acknowledgment to ensure it's processed first
                     await Task.Delay(100);
