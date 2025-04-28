@@ -40,6 +40,22 @@ args = "server-test"
 task = "workflow.run"
 args = "poker-test"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "rebuild"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "core-build"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "poker-game-test"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "services-test"
+
 [[workflows.workflow]]
 name = "rebuild_test"
 author = "agent"
@@ -73,7 +89,6 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
-waitForPort = 5000
 
 [[workflows.workflow]]
 name = "message-flow-test"
@@ -97,7 +112,41 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && ./rebuild.sh && dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj -- start-client --port-offset 0 --verbose"
+args = "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 0 --verbose"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "rebuild"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && ./rebuild.sh"
+
+[[workflows.workflow]]
+name = "core-build"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && dotnet build PokerGame.Core/PokerGame.Core.csproj"
+
+[[workflows.workflow]]
+name = "poker-game-test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "services-test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && ./poker-services.sh start-services --port-offset 0 --verbose"
 
 [deployment]
 run = ["sh", "-c", "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 200 --curses"]

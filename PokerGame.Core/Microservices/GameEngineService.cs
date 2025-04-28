@@ -530,16 +530,28 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     break;
                     
                 case MessageType.StartHand:
+                    // ULTRA HIGH VISIBILITY MARKER - This helps debug message routing issues
                     Console.WriteLine("\n\n");
-                    Console.WriteLine("**********************************************************");
-                    Console.WriteLine("*                                                        *");
-                    Console.WriteLine("*             GAME ENGINE RECEIVED STARTHAND             *");
-                    Console.WriteLine("*                                                        *");
-                    Console.WriteLine("**********************************************************");
-                    Console.WriteLine($"* GAME ENGINE: Received StartHand message (ID: {message.MessageId})");
-                    Console.WriteLine($"* From: {message.SenderId}");
-                    Console.WriteLine("**********************************************************");
+                    Console.WriteLine("##########################################################");
+                    Console.WriteLine("#                                                        #");
+                    Console.WriteLine("#             GAME ENGINE RECEIVED STARTHAND             #");
+                    Console.WriteLine("#                                                        #");
+                    Console.WriteLine("#                    MARKED: V2                          #");
+                    Console.WriteLine("#                                                        #");
+                    Console.WriteLine("##########################################################");
+                    Console.WriteLine($"# GAME ENGINE: Received StartHand message (ID: {message.MessageId})");
+                    Console.WriteLine($"# From: {message.SenderId}");
+                    Console.WriteLine($"# To: {message.ReceiverId ?? "broadcast"}");
+                    Console.WriteLine($"# Time: {DateTime.Now.ToString("HH:mm:ss.fff")}");
+                    Console.WriteLine("##########################################################");
                     Console.WriteLine("\n\n");
+                    
+                    // Log to standard debug and message trace files
+                    PokerGame.Core.Logging.FileLogger.Debug("GameEngine", 
+                        $"!!!! VERY IMPORTANT !!!! RECEIVED STARTHAND MESSAGE - ID: {message.MessageId}, From: {message.SenderId}, Time: {DateTime.Now.ToString("HH:mm:ss.fff")}");
+                    
+                    PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
+                        $"####### RECEIVED STARTHAND MESSAGE - ID: {message.MessageId}, From: {message.SenderId}, Time: {DateTime.Now.ToString("HH:mm:ss.fff")} #######");
                     
                     // Log to the file system too
                     PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
@@ -575,9 +587,34 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                         Console.WriteLine("2. Broadcasting acknowledgment as backup");
                         Broadcast(ackMessage);
                         
-                        // Log the acknowledgment
+                        Console.WriteLine("3. Sending explicit generic response");
+                        // Also send a GenericResponse message for triple redundancy
+                        var genericResponseMessage = Message.Create(MessageType.GenericResponse);
+                        genericResponseMessage.InResponseTo = message.MessageId;
+                        genericResponseMessage.SenderId = _serviceId;
+                        genericResponseMessage.ReceiverId = message.SenderId;
+                        
+                        // Create a response payload
+                        var genericResponsePayload = new GenericResponsePayload
+                        {
+                            Success = true,
+                            OriginalMessageType = MessageType.StartHand,
+                            Message = $"StartHand message {message.MessageId} received successfully",
+                            ResponseType = "StartHandAcknowledgment", 
+                            OriginalMessageId = message.MessageId
+                        };
+                        genericResponseMessage.SetPayload(genericResponsePayload);
+                        
+                        // Send direct and broadcast
+                        Console.WriteLine($"Sending GenericResponse with ID {genericResponseMessage.MessageId}");
+                        SendTo(genericResponseMessage, message.SenderId);
+                        Broadcast(genericResponseMessage);
+                        
+                        // Log all acknowledgments
                         PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
                             $"SENT ACKNOWLEDGMENT - For: {message.MessageId}, To: {message.SenderId}, AckID: {ackMessage.MessageId}");
+                        PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
+                            $"SENT GENERIC RESPONSE - For: {message.MessageId}, To: {message.SenderId}, ResponseID: {genericResponseMessage.MessageId}");
                     }
                     catch (Exception ex) {
                         Console.WriteLine($"ERROR sending acknowledgment: {ex.Message}");
@@ -830,18 +867,18 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     await Task.Delay(100);
                     
                     // Now set up the main response payload
-                    var responsePayload = new GenericResponsePayload
+                    var mainResponsePayload = new GenericResponsePayload
                     {
                         Success = true,
                         OriginalMessageType = MessageType.StartHand,
                         Message = $"Hand started successfully. Current state: {_gameEngine.State}"
                     };
-                    responseMessage.SetPayload(responsePayload);
+                    responseMessage.SetPayload(mainResponsePayload);
                     
                     PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
-                        $"Response payload: Success={responsePayload.Success}, Message={responsePayload.Message}");
+                        $"Response payload: Success={mainResponsePayload.Success}, Message={mainResponsePayload.Message}");
                         
-                    Console.WriteLine($"Response payload set: Success={responsePayload.Success}, Message={responsePayload.Message}");
+                    Console.WriteLine($"Response payload set: Success={mainResponsePayload.Success}, Message={mainResponsePayload.Message}");
                     
                     if (!string.IsNullOrEmpty(message.SenderId))
                     {

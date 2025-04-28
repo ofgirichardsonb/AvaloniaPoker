@@ -434,6 +434,18 @@ namespace PokerGame.Core.Microservices
         public string Message { get; set; } = string.Empty;
         
         /// <summary>
+        /// Gets or sets the original message ID that this response is for
+        /// </summary>
+        [JsonPropertyName("originalMessageId")]
+        public string OriginalMessageId { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets a response type string for more specific handling
+        /// </summary>
+        [JsonPropertyName("responseType")]
+        public string ResponseType { get; set; } = string.Empty;
+        
+        /// <summary>
         /// Gets or sets the error message
         /// </summary>
         public string ErrorMessage { get; set; } = string.Empty;

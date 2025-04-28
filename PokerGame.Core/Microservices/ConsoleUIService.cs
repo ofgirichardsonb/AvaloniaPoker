@@ -538,18 +538,39 @@ namespace PokerGame.Core.Microservices
                             $"Response payload: Type={genericResponse.OriginalMessageType}, Success={genericResponse.Success}, Message={genericResponse.Message}");
                         
                         // Handle specific responses
-                        if (genericResponse.OriginalMessageType == MessageType.StartHand)
+                        if (genericResponse.OriginalMessageType == MessageType.StartHand ||
+                            genericResponse.ResponseType == "StartHandAcknowledgment" ||
+                            (genericResponse.Message?.Contains("StartHand") == true))
                         {
                             Console.WriteLine("\n\n");
-                            Console.WriteLine("**********************************************************");
-                            Console.WriteLine("*                                                        *");
-                            Console.WriteLine("*             STARTHAND RESPONSE RECEIVED                *");
-                            Console.WriteLine("*                                                        *");
-                            Console.WriteLine("**********************************************************");
+                            Console.WriteLine("##########################################################");
+                            Console.WriteLine("#                                                        #");
+                            Console.WriteLine("#             STARTHAND RESPONSE RECEIVED                #");
+                            Console.WriteLine("#                                                        #");
+                            Console.WriteLine("#                   MARKED: V2                           #");
+                            Console.WriteLine("#                                                        #");
+                            Console.WriteLine("##########################################################");
                             Console.WriteLine("\n\n");
                             
                             PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                                "********* STARTHAND RESPONSE RECEIVED! *********");
+                                "########## STARTHAND RESPONSE RECEIVED WITH V2 MARKER! ##########");
+                                
+                            // Check if this is a tracked message
+                            if (!string.IsNullOrEmpty(message.InResponseTo))
+                            {
+                                Console.WriteLine($"Message {message.InResponseTo} is a response - marking as received");
+                                
+                                // Try to find the original message ID in the response
+                                string origMessageId = message.InResponseTo;
+                                if (!string.IsNullOrEmpty(genericResponse.OriginalMessageId))
+                                {
+                                    origMessageId = genericResponse.OriginalMessageId;
+                                }
+                                
+                                Console.WriteLine($"Original message ID: {origMessageId}");
+                                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                                    $"TRACKING STARTHAND RESPONSE: Original message ID = {origMessageId}");
+                            }
                                 
                             // Send an acknowledgment response for the message
                             Console.WriteLine("Sending acknowledgment for the StartHand response");
