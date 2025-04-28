@@ -5,15 +5,20 @@ using System.Text.Json.Serialization;
 using PokerGame.Core.Messaging;
 using PokerGame.Core.Models;
 
+// Suppress obsolete warnings for transition period
+#pragma warning disable CS0619 // Type or member is obsolete
+
 namespace PokerGame.Core.Microservices
 {
     /// <summary>
     /// A simplified card deck service that handles card operations
     /// </summary>
+    [Obsolete("This class has been replaced with CardDeckService and will be removed in a future release.")]
     public class SimpleCardDeckService : SimpleServiceBase
     {
         private readonly Dictionary<string, Deck> _decks = new Dictionary<string, Deck>();
         private readonly Random _random = new Random();
+        private readonly Logger Logger;
         
         /// <summary>
         /// Creates a new simplified card deck service
@@ -24,6 +29,8 @@ namespace PokerGame.Core.Microservices
         public SimpleCardDeckService(int publisherPort, int subscriberPort, bool verbose = false)
             : base("Card Deck Service", "CardDeck", publisherPort, subscriberPort, verbose)
         {
+            // Create a logger instance
+            Logger = new Logger("CardDeck", verbose);
         }
         
         /// <summary>
@@ -284,7 +291,7 @@ namespace PokerGame.Core.Microservices
             var errorResponse = SimpleMessage.CreateError(originalMessage, errorMessage);
             PublishMessage(errorResponse);
             
-            Logger.LogError($"Sent error response: {errorMessage}");
+            Logger.LogError($"Sent error response: {errorMessage}", null);
         }
     }
     
@@ -414,3 +421,6 @@ namespace PokerGame.Core.Microservices
         public int RemainingCards { get; set; }
     }
 }
+
+// Restore warning level
+#pragma warning restore CS0619 // Type or member is obsolete

@@ -6,6 +6,9 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using PokerGame.Core.Telemetry;
 
+// Suppress obsolete warnings for transition period
+#pragma warning disable CS0619 // Type or member is obsolete
+
 namespace PokerGame.Core.Messaging
 {
     /// <summary>
@@ -15,9 +18,9 @@ namespace PokerGame.Core.Messaging
     {
         private readonly ExecutionContext _executionContext;
         private readonly CancellationTokenSource _cancellationTokenSource;
-        private readonly ConcurrentDictionary<string, Action<SimpleMessage>> _subscribers = new ConcurrentDictionary<string, Action<SimpleMessage>>();
+        private readonly ConcurrentDictionary<string, Action<NetworkMessage>> _subscribers = new ConcurrentDictionary<string, Action<NetworkMessage>>();
         private readonly ConcurrentDictionary<string, ServiceInfo> _services = new ConcurrentDictionary<string, ServiceInfo>();
-        private readonly ConcurrentQueue<SimpleMessage> _messageQueue = new ConcurrentQueue<SimpleMessage>();
+        private readonly ConcurrentQueue<NetworkMessage> _messageQueue = new ConcurrentQueue<NetworkMessage>();
         private Task? _processingTask;
         private bool _isStarted;
         private bool _isDisposed;
@@ -119,7 +122,7 @@ namespace PokerGame.Core.Messaging
         /// <param name="messageType">The message type to subscribe to</param>
         /// <param name="handler">The handler to invoke when a message of this type is received</param>
         /// <returns>A subscription ID that can be used to unsubscribe</returns>
-        public string Subscribe(SimpleMessageType messageType, Action<SimpleMessage> handler)
+        public string Subscribe(MessageType messageType, Action<NetworkMessage> handler)
         {
             if (_isDisposed)
                 throw new ObjectDisposedException(nameof(CentralMessageBroker));
@@ -137,11 +140,39 @@ namespace PokerGame.Core.Messaging
         }
         
         /// <summary>
+        /// Subscribes to messages of a specific type (legacy method)
+        /// </summary>
+        /// <param name="messageType">The message type to subscribe to</param>
+        /// <param name="handler">The handler to invoke when a message of this type is received</param>
+        /// <returns>A subscription ID that can be used to unsubscribe</returns>
+        [Obsolete("Use Subscribe(MessageType, Action<NetworkMessage>) instead")]
+        public string Subscribe(SimpleMessageType messageType, Action<SimpleMessage> handler)
+        {
+            if (_isDisposed)
+                throw new ObjectDisposedException(nameof(CentralMessageBroker));
+                
+            if (handler == null)
+                throw new ArgumentNullException(nameof(handler));
+                
+            // Convert the SimpleMessageType to MessageType
+            var newMessageType = MessageAdapter.ToMessageType(messageType);
+            
+            // Create a wrapper that converts NetworkMessage to SimpleMessage before calling the handler
+            Action<NetworkMessage> wrapperHandler = networkMessage => 
+            {
+                var simpleMessage = networkMessage.ToSimpleMessage();
+                handler(simpleMessage);
+            };
+            
+            return Subscribe(newMessageType, wrapperHandler);
+        }
+        
+        /// <summary>
         /// Unsubscribes from messages
         /// </summary>
         /// <param name="subscriptionId">The subscription ID returned from Subscribe</param>
         /// <param name="messageType">The message type to unsubscribe from</param>
-        public void Unsubscribe(string subscriptionId, SimpleMessageType messageType)
+        public void Unsubscribe(string subscriptionId, MessageType messageType)
         {
             if (_isDisposed)
                 throw new ObjectDisposedException(nameof(CentralMessageBroker));
@@ -155,10 +186,26 @@ namespace PokerGame.Core.Messaging
         }
         
         /// <summary>
+        /// Unsubscribes from messages (legacy method)
+        /// </summary>
+        /// <param name="subscriptionId">The subscription ID returned from Subscribe</param>
+        /// <param name="messageType">The message type to unsubscribe from</param>
+        [Obsolete("Use Unsubscribe(string, MessageType) instead")]
+        public void Unsubscribe(string subscriptionId, SimpleMessageType messageType)
+        {
+            if (_isDisposed)
+                throw new ObjectDisposedException(nameof(CentralMessageBroker));
+                
+            // Convert the SimpleMessageType to MessageType
+            var newMessageType = MessageAdapter.ToMessageType(messageType);
+            Unsubscribe(subscriptionId, newMessageType);
+        }
+        
+        /// <summary>
         /// Publishes a message to all subscribers
         /// </summary>
         /// <param name="message">The message to publish</param>
-        public void Publish(SimpleMessage message)
+        public void Publish(NetworkMessage message)
         {
             if (_isDisposed)
                 throw new ObjectDisposedException(nameof(CentralMessageBroker));
@@ -175,6 +222,24 @@ namespace PokerGame.Core.Messaging
             // Enqueue the message for processing
             _messageQueue.Enqueue(message);
             _logger.Log($"Enqueued message of type {message.Type} from {message.SenderId} to {message.ReceiverId ?? "all"}");
+        }
+        
+        /// <summary>
+        /// Publishes a message to all subscribers (legacy method)
+        /// </summary>
+        /// <param name="message">The message to publish</param>
+        [Obsolete("Use Publish(NetworkMessage) instead")]
+        public void Publish(SimpleMessage message)
+        {
+            if (_isDisposed)
+                throw new ObjectDisposedException(nameof(CentralMessageBroker));
+                
+            if (message == null)
+                throw new ArgumentNullException(nameof(message));
+            
+            // Convert the SimpleMessage to a NetworkMessage
+            var networkMessage = message.ToNetworkMessage();
+            Publish(networkMessage);
         }
         
         /// <summary>
@@ -255,7 +320,7 @@ namespace PokerGame.Core.Messaging
                             }
                             
                             // Handle service registration messages specially
-                            if (message.Type == SimpleMessageType.ServiceRegistration)
+                            if (message.Type == MessageType.ServiceRegistration)
                             {
                                 var payload = message.GetPayload<ServiceRegistrationPayload>();
                                 if (payload != null)
@@ -272,7 +337,7 @@ namespace PokerGame.Core.Messaging
                             {
                                 // Parse the key to get the message type
                                 string[] parts = subscriber.Key.Split(':');
-                                if (parts.Length == 2 && Enum.TryParse<SimpleMessageType>(parts[0], out var type))
+                                if (parts.Length == 2 && Enum.TryParse<MessageType>(parts[0], out var type))
                                 {
                                     // If the subscriber is for this message type, invoke the handler
                                     if (type == message.Type)

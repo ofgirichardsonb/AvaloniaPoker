@@ -8,6 +8,9 @@ using PokerGame.Core.Models;
 using PokerGame.Core.Game;
 using PokerGame.Core.Microservices; // Added for access to SimpleDeckCreatePayload
 
+// Suppress obsolete warnings for transition period
+#pragma warning disable CS0619 // Type or member is obsolete
+
 namespace PokerGame.Core.Microservices
 {
     /// <summary>
@@ -63,6 +66,7 @@ namespace PokerGame.Core.Microservices
     /// <summary>
     /// A simplified game engine service that manages the poker game
     /// </summary>
+    [Obsolete("This class has been replaced with GameEngineService and will be removed in a future release.")]
     public class SimpleGameEngineService : SimpleServiceBase
     {
         private readonly List<Player> _players = new List<Player>();
@@ -80,6 +84,9 @@ namespace PokerGame.Core.Microservices
         // private int _maxRetries = 3;
         private bool _microservicesMode = false;
         
+        // Logger instance
+        private readonly Logger Logger;
+        
         // Timeout values
         private static readonly TimeSpan _messageTimeout = TimeSpan.FromSeconds(5);
         
@@ -95,6 +102,9 @@ namespace PokerGame.Core.Microservices
         {
             _microservicesMode = microservicesMode;
             
+            // Create a logger instance
+            Logger = new Logger("GameEngine", verbose);
+            
             // Create a local deck as fallback
             _localDeck = new Deck();
             _localDeck.Initialize();
@@ -106,7 +116,7 @@ namespace PokerGame.Core.Microservices
         /// <summary>
         /// Starts the service and initializes the game
         /// </summary>
-        public override void Start()
+        public void Start()
         {
             base.Start();
             
@@ -861,3 +871,6 @@ namespace PokerGame.Core.Microservices
     
     // These payload classes are now defined in the MessageTypes.cs file
 }
+
+// Restore warning level
+#pragma warning restore CS0619 // Type or member is obsolete

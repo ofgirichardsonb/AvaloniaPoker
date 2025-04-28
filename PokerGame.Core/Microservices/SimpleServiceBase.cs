@@ -1,5 +1,5 @@
 using System;
-using System.Text.Json.Serialization;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using PokerGame.Core.Messaging;
@@ -7,426 +7,264 @@ using PokerGame.Core.Messaging;
 namespace PokerGame.Core.Microservices
 {
     /// <summary>
-    /// Base class for simplified microservices with improved error handling and reliability
+    /// Base class for simplified services that use SimpleMessage for communication
     /// </summary>
+    [Obsolete("This class has been replaced with MicroserviceBase and will be removed in a future release.")]
     public abstract class SimpleServiceBase : IDisposable
     {
-        private readonly string _serviceId;
         private readonly string _serviceName;
         private readonly string _serviceType;
+        private readonly string _serviceId;
+        private readonly int _publisherPort;
+        private readonly int _subscriberPort;
         private readonly bool _verbose;
-        private readonly PokerGame.Core.Messaging.ExecutionContext _executionContext;
-        private readonly CancellationTokenSource _cancellationTokenSource;
-        private SocketCommunicationAdapter _messageBroker;
-        private readonly Logger _logger;
-        private Task _backgroundTask;
-        private bool _disposed = false;
-        private int _publisherPort;
-        private int _subscriberPort;
-        
+        private readonly SocketCommunicationAdapter _socketAdapter;
+        private readonly Dictionary<string, ServiceInfo> _serviceRegistry = new Dictionary<string, ServiceInfo>();
+        private readonly List<string> _acknowledgedMessageIds = new List<string>();
+        private readonly object _serviceRegistryLock = new object();
+        private bool _isRunning;
+        private bool _isDisposed;
+        private readonly PokerGame.Core.Messaging.ExecutionContext? _executionContext;
+        private Task? _heartbeatTask;
+        private Task? _registrationTask;
+        private CancellationTokenSource? _cancellationTokenSource;
+
         /// <summary>
         /// Gets the unique identifier of this service
         /// </summary>
         public string ServiceId => _serviceId;
-        
+
         /// <summary>
         /// Gets the name of this service
         /// </summary>
         public string ServiceName => _serviceName;
-        
+
         /// <summary>
         /// Gets the type of this service
         /// </summary>
         public string ServiceType => _serviceType;
-        
+
         /// <summary>
-        /// Gets the logger instance for this service
+        /// Gets a value indicating whether verbose logging is enabled
         /// </summary>
-        protected Logger Logger => _logger;
-        
+        protected bool Verbose => _verbose;
+
         /// <summary>
-        /// Creates a new simple service instance
+        /// Creates a new simple service base
         /// </summary>
-        /// <param name="serviceName">The human-readable name of the service</param>
-        /// <param name="serviceType">The type of the service (e.g., "GameEngine", "CardDeck")</param>
-        /// <param name="publisherPort">The port on which this service will publish messages</param>
-        /// <param name="subscriberPort">The port on which this service will subscribe to messages</param>
+        /// <param name="serviceName">The name of the service</param>
+        /// <param name="serviceType">The type of the service</param>
+        /// <param name="publisherPort">The port to publish messages on</param>
+        /// <param name="subscriberPort">The port to subscribe to messages on</param>
         /// <param name="verbose">Whether to enable verbose logging</param>
         protected SimpleServiceBase(string serviceName, string serviceType, int publisherPort, int subscriberPort, bool verbose = false)
-            : this(serviceName, serviceType, publisherPort, subscriberPort, null, verbose)
         {
-        }
-        
-        /// <summary>
-        /// Creates a new simple service instance with an execution context
-        /// </summary>
-        /// <param name="serviceName">The human-readable name of the service</param>
-        /// <param name="serviceType">The type of the service (e.g., "GameEngine", "CardDeck")</param>
-        /// <param name="publisherPort">The port on which this service will publish messages</param>
-        /// <param name="subscriberPort">The port on which this service will subscribe to messages</param>
-        /// <param name="executionContext">The execution context for this service</param>
-        /// <param name="verbose">Whether to enable verbose logging</param>
-        protected SimpleServiceBase(string serviceName, string serviceType, int publisherPort, int subscriberPort, PokerGame.Core.Messaging.ExecutionContext? executionContext = null, bool verbose = false)
-        {
+            _serviceName = serviceName ?? throw new ArgumentNullException(nameof(serviceName));
+            _serviceType = serviceType ?? throw new ArgumentNullException(nameof(serviceType));
             _serviceId = Guid.NewGuid().ToString();
-            _serviceName = serviceName;
-            _serviceType = serviceType;
             _publisherPort = publisherPort;
             _subscriberPort = subscriberPort;
             _verbose = verbose;
-            
-            // If no execution context is provided, create one from the current thread
-            _executionContext = executionContext ?? PokerGame.Core.Messaging.ExecutionContext.FromCurrentThread();
-            
-            // Use the cancellation token source from the execution context, or create a new one
-            _cancellationTokenSource = _executionContext.CancellationTokenSource ?? new CancellationTokenSource();
-            
-            // Create a logger with a shortened service ID for more readable log entries
-            _logger = new Logger($"{serviceType}_{_serviceId.Substring(0, 8)}", verbose);
-            
-            _logger.Log($"Created {_serviceType} service '{_serviceName}' with ID {_serviceId}");
-            _logger.Log($"Using execution context: ThreadId={_executionContext.ThreadId}, IsTest={_executionContext.IsTestContext}");
+            _socketAdapter = new SocketCommunicationAdapter(_serviceId, publisherPort, subscriberPort, verbose);
+            _socketAdapter.MessageReceived += OnMessageReceived;
         }
-        
+
+        /// <summary>
+        /// Creates a new simple service base with a provided execution context
+        /// </summary>
+        /// <param name="serviceName">The name of the service</param>
+        /// <param name="serviceType">The type of the service</param>
+        /// <param name="publisherPort">The port to publish messages on</param>
+        /// <param name="subscriberPort">The port to subscribe to messages on</param>
+        /// <param name="executionContext">The execution context to use</param>
+        /// <param name="verbose">Whether to enable verbose logging</param>
+        protected SimpleServiceBase(string serviceName, string serviceType, int publisherPort, int subscriberPort, PokerGame.Core.Messaging.ExecutionContext? executionContext = null, bool verbose = false)
+            : this(serviceName, serviceType, publisherPort, subscriberPort, verbose)
+        {
+            _executionContext = executionContext;
+        }
+
         /// <summary>
         /// Starts the service
         /// </summary>
         public virtual void Start()
         {
-            try
+            if (_isDisposed)
+                throw new ObjectDisposedException(nameof(SimpleServiceBase));
+
+            if (_isRunning)
+                return;
+
+            _isRunning = true;
+            _cancellationTokenSource = new CancellationTokenSource();
+            
+            // Start the socket adapter
+            _socketAdapter.Start();
+            
+            // Start sending heartbeats
+            _heartbeatTask = Task.Run(SendHeartbeatsAsync);
+            
+            // Start sending service registrations
+            _registrationTask = Task.Run(SendRegistrationsAsync);
+            
+            Console.WriteLine($"Service {_serviceName} ({_serviceType}) started with ID {_serviceId}");
+            
+            if (_verbose)
             {
-                if (_disposed)
-                {
-                    throw new ObjectDisposedException(nameof(SimpleServiceBase));
-                }
-                
-                _logger.Log($"Starting {_serviceType} service '{_serviceName}'...");
-                
-                // Create and start the socket communication adapter with our execution context
-                _messageBroker = new SocketCommunicationAdapter(_serviceId, _publisherPort, _subscriberPort, _executionContext, _verbose);
-                _messageBroker.MessageReceived += OnMessageReceived;
-                _messageBroker.Start();
-                
-                // Start the background task with appropriate thread management based on the execution context
-                StartBackgroundTask();
-                
-                // Register the service
-                RegisterService();
-                
-                _logger.Log($"{_serviceType} service '{_serviceName}' started successfully");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error starting {_serviceType} service '{_serviceName}'", ex);
-                throw;
+                Console.WriteLine($"  Publishing on port {_publisherPort}");
+                Console.WriteLine($"  Subscribing on port {_subscriberPort}");
             }
         }
-        
-        /// <summary>
-        /// Starts the background processing task based on the execution context settings
-        /// </summary>
-        private void StartBackgroundTask()
-        {
-            try
-            {
-                CancellationToken token = _cancellationTokenSource.Token;
-                
-                // If we have a SynchronizationContext and ThreadId in our ExecutionContext,
-                // try to use the specified thread for our background processing
-                if (_executionContext.SynchronizationContext != null && _executionContext.ThreadId.HasValue)
-                {
-                    _logger.Log($"Starting background task on thread {_executionContext.ThreadId.Value} using SynchronizationContext");
-                    
-                    // Use the SynchronizationContext to post the background loop to the appropriate thread
-                    _executionContext.SynchronizationContext.Post(_ => {
-                        // Verify we're on the expected thread
-                        if (_executionContext.ThreadId.Value == Thread.CurrentThread.ManagedThreadId)
-                        {
-                            _logger.Log($"Successfully started background task on thread {Thread.CurrentThread.ManagedThreadId}");
-                            BackgroundLoop(token);
-                        }
-                        else
-                        {
-                            _logger.LogError($"Thread mismatch: Expected {_executionContext.ThreadId.Value}, got {Thread.CurrentThread.ManagedThreadId}");
-                            // Fallback to Task.Run
-                            _backgroundTask = Task.Run(() => BackgroundLoop(token), token);
-                        }
-                    }, null);
-                }
-                // If we have a TaskScheduler, use it to schedule our background task
-                else if (_executionContext.TaskScheduler != null)
-                {
-                    _logger.Log("Starting background task using TaskScheduler");
-                    _backgroundTask = Task.Factory.StartNew(
-                        () => BackgroundLoop(token),
-                        token,
-                        TaskCreationOptions.LongRunning,
-                        _executionContext.TaskScheduler);
-                }
-                // Default to standard Task.Run
-                else
-                {
-                    _logger.Log("Starting background task using Task.Run");
-                    _backgroundTask = Task.Run(() => BackgroundLoop(token), token);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("Error starting background task", ex);
-                // Fallback to simple task
-                _backgroundTask = Task.Run(() => BackgroundLoop(_cancellationTokenSource.Token));
-            }
-        }
-        
+
         /// <summary>
         /// Stops the service
         /// </summary>
         public virtual void Stop()
         {
-            if (_disposed)
+            if (_isDisposed)
+                throw new ObjectDisposedException(nameof(SimpleServiceBase));
+
+            if (!_isRunning)
                 return;
-                
-            _logger.Log($"Stopping {_serviceType} service '{_serviceName}'...");
+
+            _isRunning = false;
+            _cancellationTokenSource?.Cancel();
             
-            try
-            {
-                // Cancel the background task
-                _cancellationTokenSource.Cancel();
-                
-                // Wait for the background task to complete
-                if (_backgroundTask != null)
-                {
-                    _backgroundTask.Wait(1000);
-                }
-                
-                // Stop the message broker
-                if (_messageBroker != null)
-                {
-                    _messageBroker.MessageReceived -= OnMessageReceived;
-                    _messageBroker.Stop();
-                }
-                
-                _logger.Log($"{_serviceType} service '{_serviceName}' stopped successfully");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error stopping {_serviceType} service '{_serviceName}'", ex);
-            }
+            // Stop the socket adapter
+            _socketAdapter.Stop();
+            
+            Console.WriteLine($"Service {_serviceName} ({_serviceType}) stopped");
         }
-        
+
         /// <summary>
         /// Disposes the service
         /// </summary>
         public void Dispose()
         {
-            if (_disposed)
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        /// <summary>
+        /// Disposes the service
+        /// </summary>
+        /// <param name="disposing">Whether this is being called from Dispose()</param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_isDisposed)
                 return;
-                
-            _disposed = true;
-            
-            try
+
+            if (disposing)
             {
                 Stop();
+                _socketAdapter.Dispose();
+                _cancellationTokenSource?.Dispose();
+            }
+
+            _isDisposed = true;
+        }
+
+        /// <summary>
+        /// Sends heartbeats periodically
+        /// </summary>
+        private async Task SendHeartbeatsAsync()
+        {
+            if (_cancellationTokenSource == null)
+                return;
                 
-                // Dispose the message broker
-                _messageBroker?.Dispose();
-                _messageBroker = null;
-                
-                // Dispose the cancellation token source
-                _cancellationTokenSource.Dispose();
-                
-                _logger.Log($"{_serviceType} service '{_serviceName}' disposed");
+            try
+            {
+                while (_isRunning && !_cancellationTokenSource.Token.IsCancellationRequested)
+                {
+                    var heartbeatMessage = SimpleMessage.Create(SimpleMessageType.Heartbeat);
+                    heartbeatMessage.SenderId = _serviceId;
+                    
+                    PublishMessage(heartbeatMessage);
+                    
+                    await Task.Delay(5000, _cancellationTokenSource.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Ignore
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error disposing {_serviceType} service '{_serviceName}'", ex);
+                Console.WriteLine($"Error sending heartbeats: {ex.Message}");
             }
         }
-        
+
         /// <summary>
-        /// Publishes a message
+        /// Sends service registrations periodically
+        /// </summary>
+        private async Task SendRegistrationsAsync()
+        {
+            if (_cancellationTokenSource == null)
+                return;
+                
+            try
+            {
+                while (_isRunning && !_cancellationTokenSource.Token.IsCancellationRequested)
+                {
+                    var payload = new ServiceRegistrationPayload
+                    {
+                        ServiceId = _serviceId,
+                        ServiceName = _serviceName,
+                        ServiceType = _serviceType
+                    };
+                    
+                    var registrationMessage = SimpleMessage.Create(SimpleMessageType.ServiceRegistration, payload);
+                    registrationMessage.SenderId = _serviceId;
+                    
+                    PublishMessage(registrationMessage);
+                    
+                    await Task.Delay(10000, _cancellationTokenSource.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Ignore
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending registrations: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Publishes a message to all subscribers
         /// </summary>
         /// <param name="message">The message to publish</param>
         protected void PublishMessage(SimpleMessage message)
         {
-            if (_disposed)
-            {
-                throw new ObjectDisposedException(nameof(SimpleServiceBase));
-            }
-            
-            try
-            {
-                if (_messageBroker == null)
-                {
-                    _logger.LogError("Cannot publish message: message broker is null");
-                    return;
-                }
+            if (message == null)
+                throw new ArgumentNullException(nameof(message));
                 
-                // Set the sender ID
+            if (string.IsNullOrEmpty(message.SenderId))
                 message.SenderId = _serviceId;
                 
-                // Publish the message
-                _messageBroker.Publish(message);
-                
-                if (_verbose)
-                {
-                    _logger.Log($"Published message of type {message.Type}");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("Error publishing message", ex);
-            }
+            _socketAdapter.Publish(message);
         }
-        
+
         /// <summary>
-        /// Background loop for the service
+        /// Handles the MessageReceived event from the socket adapter
         /// </summary>
-        /// <param name="cancellationToken">Cancellation token to stop the loop</param>
-        private void BackgroundLoop(CancellationToken cancellationToken)
+        private void OnMessageReceived(object? sender, MessageReceivedEventArgs e)
         {
-            try
+            if (e.Message != null)
             {
-                _logger.Log($"Background task started for {_serviceType} service '{_serviceName}'");
-                
-                // Initialize the heartbeat timer
-                var lastHeartbeat = DateTime.UtcNow;
-                var heartbeatInterval = TimeSpan.FromSeconds(5);
-                
-                while (!cancellationToken.IsCancellationRequested)
+                // Convert the message to a SimpleMessage format
+                var simpleMessage = new SimpleMessage
                 {
-                    try
-                    {
-                        // Send heartbeat if needed
-                        var now = DateTime.UtcNow;
-                        if (now - lastHeartbeat >= heartbeatInterval)
-                        {
-                            SendHeartbeat();
-                            lastHeartbeat = now;
-                        }
-                        
-                        // Run service-specific background tasks
-                        OnBackgroundTick();
-                        
-                        // Sleep to avoid busy waiting
-                        Thread.Sleep(100);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError("Error in background loop", ex);
-                        Thread.Sleep(1000); // Sleep longer after an error
-                    }
-                }
-                
-                _logger.Log($"Background task stopped for {_serviceType} service '{_serviceName}'");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("Background task terminated with error", ex);
-            }
-        }
-        
-        /// <summary>
-        /// Sends a heartbeat message
-        /// </summary>
-        private void SendHeartbeat()
-        {
-            try
-            {
-                var heartbeatMessage = SimpleMessage.Create(SimpleMessageType.Heartbeat);
-                PublishMessage(heartbeatMessage);
-                
-                if (_verbose)
-                {
-                    _logger.Log("Sent heartbeat message");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("Error sending heartbeat", ex);
-            }
-        }
-        
-        /// <summary>
-        /// Registers this service with other services
-        /// </summary>
-        private void RegisterService()
-        {
-            try
-            {
-                // Create the registration payload
-                var payload = new ServiceRegistrationPayload
-                {
-                    ServiceId = _serviceId,
-                    ServiceName = _serviceName,
-                    ServiceType = _serviceType,
-                    PublisherPort = _publisherPort,
-                    SubscriberPort = _subscriberPort
+                    MessageId = e.Message.Id,
+                    SenderId = e.Message.SenderId,
+                    Type = (SimpleMessageType)e.Message.Type,
+                    InResponseTo = e.Message.InResponseTo,
+                    Payload = e.Message.Payload
                 };
                 
-                // Create and publish the registration message
-                var registrationMessage = SimpleMessage.Create(SimpleMessageType.ServiceRegistration, payload);
-                PublishMessage(registrationMessage);
-                
-                _logger.Log($"Registered {_serviceType} service '{_serviceName}'");
+                HandleMessage(simpleMessage);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError("Error registering service", ex);
-            }
-        }
-        
-        /// <summary>
-        /// Handles received messages
-        /// </summary>
-        /// <param name="sender">The sender of the event</param>
-        /// <param name="e">The event arguments</param>
-        private void OnMessageReceived(object sender, MessageReceivedEventArgs e)
-        {
-            try
-            {
-                var message = e.Message;
-                
-                // Don't skip response messages that are addressed directly to us, even if we're the sender
-                bool isResponseToUs = !string.IsNullOrEmpty(message.InResponseTo) && message.ReceiverId == _serviceId;
-                
-                // Skip our own messages that aren't responses to us
-                if (message.SenderId == _serviceId && !isResponseToUs)
-                {
-                    if (_verbose)
-                    {
-                        _logger.Log($"Skipping own message: {message.MessageId}");
-                    }
-                    return;
-                }
-                
-                // If the message has a specific recipient and it's not us, ignore it
-                if (!string.IsNullOrEmpty(message.ReceiverId) && message.ReceiverId != _serviceId)
-                {
-                    return;
-                }
-                
-                // Log the received message
-                if (_verbose)
-                {
-                    _logger.Log($"Received message: Type={message.Type}, From={message.SenderId}, To={message.ReceiverId}, InResponseTo={message.InResponseTo}");
-                }
-                
-                // Handle the message based on its type
-                HandleMessage(message);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("Error handling received message", ex);
-            }
-        }
-        
-        /// <summary>
-        /// Called once per tick of the background loop
-        /// </summary>
-        protected virtual void OnBackgroundTick()
-        {
-            // Base implementation does nothing
         }
         
         /// <summary>
@@ -435,55 +273,83 @@ namespace PokerGame.Core.Microservices
         /// <param name="message">The message to handle</param>
         protected virtual void HandleMessage(SimpleMessage message)
         {
+            if (message == null)
+                return;
+                
+            if (_verbose)
+            {
+                Console.WriteLine($"Received message: {message.Type} from {message.SenderId}");
+            }
+            
             switch (message.Type)
             {
                 case SimpleMessageType.Heartbeat:
-                    // Heartbeats don't need a response
+                    // No need to do anything with heartbeats
                     break;
-                    
                 case SimpleMessageType.ServiceRegistration:
-                    // Handle service registration
-                    var registrationPayload = message.GetPayload<ServiceRegistrationPayload>();
-                    if (registrationPayload != null)
-                    {
-                        HandleServiceRegistration(registrationPayload, message);
-                    }
+                    var payload = message.GetPayload<ServiceRegistrationPayload>();
+                    HandleServiceRegistration(payload, message);
                     break;
-                    
                 case SimpleMessageType.Acknowledgment:
-                    // Handle acknowledgment
                     HandleAcknowledgment(message);
                     break;
-                    
                 case SimpleMessageType.Error:
-                    // Handle error
-                    var errorPayload = message.GetPayload<ErrorPayload>();
-                    if (errorPayload != null)
-                    {
-                        _logger.LogError($"Received error message: {errorPayload.ErrorMessage}");
-                    }
+                    var errorMessage = message.GetPayloadAsString();
+                    Console.WriteLine($"Error from {message.SenderId}: {errorMessage}");
                     break;
-                    
                 default:
-                    // Handle other message types in derived classes
+                    // Let derived classes handle other message types
                     break;
             }
         }
-        
+
         /// <summary>
         /// Handles a service registration message
         /// </summary>
-        /// <param name="payload">The registration payload</param>
+        /// <param name="payload">The service registration payload</param>
         /// <param name="message">The original message</param>
         protected virtual void HandleServiceRegistration(ServiceRegistrationPayload payload, SimpleMessage message)
         {
-            _logger.Log($"Registered service: {payload.ServiceName} (ID: {payload.ServiceId}, Type: {payload.ServiceType})");
+            if (payload == null || string.IsNullOrEmpty(payload.ServiceId))
+                return;
+                
+            lock (_serviceRegistryLock)
+            {
+                if (!_serviceRegistry.TryGetValue(payload.ServiceId, out var serviceInfo))
+                {
+                    serviceInfo = new ServiceInfo
+                    {
+                        ServiceId = payload.ServiceId,
+                        ServiceName = payload.ServiceName,
+                        ServiceType = payload.ServiceType,
+                        LastSeen = DateTime.UtcNow
+                    };
+                    
+                    _serviceRegistry[payload.ServiceId] = serviceInfo;
+                    
+                    if (_verbose)
+                    {
+                        Console.WriteLine($"Registered service: {payload.ServiceName} ({payload.ServiceType}) with ID {payload.ServiceId}");
+                    }
+                }
+                else
+                {
+                    serviceInfo.LastSeen = DateTime.UtcNow;
+                    
+                    if (_verbose)
+                    {
+                        Console.WriteLine($"Updated service: {payload.ServiceName} ({payload.ServiceType}) with ID {payload.ServiceId}");
+                    }
+                }
+            }
             
-            // Send an acknowledgment
+            // Send acknowledgment
             var acknowledgment = SimpleMessage.CreateAcknowledgment(message);
+            acknowledgment.SenderId = _serviceId;
+            
             PublishMessage(acknowledgment);
         }
-        
+
         /// <summary>
         /// Handles an acknowledgment message
         /// </summary>
@@ -491,18 +357,116 @@ namespace PokerGame.Core.Microservices
         protected virtual void HandleAcknowledgment(SimpleMessage message)
         {
             if (string.IsNullOrEmpty(message.InResponseTo))
-            {
-                _logger.LogWarning($"Received acknowledgment with empty InResponseTo field, messageId: {message.MessageId}");
                 return;
+                
+            lock (_acknowledgedMessageIds)
+            {
+                if (!_acknowledgedMessageIds.Contains(message.InResponseTo))
+                {
+                    _acknowledgedMessageIds.Add(message.InResponseTo);
+                    
+                    if (_verbose)
+                    {
+                        Console.WriteLine($"Message {message.InResponseTo} acknowledged by {message.SenderId}");
+                    }
+                }
             }
             
-            // Always acknowledge the acknowledgment message itself to prevent retries
+            // Send acknowledgment to the acknowledgment
+            // This helps with service discovery
             var ackAck = SimpleMessage.CreateAcknowledgment(message);
-            PublishMessage(ackAck);
+            ackAck.SenderId = _serviceId;
             
-            _logger.Log($"Received acknowledgment for message {message.InResponseTo} and sent ack response");
+            PublishMessage(ackAck);
+        }
+
+        /// <summary>
+        /// Gets a list of all registered services
+        /// </summary>
+        /// <returns>A list of service information</returns>
+        protected IReadOnlyList<ServiceInfo> GetRegisteredServices()
+        {
+            lock (_serviceRegistryLock)
+            {
+                return _serviceRegistry.Values.ToList();
+            }
+        }
+
+        /// <summary>
+        /// Gets a service by its ID
+        /// </summary>
+        /// <param name="serviceId">The ID of the service to get</param>
+        /// <returns>The service information, or null if not found</returns>
+        protected ServiceInfo? GetServiceById(string serviceId)
+        {
+            lock (_serviceRegistryLock)
+            {
+                if (_serviceRegistry.TryGetValue(serviceId, out var serviceInfo))
+                    return serviceInfo;
+                    
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets a service by its type
+        /// </summary>
+        /// <param name="serviceType">The type of the service to get</param>
+        /// <returns>The first service of the specified type, or null if not found</returns>
+        protected ServiceInfo? GetServiceByType(string serviceType)
+        {
+            lock (_serviceRegistryLock)
+            {
+                foreach (var serviceInfo in _serviceRegistry.Values)
+                {
+                    if (serviceInfo.ServiceType == serviceType)
+                        return serviceInfo;
+                }
+                
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets all services of a specific type
+        /// </summary>
+        /// <param name="serviceType">The type of services to get</param>
+        /// <returns>A list of services of the specified type</returns>
+        protected IReadOnlyList<ServiceInfo> GetServicesByType(string serviceType)
+        {
+            lock (_serviceRegistryLock)
+            {
+                return _serviceRegistry.Values
+                    .Where(s => s.ServiceType == serviceType)
+                    .ToList();
+            }
         }
     }
     
-    // This class has been moved to MessageTypes.cs
+    /// <summary>
+    /// Information about a service
+    /// </summary>
+    [Obsolete("This class has been replaced with ServiceInfo in MessageTypes.cs and will be removed in a future release.")]
+    public class ServiceInfo
+    {
+        /// <summary>
+        /// Gets or sets the unique identifier of the service
+        /// </summary>
+        public string ServiceId { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the name of the service
+        /// </summary>
+        public string ServiceName { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the type of the service
+        /// </summary>
+        public string ServiceType { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the timestamp when the service was last seen
+        /// </summary>
+        public DateTime LastSeen { get; set; }
+    }
 }

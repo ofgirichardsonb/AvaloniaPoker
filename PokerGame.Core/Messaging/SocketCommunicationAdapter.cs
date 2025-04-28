@@ -6,6 +6,9 @@ using System.Threading.Tasks;
 using NetMQ;
 using NetMQ.Sockets;
 
+// Suppress obsolete warnings for transition period
+#pragma warning disable CS0619 // Type or member is obsolete
+
 namespace PokerGame.Core.Messaging
 {
     /// <summary>
