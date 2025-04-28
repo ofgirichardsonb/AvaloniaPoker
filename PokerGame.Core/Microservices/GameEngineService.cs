@@ -670,24 +670,44 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     BroadcastGameState();
                     
                     // Send a direct response to the sender
+                    Console.WriteLine("========== SENDING STARTHAND RESPONSE ==========");
                     var responseMessage = Message.Create(MessageType.GenericResponse);
-                    responseMessage.SetPayload(new GenericResponsePayload
+                    
+                    // Set message ID to ensure uniqueness
+                    responseMessage.MessageId = Guid.NewGuid().ToString();
+                    
+                    // Set in response to property for tracking the relationship
+                    responseMessage.InResponseTo = message.MessageId;
+                    
+                    Console.WriteLine($"Original message ID: {message.MessageId}");
+                    Console.WriteLine($"Response message ID: {responseMessage.MessageId}");
+                    Console.WriteLine($"Response in response to: {responseMessage.InResponseTo}");
+                    
+                    // Create and set payload
+                    var responsePayload = new GenericResponsePayload
                     {
                         Success = true,
                         OriginalMessageType = MessageType.StartHand,
                         Message = $"Hand started successfully. Current state: {_gameEngine.State}"
-                    });
+                    };
+                    responseMessage.SetPayload(responsePayload);
+                    
+                    Console.WriteLine($"Response payload set: Success={responsePayload.Success}, Message={responsePayload.Message}");
                     
                     if (!string.IsNullOrEmpty(message.SenderId))
                     {
-                        Console.WriteLine($"Sending StartHand response to {message.SenderId}");
+                        Console.WriteLine($"Sending StartHand response directly to {message.SenderId}");
                         SendTo(responseMessage, message.SenderId);
+                        Console.WriteLine("StartHand response sent!");
                     }
                     else
                     {
-                        Console.WriteLine("Cannot send StartHand response - sender ID is missing");
+                        Console.WriteLine("WARNING: Cannot send StartHand response - sender ID is missing");
+                        Console.WriteLine("Falling back to broadcast for StartHand response");
                         Broadcast(responseMessage); // Fallback to broadcast
+                        Console.WriteLine("StartHand response broadcasted!");
                     }
+                    Console.WriteLine("================================================");
                     break;
                     
                 case MessageType.PlayerAction:

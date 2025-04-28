@@ -452,6 +452,40 @@ namespace PokerGame.Core.Microservices
                         DisplayActionPrompt(actionPlayer);
                     }
                     break;
+                    
+                case MessageType.GenericResponse:
+                    Console.WriteLine("========== RECEIVED GENERIC RESPONSE ==========");
+                    Console.WriteLine($"Message ID: {message.MessageId}");
+                    Console.WriteLine($"In response to: {message.InResponseTo}");
+                    Console.WriteLine($"From service: {message.SenderId}");
+                    
+                    var genericResponse = message.GetPayload<GenericResponsePayload>();
+                    if (genericResponse != null)
+                    {
+                        Console.WriteLine($"Response for message type: {genericResponse.OriginalMessageType}");
+                        Console.WriteLine($"Success: {genericResponse.Success}");
+                        Console.WriteLine($"Message: {genericResponse.Message}");
+                        
+                        // Handle specific responses
+                        if (genericResponse.OriginalMessageType == MessageType.StartHand)
+                        {
+                            Console.WriteLine("StartHand response received!");
+                            if (genericResponse.Success)
+                            {
+                                Console.WriteLine("Hand started successfully!");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Error starting hand: {genericResponse.Message}");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Warning: Received GenericResponse with null payload");
+                    }
+                    Console.WriteLine("================================================");
+                    break;
             }
             
             await Task.CompletedTask;
@@ -563,9 +597,19 @@ namespace PokerGame.Core.Microservices
                         }
                         else if (string.IsNullOrWhiteSpace(input) && _gameEngineServiceId != null)
                         {
-                            // Start a new hand
+                            // Start a new hand with enhanced logging
+                            Console.WriteLine("========== SENDING STARTHAND MESSAGE ==========");
                             var message = Message.Create(MessageType.StartHand);
+                            message.MessageId = Guid.NewGuid().ToString(); // Ensure unique message ID
+                            message.SenderId = _serviceId; // Set sender ID explicitly
+                            
+                            Console.WriteLine($"StartHand message ID: {message.MessageId}");
+                            Console.WriteLine($"StartHand sender ID: {message.SenderId}");
+                            Console.WriteLine($"StartHand recipient ID: {_gameEngineServiceId}");
+                            
+                            Console.WriteLine("StartHand message sent, waiting for response...");
                             SendTo(message, _gameEngineServiceId);
+                            Console.WriteLine("================================================");
                         }
                     }
                     
