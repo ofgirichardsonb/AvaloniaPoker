@@ -204,6 +204,106 @@ namespace MSA.Foundation.Tests.Messaging
             messageBroker.Stop();
         }
         
+        [Fact]
+        public void Start_WhenSocketFailsToInitialize_ShouldHandleGracefully()
+        {
+            // Arrange
+            var mock = new Mock<ISocketCommunicationAdapter>();
+            mock.Setup(m => m.Start()).Throws(new InvalidOperationException("Test exception"));
+            var messageBroker = CreateMessageBrokerWithMock(mock.Object);
+            
+            // Act
+            Action startAction = () => messageBroker.Start();
+            
+            // Assert
+            startAction.Should().NotThrow("Start should handle socket initialization exceptions gracefully");
+            
+            // Cleanup
+            messageBroker.Stop();
+        }
+        
+        [Fact]
+        public void Stop_ShouldHandleExceptionsGracefully()
+        {
+            // Arrange
+            var mock = new Mock<ISocketCommunicationAdapter>();
+            mock.Setup(m => m.Stop()).Throws(new InvalidOperationException("Test exception"));
+            var messageBroker = CreateMessageBrokerWithMock(mock.Object);
+            messageBroker.Start();
+            
+            // Act
+            Action stopAction = () => messageBroker.Stop();
+            
+            // Assert
+            stopAction.Should().NotThrow("Stop should handle socket cleanup exceptions gracefully");
+        }
+        
+        [Fact]
+        public void Dispose_ShouldCallStop()
+        {
+            // Arrange
+            var mock = new Mock<ISocketCommunicationAdapter>();
+            var messageBroker = CreateMessageBrokerWithMock(mock.Object);
+            messageBroker.Start();
+            
+            // Act
+            messageBroker.Dispose();
+            
+            // Assert
+            mock.Verify(m => m.Dispose(), Times.Once, "Dispose should call Stop on the socket adapter");
+        }
+        
+        [Fact]
+        public void PublishMessage_WhenNotStarted_ShouldReturnFalse()
+        {
+            // Arrange
+            var messageBroker = CreateMessageBrokerWithMockedSocket();
+            var message = new Message(MessageType.Command, "testSender", "testPayload");
+            
+            // Act - Don't call Start()
+            bool result = messageBroker.PublishMessage(message);
+            
+            // Assert
+            result.Should().BeFalse("PublishMessage should return false when not started");
+        }
+        
+        [Fact]
+        public async Task PublishMessageAsync_WhenNotStarted_ShouldReturnFalse()
+        {
+            // Arrange
+            var messageBroker = CreateMessageBrokerWithMockedSocket();
+            var message = new Message(MessageType.Command, "testSender", "testPayload");
+            
+            // Act - Don't call Start()
+            bool result = await messageBroker.PublishMessageAsync(message);
+            
+            // Assert
+            result.Should().BeFalse("PublishMessageAsync should return false when not started");
+        }
+        
+        [Fact]
+        public void Constructor_WithDependencyInjection_ShouldWorkCorrectly()
+        {
+            // Arrange
+            var mock = new Mock<ISocketCommunicationAdapter>();
+            
+            // Act
+            Action createAction = () => new MessageBroker(mock.Object);
+            
+            // Assert
+            createAction.Should().NotThrow("Constructor with dependency injection should not throw");
+            
+            // Additional verification to ensure broker uses the mock
+            var broker = new MessageBroker(mock.Object);
+            broker.Start();
+            
+            // Now verify Start was called on the mock
+            mock.Verify(m => m.Start(), Times.Once, "Start should call Start on the injected socket adapter");
+            
+            // Cleanup
+            broker.Stop();
+        }
+        
         // Helper methods
         
         private MessageBroker CreateMessageBrokerWithMockedSocket()

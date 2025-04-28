@@ -173,6 +173,94 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("Flush should not throw exception");
         }
         
+        [Fact]
+        public async void FlushAsync_ShouldNotThrowException()
+        {
+            // Arrange
+            var telemetryService = TelemetryService.Instance;
+            telemetryService.Initialize("test-key");
+            
+            // Act
+            Func<Task> action = async () => await telemetryService.FlushAsync();
+            
+            // Assert
+            await action.Should().NotThrowAsync("FlushAsync should not throw exception");
+        }
+        
+        [Fact]
+        public void TrackMetric_WhenTelemetryIsEnabled_ShouldNotThrowException()
+        {
+            // Arrange
+            var telemetryService = TelemetryService.Instance;
+            telemetryService.Initialize("test-key");
+            
+            // Act
+            Action action = () => telemetryService.TrackMetric("TestMetric", 42.0);
+            
+            // Assert
+            action.Should().NotThrow("TrackMetric should not throw when telemetry is enabled");
+        }
+        
+        [Fact]
+        public void TrackMetric_WithProperties_ShouldNotThrowException()
+        {
+            // Arrange
+            var telemetryService = TelemetryService.Instance;
+            telemetryService.Initialize("test-key");
+            var properties = new Dictionary<string, string> { { "PropertyKey", "PropertyValue" } };
+            
+            // Act
+            Action action = () => telemetryService.TrackMetric("TestMetric", 42.0, properties);
+            
+            // Assert
+            action.Should().NotThrow("TrackMetric with properties should not throw when telemetry is enabled");
+        }
+        
+        [Fact]
+        public void Constructor_WithConfiguration_ShouldInitializeCorrectly()
+        {
+            // Arrange
+            var config = CreateConfigurationWithKey("test-config-key");
+            
+            // Act
+            Action action = () => {
+                var telemetryService = new TelemetryService(config);
+                // No need to call Initialize as it should be called in the constructor
+            };
+            
+            // Assert
+            action.Should().NotThrow("Constructor with configuration should not throw");
+        }
+        
+        [Fact]
+        public void Constructor_WithEmptyConfiguration_ShouldNotThrow()
+        {
+            // Arrange
+            var config = CreateConfigurationWithoutKey();
+            
+            // Act
+            Action action = () => {
+                var telemetryService = new TelemetryService(config);
+            };
+            
+            // Assert
+            action.Should().NotThrow("Constructor with empty configuration should not throw");
+        }
+        
+        [Fact]
+        public void Dispose_ShouldNotThrowException()
+        {
+            // Arrange
+            var config = CreateConfigurationWithKey("test-key");
+            var telemetryService = new TelemetryService(config);
+            
+            // Act
+            Action action = () => telemetryService.Dispose();
+            
+            // Assert
+            action.Should().NotThrow("Dispose should not throw exception");
+        }
+        
         // Helper methods
         
         private IConfiguration CreateConfigurationWithKey(string instrumentationKey)

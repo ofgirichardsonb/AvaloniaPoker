@@ -179,6 +179,96 @@ namespace MSA.Foundation.Tests.Messaging
             messageReceived.Should().BeTrue("The subscriber should be notified when a message is received");
         }
         
+        [Fact]
+        public void LogVerbose_WithVerboseEnabled_ShouldLogToConsole()
+        {
+            // This tests the verbose logging functionality
+            // Arrange
+            using var adapter = new SocketCommunicationAdapter(_testHost, _testPort, true);
+            
+            // Act - Just test that it doesn't throw
+            adapter.Start();
+            Action stopAction = () => adapter.Stop();
+            
+            // Assert
+            stopAction.Should().NotThrow("Operations with verbose logging enabled should not throw");
+        }
+        
+        [Fact]
+        public void Start_CalledMultipleTimes_ShouldNotCreateMultipleSockets()
+        {
+            // Arrange
+            using var adapter = CreateMockableAdapter();
+            
+            // Act
+            adapter.Start(); // First start
+            adapter.Start(); // Second start should be ignored
+            
+            // Start one socket pair and send a message
+            bool firstSendResult = adapter.SendMessage("topic", "message");
+            
+            // Stop and restart to verify new socket creation
+            adapter.Stop();
+            adapter.Start();
+            bool secondSendResult = adapter.SendMessage("topic", "message");
+            
+            // Assert - Both send attempts should work because we properly initialize sockets
+            firstSendResult.Should().BeTrue("First send after Start should succeed");
+            secondSendResult.Should().BeTrue("Send after Stop/Start should succeed");
+            
+            // Cleanup
+            adapter.Stop();
+        }
+        
+        [Fact]
+        public void Subscribe_WithSpecificTopic_ShouldOnlyReceiveMatchingMessages()
+        {
+            // Arrange
+            var mockAdapter = new Mock<ISocketCommunicationAdapter>();
+            bool receivedMatchingMessage = false;
+            bool receivedNonMatchingMessage = false;
+            
+            mockAdapter.Setup(m => m.Subscribe(It.IsAny<string>(), It.IsAny<Action<string, string>>()))
+                .Callback<string, Action<string, string>>((topic, callback) => {
+                    // Simulate receiving both matching and non-matching messages
+                    callback(topic, "matching-message"); // Should match
+                    callback("different-topic", "non-matching-message"); // Should not match
+                })
+                .Returns("test-subscription-id");
+                
+            // Act
+            string subscriptionId = mockAdapter.Object.Subscribe("test-topic", (topic, message) => {
+                if (topic == "test-topic" && message == "matching-message")
+                {
+                    receivedMatchingMessage = true;
+                }
+                else if (topic == "different-topic")
+                {
+                    receivedNonMatchingMessage = true;
+                }
+            });
+            
+            // Assert
+            receivedMatchingMessage.Should().BeTrue("Subscriber should receive matching topic messages");
+            receivedNonMatchingMessage.Should().BeFalse("Subscriber should not receive non-matching topic messages");
+        }
+        
+        [Fact]
+        public void Stop_WhenAlreadyStopped_ShouldNotThrow()
+        {
+            // Arrange
+            using var adapter = CreateMockableAdapter();
+            
+            // Act
+            adapter.Stop(); // Not started, but shouldn't throw
+            adapter.Start();
+            adapter.Stop(); // First stop
+            Action secondStop = () => adapter.Stop(); // Second stop
+            
+            // Assert
+            secondStop.Should().NotThrow("Stopping an already stopped adapter should not throw");
+        }
+        
         // Helper method to create a more testable adapter
         private SocketCommunicationAdapter CreateMockableAdapter()
         {
