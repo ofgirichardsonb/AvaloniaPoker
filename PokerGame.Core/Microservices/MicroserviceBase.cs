@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using NetMQ;
 using NetMQ.Sockets;
 using PokerGame.Core.ServiceManagement;
+using PokerGame.Core.Messaging;
 
 namespace PokerGame.Core.Microservices
 {
@@ -396,17 +397,50 @@ namespace PokerGame.Core.Microservices
         }
         
         /// <summary>
-        /// Sends a message to all microservices
+        /// Sends a message to all microservices through the central message broker
         /// </summary>
         /// <param name="message">The message to send</param>
         protected internal virtual void Broadcast(Message message)
         {
-            message.SenderId = _serviceId;
-            _publisherSocket?.SendFrame(message.ToJson());
+            try
+            {
+                // Set the sender ID
+                message.SenderId = _serviceId;
+                
+                // Add a unique message ID if not already present
+                if (string.IsNullOrEmpty(message.MessageId))
+                {
+                    message.MessageId = Guid.NewGuid().ToString();
+                }
+                
+                // Log the broadcast
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Broadcasting message {message.Type} (ID: {message.MessageId}) through central broker");
+                
+                // Convert to NetworkMessage
+                var networkMessage = message.ToNetworkMessage();
+                
+                // Get the central broker and publish
+                var centralBroker = BrokerManager.Instance.CentralBroker;
+                if (centralBroker != null)
+                {
+                    centralBroker.Publish(networkMessage);
+                    return;
+                }
+                
+                // Fallback to direct socket if central broker isn't available
+                Console.WriteLine($"WARNING: Central broker not available, using fallback direct socket for message {message.MessageId}");
+                _publisherSocket?.SendFrame(message.ToJson());
+            }
+            catch (Exception ex)
+            {
+                // Log any errors
+                Console.WriteLine($"Error broadcasting message: {ex.Message}");
+                Console.WriteLine(ex.StackTrace);
+            }
         }
         
         /// <summary>
-        /// Sends a message to a specific microservice
+        /// Sends a message to a specific microservice through the central message broker
         /// </summary>
         /// <param name="message">The message to send</param>
         /// <param name="receiverId">The ID of the receiving service</param>
@@ -441,13 +475,22 @@ namespace PokerGame.Core.Microservices
                     message.MessageId = Guid.NewGuid().ToString();
                 }
                 
-                string serialized = message.ToJson();
-                Console.WriteLine($"Sending message type {message.Type} to {receiverId}");
+                Console.WriteLine($"Sending message type {message.Type} to {receiverId} through central broker");
                 
-                // Important fix: When sending a message to a specific service,
-                // it needs to be broadcast so all services can see it
-                // The receiver ID field is used to filter who should process it
-                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Broadcasting message {message.Type} to {receiverId} (using broadcast instead of direct send)");
+                // Convert to NetworkMessage
+                var networkMessage = message.ToNetworkMessage();
+                
+                // Get the central broker and publish
+                var centralBroker = BrokerManager.Instance.CentralBroker;
+                if (centralBroker != null)
+                {
+                    centralBroker.Publish(networkMessage);
+                    return true;
+                }
+                
+                // Fallback to direct socket if central broker isn't available
+                Console.WriteLine($"WARNING: Central broker not available, using fallback direct socket for message {message.MessageId}");
+                string serialized = message.ToJson();
                 _publisherSocket?.SendFrame(serialized);
                 
                 return true;

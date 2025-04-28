@@ -885,42 +885,17 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                         Console.WriteLine($"Sending StartHand response directly to {message.SenderId}");
                         Console.WriteLine($"RESPONSE PAYLOAD: {responseMessage.GetPayload<GenericResponsePayload>()?.Message}");
                         
-                        // Try multiple approaches to ensure delivery
+                        // Always use MicroserviceBase's SendTo method which routes through CentralMessageBroker
+                        Console.WriteLine("Sending StartHand response via MicroserviceBase.SendTo");
                         
-                        // 1. First, broadcast the message (ensures it's visible to all services)
-                        Console.WriteLine("1. Broadcasting response message to all services");
-                        Broadcast(responseMessage);
-                        
-                        // 2. Then, direct send (explicit targeting)
-                        Console.WriteLine($"2. Direct sending response to {message.SenderId}");
+                        // This will ensure the response is routed through CentralMessageBroker
                         SendTo(responseMessage, message.SenderId);
                         
-                        // 3. Finally, try the most reliable method (with acknowledgment)
-                        try
-                        {
-                            Console.WriteLine("3. Attempting send with acknowledgment");
-                            bool sent = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
-                                this, 
-                                responseMessage, 
-                                message.SenderId, 
-                                timeoutMs: 5000,
-                                maxRetries: 3,
-                                useExponentialBackoff: true);
-                                
-                            if (sent)
-                            {
-                                Console.WriteLine("StartHand response sent with acknowledgment!");
-                            }
-                            else
-                            {
-                                Console.WriteLine("Failed to send StartHand response with acknowledgment after retries");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Error sending with acknowledgment: {ex.Message}");
-                            Console.WriteLine(ex.StackTrace);
-                        }
+                        Console.WriteLine("StartHand response sent via CentralMessageBroker!");
+                        
+                        // Log the successful sending
+                        PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
+                            $"StartHand response sent to {message.SenderId} - MessageID: {responseMessage.MessageId}, InResponseTo: {responseMessage.InResponseTo}");
                         
                         Console.WriteLine("StartHand response sent using multiple delivery methods!");
                     }
@@ -980,7 +955,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             Console.WriteLine("Broadcasting game state after player action");
                             BroadcastGameState();
                             
-                            // Send a response back to the UI
+                            // Send a response back to the UI through CentralMessageBroker
                             var actionResponseMessage = Message.Create(MessageType.ActionResponse);
                             actionResponseMessage.SetPayload(new ActionResponsePayload
                             {
@@ -988,6 +963,9 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 ActionType = actionPayload.ActionType,
                                 Message = $"Action {actionPayload.ActionType} processed successfully"
                             });
+                            // Set the response as being in response to the original message
+                            actionResponseMessage.InResponseTo = message.MessageId;
+                            // Use SendTo which now properly routes through CentralMessageBroker
                             SendTo(actionResponseMessage, message.SenderId);
                         }
                         catch (Exception ex)
@@ -995,7 +973,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             Console.WriteLine($"Error processing player action: {ex.Message}");
                             Console.WriteLine(ex.StackTrace);
                             
-                            // Send failure response
+                            // Send failure response through CentralMessageBroker
                             var actionErrorResponseMessage = Message.Create(MessageType.ActionResponse);
                             actionErrorResponseMessage.SetPayload(new ActionResponsePayload
                             {
@@ -1003,6 +981,9 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 ActionType = actionPayload.ActionType,
                                 Message = $"Error: {ex.Message}"
                             });
+                            // Set the response as being in response to the original message
+                            actionErrorResponseMessage.InResponseTo = message.MessageId;
+                            // Use SendTo which now properly routes through CentralMessageBroker
                             SendTo(actionErrorResponseMessage, message.SenderId);
                         }
                     }

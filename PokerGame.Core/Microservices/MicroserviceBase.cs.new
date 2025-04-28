@@ -1,0 +1,626 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using NetMQ;
+using NetMQ.Sockets;
+using PokerGame.Core.ServiceManagement;
+using PokerGame.Core.Messaging;
+
+namespace PokerGame.Core.Microservices
+{
+    /// <summary>
+    /// Base class for all microservices
+    /// </summary>
+    public abstract class MicroserviceBase : IDisposable
+    {
+        protected readonly string _serviceId;
+        protected readonly string _serviceName;
+        protected readonly string _serviceType;
+        
+        /// <summary>
+        /// Gets the unique ID of this service
+        /// </summary>
+        public string ServiceId => _serviceId;
+        
+        /// <summary>
+        /// Gets the name of this service
+        /// </summary>
+        public string ServiceName => _serviceName;
+        
+        /// <summary>
+        /// Gets the type of this service
+        /// </summary>
+        public string ServiceType => _serviceType;
+        
+        protected PublisherSocket? _publisherSocket;
+        protected SubscriberSocket? _subscriberSocket;
+        protected readonly ConcurrentQueue<Message> _messageQueue = new ConcurrentQueue<Message>();
+        
+        protected CancellationTokenSource? _cancellationTokenSource = new CancellationTokenSource();
+        private Task? _processingTask;
+        private Task? _heartbeatTask;
+        
+        private readonly ConcurrentDictionary<string, string> _serviceRegistry = new ConcurrentDictionary<string, string>();
+        
+        // Configuration options
+        private readonly int _heartbeatIntervalMs;
+        protected readonly int _publisherPort;
+        protected readonly int _subscriberPort;
+        
+        /// <summary>
+        /// Gets the service registry showing service ID to service type mappings
+        /// </summary>
+        protected Dictionary<string, string> GetServiceRegistry()
+        {
+            return _serviceRegistry.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+        }
+                
+        /// <summary>
+        /// Creates a new microservice instance with an execution context
+        /// </summary>
+        /// <param name="serviceType">The type of service</param>
+        /// <param name="serviceName">The human-readable name of the service</param>
+        /// <param name="executionContext">The execution context to use</param>
+        /// <param name="heartbeatIntervalMs">The interval between heartbeats in milliseconds</param>
+        protected MicroserviceBase(
+            string serviceType, 
+            string serviceName, 
+            Messaging.ExecutionContext executionContext,
+            int heartbeatIntervalMs = 5000)
+        {
+            // Assign static IDs based on service type for more reliable direct connections
+            if (serviceType == ServiceConstants.ServiceTypes.GameEngine)
+            {
+                _serviceId = ServiceConstants.StaticServiceIds.GameEngine;
+            }
+            else if (serviceType == ServiceConstants.ServiceTypes.CardDeck)
+            {
+                _serviceId = ServiceConstants.StaticServiceIds.CardDeck;
+            }
+            else if (serviceType == ServiceConstants.ServiceTypes.ConsoleUI)
+            {
+                _serviceId = ServiceConstants.StaticServiceIds.ConsoleUI;
+            }
+            else
+            {
+                // Fallback to dynamic ID for any new service types
+                _serviceId = Guid.NewGuid().ToString();
+            }
+            
+            _serviceName = serviceName;
+            _serviceType = serviceType;
+            _heartbeatIntervalMs = heartbeatIntervalMs;
+            _publisherPort = 0; // Not used in this constructor but initialized for completeness
+            _subscriberPort = 0; // Not used in this constructor but initialized for completeness
+            
+            // Use the provided execution context to set up messaging
+            // The broker will handle the actual communication
+            Console.WriteLine($"Creating microservice {serviceName} ({serviceType}) with execution context");
+            Console.WriteLine($"Using STATIC SERVICE ID: {_serviceId}");
+        }
+        
+        /// <summary>
+        /// Creates a new microservice instance with ports for backward compatibility
+        /// </summary>
+        /// <param name="serviceType">The type of service</param>
+        /// <param name="serviceName">The human-readable name of the service</param>
+        /// <param name="publisherPort">The port to use for publishing messages</param>
+        /// <param name="subscriberPort">The port to use for subscribing to messages</param>
+        /// <param name="heartbeatIntervalMs">The interval between heartbeats in milliseconds</param>
+        protected MicroserviceBase(
+            string serviceType, 
+            string serviceName, 
+            int publisherPort, 
+            int subscriberPort,
+            int heartbeatIntervalMs = 5000)
+        {
+            // Assign static IDs based on service type for more reliable direct connections
+            if (serviceType == ServiceConstants.ServiceTypes.GameEngine)
+            {
+                _serviceId = ServiceConstants.StaticServiceIds.GameEngine;
+            }
+            else if (serviceType == ServiceConstants.ServiceTypes.CardDeck)
+            {
+                _serviceId = ServiceConstants.StaticServiceIds.CardDeck;
+            }
+            else if (serviceType == ServiceConstants.ServiceTypes.ConsoleUI)
+            {
+                _serviceId = ServiceConstants.StaticServiceIds.ConsoleUI;
+            }
+            else
+            {
+                // Fallback to dynamic ID for any new service types
+                _serviceId = Guid.NewGuid().ToString();
+            }
+            
+            _serviceName = serviceName;
+            _serviceType = serviceType;
+            _heartbeatIntervalMs = heartbeatIntervalMs;
+            _publisherPort = publisherPort;
+            _subscriberPort = subscriberPort;
+            
+            // Set up the publisher socket with retry logic
+            int maxRetries = 3;
+            int currentRetry = 0;
+            bool publisherBound = false;
+            
+            while (!publisherBound && currentRetry < maxRetries)
+            {
+                try
+                {
+                    // Try to create and bind the publisher socket
+                    _publisherSocket = new PublisherSocket();
+                    _publisherSocket.Options.SendHighWatermark = 1000;
+                    _publisherSocket.Bind($"tcp://127.0.0.1:{publisherPort}");
+                    publisherBound = true;
+                    Console.WriteLine($"Successfully bound publisher socket on port {publisherPort}");
+                }
+                catch (NetMQ.AddressAlreadyInUseException)
+                {
+                    currentRetry++;
+                    
+                    // Dispose of failed socket attempt
+                    if (_publisherSocket != null)
+                    {
+                        _publisherSocket.Dispose();
+                        _publisherSocket = null;
+                    }
+                    
+                    if (currentRetry < maxRetries)
+                    {
+                        Console.WriteLine($"Port {publisherPort} already in use, retrying with port {publisherPort + currentRetry}");
+                        publisherPort += currentRetry;
+                        Thread.Sleep(500); // Give time for potential cleanup
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Failed to bind publisher after {maxRetries} attempts");
+                        throw; // Rethrow after max retries
+                    }
+                }
+            }
+            
+            // Set up the subscriber socket (for receiving messages)
+            _subscriberSocket = new SubscriberSocket();
+            _subscriberSocket.Options.ReceiveHighWatermark = 1000;
+            _subscriberSocket.Connect($"tcp://127.0.0.1:{subscriberPort}");
+            
+            // Subscribe to all messages
+            _subscriberSocket.Subscribe("");
+            
+            Console.WriteLine($"{_serviceName} ({_serviceType}) started with STATIC ID: {_serviceId}");
+        }
+        
+        /// <summary>
+        /// Starts the microservice
+        /// </summary>
+        public virtual void Start()
+        {
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Starting microservice: {_serviceName}");
+            
+            // Start the message processing task
+            _processingTask = Task.Run(ProcessMessagesAsync, _cancellationTokenSource?.Token ?? CancellationToken.None);
+            
+            // Give time for processing task to initialize
+            Thread.Sleep(300);
+            
+            // Register this service with others - do this before starting heartbeat
+            for (int i = 0; i < 3; i++)
+            {
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Sending service registration broadcast (attempt {i+1}/3)");
+                RegisterService();
+                Thread.Sleep(100); // Small delay between registration attempts
+            }
+            
+            // Start the heartbeat task after registration to ensure service is visible
+            _heartbeatTask = Task.Run(SendHeartbeatAsync, _cancellationTokenSource?.Token ?? CancellationToken.None);
+            
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Microservice started successfully");
+        }
+        
+        /// <summary>
+        /// Starts the microservice asynchronously
+        /// </summary>
+        public virtual async Task StartAsync()
+        {
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Starting microservice asynchronously: {_serviceName}");
+            
+            // Start using the synchronous method
+            Start();
+            
+            // Give a longer delay to allow full initialization and multiple registration broadcasts
+            await Task.Delay(500);
+            
+            // Send one more registration after everything is started
+            RegisterService();
+            
+            // Send multiple registrations with increasing delays for improved reliability
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Enhanced service discovery: sending multiple registrations");
+            _ = Task.Run(async () => {
+                for (int i = 0; i < 5; i++)
+                {
+                    await Task.Delay(100 * (i + 1));
+                    PublishServiceRegistration();
+                }
+            });
+            
+            // Debug our sockets and connections
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Publisher port: {_publisherPort}, Subscriber port: {_subscriberPort}");
+            
+            // Broadcast port information to help with debugging
+            var portInfoMessage = Message.Create(MessageType.Debug, 
+                $"Service {_serviceName} ({_serviceType}) is using publisher port {_publisherPort} and subscriber port {_subscriberPort}");
+            portInfoMessage.SenderId = _serviceId;
+            Broadcast(portInfoMessage);
+            
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Microservice async start completed");
+        }
+        
+        /// <summary>
+        /// Stops the microservice
+        /// </summary>
+        public virtual void Stop()
+        {
+            _cancellationTokenSource?.Cancel();
+            
+            try
+            {
+                var tasks = new List<Task>();
+                if (_processingTask != null) tasks.Add(_processingTask);
+                if (_heartbeatTask != null) tasks.Add(_heartbeatTask);
+                
+                if (tasks.Count > 0)
+                {
+                    // Wait for tasks to complete with a timeout
+                    Task.WaitAll(tasks.ToArray(), 1000);
+                }
+            }
+            catch (AggregateException)
+            {
+                // Tasks may throw exceptions when canceled
+            }
+            catch (TimeoutException)
+            {
+                // Tasks may not complete within the timeout
+            }
+            
+            // Clean up sockets to release network resources
+            _publisherSocket?.Dispose();
+            _publisherSocket = null;
+            
+            _subscriberSocket?.Dispose();
+            _subscriberSocket = null;
+            
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Microservice stopped");
+        }
+        
+        /// <summary>
+        /// Registers this service with peers
+        /// </summary>
+        private void RegisterService()
+        {
+            var registrationMessage = Message.Create(MessageType.ServiceRegistration);
+            registrationMessage.SetPayload(new ServiceRegistrationPayload
+            {
+                ServiceId = _serviceId,
+                ServiceType = _serviceType,
+                ServiceName = _serviceName,
+                PublisherPort = _publisherPort,
+                SubscriberPort = _subscriberPort,
+                RequestTransportUrl = null
+            });
+            
+            registrationMessage.SenderId = _serviceId;
+            
+            // Register the service through broadcast to reach all listeners
+            Broadcast(registrationMessage);
+        }
+        
+        /// <summary>
+        /// Publishes a service registration message directly
+        /// </summary>
+        private void PublishServiceRegistration()
+        {
+            var registrationMessage = Message.Create(MessageType.ServiceRegistration);
+            registrationMessage.SetPayload(new ServiceRegistrationPayload
+            {
+                ServiceId = _serviceId,
+                ServiceType = _serviceType,
+                ServiceName = _serviceName,
+                PublisherPort = _publisherPort,
+                SubscriberPort = _subscriberPort,
+                RequestTransportUrl = null
+            });
+            
+            registrationMessage.SenderId = _serviceId;
+            
+            // Publish directly to socket to avoid circular dependencies
+            if (_publisherSocket != null)
+            {
+                _publisherSocket.SendFrame(registrationMessage.ToJson());
+            }
+        }
+        
+        /// <summary>
+        /// Broadcasts a message to all services via the central broker
+        /// </summary>
+        /// <param name="message">The message to send</param>
+        protected internal virtual void Broadcast(Message message)
+        {
+            try
+            {
+                // Set the sender ID
+                message.SenderId = _serviceId;
+                
+                // Add a unique message ID if not already present
+                if (string.IsNullOrEmpty(message.MessageId))
+                {
+                    message.MessageId = Guid.NewGuid().ToString();
+                }
+                
+                // Log the broadcast
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Broadcasting message {message.Type} (ID: {message.MessageId}) through central broker");
+                
+                // Convert to NetworkMessage
+                var networkMessage = message.ToNetworkMessage();
+                
+                // Get the central broker and publish
+                var brokerManager = PokerGame.Core.Messaging.BrokerManager.Instance;
+                var centralBroker = brokerManager?.CentralBroker;
+                if (centralBroker != null)
+                {
+                    centralBroker.Publish(networkMessage);
+                    return;
+                }
+                
+                // Fallback to direct socket if central broker isn't available
+                Console.WriteLine($"WARNING: Central broker not available, using fallback direct socket for message {message.MessageId}");
+                _publisherSocket?.SendFrame(message.ToJson());
+            }
+            catch (Exception ex)
+            {
+                // Log any errors
+                Console.WriteLine($"Error broadcasting message: {ex.Message}");
+                Console.WriteLine(ex.StackTrace);
+            }
+        }
+        
+        /// <summary>
+        /// Sends a message to a specific service via the central broker
+        /// </summary>
+        /// <param name="message">The message to send</param>
+        /// <param name="receiverId">The ID of the receiver service</param>
+        protected internal virtual void SendTo(Message message, string receiverId)
+        {
+            try
+            {
+                // Set the sender ID
+                message.SenderId = _serviceId;
+                
+                // Set the receiver ID
+                message.ReceiverId = receiverId;
+                
+                // Add a unique message ID if not already present
+                if (string.IsNullOrEmpty(message.MessageId))
+                {
+                    message.MessageId = Guid.NewGuid().ToString();
+                }
+                
+                // Log the targeted message
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Sending message {message.Type} (ID: {message.MessageId}) to {receiverId} through central broker");
+                
+                // Convert to NetworkMessage
+                var networkMessage = message.ToNetworkMessage();
+                
+                // Get the central broker and publish
+                var brokerManager = PokerGame.Core.Messaging.BrokerManager.Instance;
+                var centralBroker = brokerManager?.CentralBroker;
+                if (centralBroker != null)
+                {
+                    centralBroker.Publish(networkMessage);
+                    return;
+                }
+                
+                // Fallback to direct socket if central broker isn't available
+                Console.WriteLine($"WARNING: Central broker not available, using fallback direct socket for message {message.MessageId}");
+                _publisherSocket?.SendFrame(message.ToJson());
+            }
+            catch (Exception ex)
+            {
+                // Log any errors
+                Console.WriteLine($"Error sending message to {receiverId}: {ex.Message}");
+                Console.WriteLine(ex.StackTrace);
+            }
+        }
+        
+        /// <summary>
+        /// Sends a heartbeat message to let other services know this service is alive
+        /// </summary>
+        private async Task SendHeartbeatAsync()
+        {
+            try
+            {
+                while (_cancellationTokenSource != null && !_cancellationTokenSource.IsCancellationRequested)
+                {
+                    // Create a heartbeat message
+                    var heartbeatMessage = Message.Create(MessageType.Heartbeat);
+                    heartbeatMessage.SetPayload(new HeartbeatPayload
+                    {
+                        ServiceId = _serviceId,
+                        ServiceType = _serviceType,
+                        ServiceName = _serviceName,
+                        Timestamp = DateTime.UtcNow,
+                        IsActive = true
+                    });
+                    
+                    heartbeatMessage.SenderId = _serviceId;
+                    
+                    // Send the heartbeat to all services
+                    Broadcast(heartbeatMessage);
+                    
+                    // Wait for the next heartbeat interval
+                    await Task.Delay(_heartbeatIntervalMs, _cancellationTokenSource.Token);
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                // Normal cancellation, service is shutting down
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal cancellation, service is shutting down
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in heartbeat task: {ex.Message}");
+                Console.WriteLine(ex.StackTrace);
+            }
+        }
+        
+        /// <summary>
+        /// Processes incoming messages
+        /// </summary>
+        protected async Task ProcessMessagesAsync()
+        {
+            try
+            {
+                while (_cancellationTokenSource != null && !_cancellationTokenSource.IsCancellationRequested)
+                {
+                    try
+                    {
+                        // Process any messages already in the queue
+                        while (_messageQueue.TryDequeue(out var message))
+                        {
+                            try
+                            {
+                                await ProcessMessageAsync(message);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Error processing message from queue: {ex.Message}");
+                                Console.WriteLine(ex.StackTrace);
+                            }
+                        }
+                        
+                        // Check for new messages from subscriber socket
+                        if (_subscriberSocket != null && _subscriberSocket.TryReceiveFrameString(TimeSpan.FromMilliseconds(100), out var json))
+                        {
+                            try
+                            {
+                                // Convert the JSON to a message
+                                var receivedMessage = Message.FromJson(json);
+                                
+                                // Handle messages that are for this service (or broadcast messages with no receiver ID)
+                                bool isForThisService = 
+                                    string.IsNullOrEmpty(receivedMessage.ReceiverId) || 
+                                    receivedMessage.ReceiverId == _serviceId;
+                                
+                                // Skip messages from this service to avoid echo
+                                if (receivedMessage.SenderId != _serviceId && isForThisService)
+                                {
+                                    // Put the message in the queue
+                                    _messageQueue.Enqueue(receivedMessage);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Error parsing received message: {ex.Message}");
+                                Console.WriteLine(ex.StackTrace);
+                            }
+                        }
+                        else
+                        {
+                            // If no messages, yield the thread
+                            await Task.Delay(10);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error in message processing loop: {ex.Message}");
+                        Console.WriteLine(ex.StackTrace);
+                        
+                        // Allow brief recovery time 
+                        await Task.Delay(100);
+                    }
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                // Normal cancellation
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal cancellation
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Fatal error in message processing task: {ex.Message}");
+                Console.WriteLine(ex.StackTrace);
+            }
+        }
+        
+        /// <summary>
+        /// Processes a single message, to be implemented by derived classes
+        /// </summary>
+        /// <param name="message">The message to process</param>
+        protected virtual async Task ProcessMessageAsync(Message message)
+        {
+            if (message.Type == MessageType.ServiceRegistration)
+            {
+                var payload = message.GetPayload<ServiceRegistrationPayload>();
+                if (payload != null)
+                {
+                    _serviceRegistry[payload.ServiceId] = payload.ServiceType;
+                    Console.WriteLine($"Registered service {payload.ServiceName} ({payload.ServiceType}) with ID {payload.ServiceId}");
+                    
+                    // Acknowledge receipt of service registration
+                    var acknowledgment = Message.Create(MessageType.Acknowledgment);
+                    acknowledgment.InResponseTo = message.MessageId;
+                    acknowledgment.SetPayload(new AcknowledgmentPayload { Success = true });
+                    SendTo(acknowledgment, message.SenderId);
+                }
+            }
+            else if (message.Type == MessageType.Heartbeat)
+            {
+                // Just update the service registry entry timestamp
+                var payload = message.GetPayload<HeartbeatPayload>();
+                if (payload != null)
+                {
+                    _serviceRegistry[payload.ServiceId] = payload.ServiceType;
+                }
+            }
+            
+            // If message requires acknowledgment, send one
+            if (message.RequireAcknowledgment)
+            {
+                var acknowledgment = Message.Create(MessageType.Acknowledgment);
+                acknowledgment.InResponseTo = message.MessageId;
+                acknowledgment.SetPayload(new AcknowledgmentPayload { Success = true });
+                SendTo(acknowledgment, message.SenderId);
+            }
+            
+            await Task.CompletedTask;
+        }
+        
+        /// <summary>
+        /// Ensures all resources are disposed
+        /// </summary>
+        public virtual void Dispose()
+        {
+            Stop();
+            
+            _cancellationTokenSource?.Dispose();
+            _cancellationTokenSource = null;
+            
+            _publisherSocket?.Dispose();
+            _publisherSocket = null;
+            
+            _subscriberSocket?.Dispose();
+            _subscriberSocket = null;
+            
+            GC.SuppressFinalize(this);
+        }
+    }
+}
