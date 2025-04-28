@@ -14,39 +14,40 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "PokerGame"
+args = "rebuild_test"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "poker_curses"
+args = "poker_enhanced_test"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "clean_poker_test"
+args = "poker-game"
 
 [[workflows.workflow]]
-name = "PokerGame"
+name = "rebuild_test"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 200 --curses"
+args = "cd /home/runner/workspace && ./poker-services.sh rebuild"
 
 [[workflows.workflow]]
-name = "poker_curses"
+name = "poker_enhanced_test"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && ./poker-services.sh curses --port-offset=200"
+args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
 
 [[workflows.workflow]]
-name = "clean_poker_test"
+name = "poker-game"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && ./poker-services.sh services-and-curses --port-offset 5000 --verbose"
+args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
+waitForPort = 5000
 
 [deployment]
 run = ["sh", "-c", "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 200 --curses"]

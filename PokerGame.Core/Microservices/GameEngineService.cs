@@ -16,6 +16,10 @@ namespace PokerGame.Core.Microservices
     /// </summary>
     public class GameEngineService : MicroserviceBase, IGameEngineService
     {
+        // Test logging line to verify build
+        static GameEngineService() {
+            Console.WriteLine("********** GAME ENGINE SERVICE LOADED - NEW VERSION WITH STARTHAND RESPONSE **********");
+        }
         private readonly PokerGameEngine _gameEngine;
         private readonly MicroserviceUI _microserviceUI;
         private string? _cardDeckServiceId;
@@ -697,7 +701,37 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     if (!string.IsNullOrEmpty(message.SenderId))
                     {
                         Console.WriteLine($"Sending StartHand response directly to {message.SenderId}");
-                        SendTo(responseMessage, message.SenderId);
+                        Console.WriteLine($"RESPONSE PAYLOAD: {responseMessage.GetPayload<GenericResponsePayload>()?.Message}");
+                        
+                        // Try the more reliable method first (with acknowledgment)
+                        try
+                        {
+                            bool sent = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
+                                this, 
+                                responseMessage, 
+                                message.SenderId, 
+                                timeoutMs: 5000,
+                                maxRetries: 3,
+                                useExponentialBackoff: true);
+                                
+                            if (sent)
+                            {
+                                Console.WriteLine("StartHand response sent with acknowledgment!");
+                            }
+                            else
+                            {
+                                Console.WriteLine("Failed to send StartHand response with acknowledgment after retries");
+                                Console.WriteLine("Falling back to direct send...");
+                                SendTo(responseMessage, message.SenderId);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error sending with acknowledgment: {ex.Message}");
+                            Console.WriteLine("Falling back to direct send...");
+                            SendTo(responseMessage, message.SenderId);
+                        }
+                        
                         Console.WriteLine("StartHand response sent!");
                     }
                     else

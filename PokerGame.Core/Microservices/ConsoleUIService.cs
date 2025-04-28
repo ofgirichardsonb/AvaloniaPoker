@@ -29,6 +29,10 @@ namespace PokerGame.Core.Microservices
     /// </summary>
     public class ConsoleUIService : MicroserviceBase
     {
+        // Test logging for build verification
+        static ConsoleUIService() {
+            Console.WriteLine("********** CONSOLE UI SERVICE LOADED - NEW VERSION WITH STARTHAND LOGGING **********");
+        }
         private GameStatePayload? _latestGameState;
         private readonly Dictionary<string, PlayerInfo> _players = new Dictionary<string, PlayerInfo>();
         private string? _gameEngineServiceId;
@@ -454,7 +458,7 @@ namespace PokerGame.Core.Microservices
                     break;
                     
                 case MessageType.GenericResponse:
-                    Console.WriteLine("========== RECEIVED GENERIC RESPONSE ==========");
+                    Console.WriteLine("********** RECEIVED GENERIC RESPONSE **********");
                     Console.WriteLine($"Message ID: {message.MessageId}");
                     Console.WriteLine($"In response to: {message.InResponseTo}");
                     Console.WriteLine($"From service: {message.SenderId}");
@@ -469,10 +473,18 @@ namespace PokerGame.Core.Microservices
                         // Handle specific responses
                         if (genericResponse.OriginalMessageType == MessageType.StartHand)
                         {
-                            Console.WriteLine("StartHand response received!");
+                            Console.WriteLine("********* STARTHAND RESPONSE RECEIVED! *********");
                             if (genericResponse.Success)
                             {
                                 Console.WriteLine("Hand started successfully!");
+                                
+                                // Acknowledge the message explicitly
+                                var ackMessage = Message.Create(MessageType.Acknowledgment);
+                                ackMessage.SenderId = _serviceId;
+                                ackMessage.ReceiverId = message.SenderId;
+                                ackMessage.InResponseTo = message.MessageId;
+                                Console.WriteLine($"Sending explicit acknowledgment for message {message.MessageId} to {message.SenderId}");
+                                SendTo(ackMessage, message.SenderId);
                             }
                             else
                             {
@@ -484,7 +496,7 @@ namespace PokerGame.Core.Microservices
                     {
                         Console.WriteLine("Warning: Received GenericResponse with null payload");
                     }
-                    Console.WriteLine("================================================");
+                    Console.WriteLine("************************************************");
                     break;
             }
             
