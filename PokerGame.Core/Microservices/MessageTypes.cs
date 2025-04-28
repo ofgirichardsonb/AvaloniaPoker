@@ -60,6 +60,9 @@ namespace PokerGame.Core.Microservices
         DeckStatus,
         DeckStatusResponse, // Response to status request
         
+        // Generic response message
+        GenericResponse,    // Generic response to any message
+        
         // Error messages
         Error
     }
@@ -395,6 +398,40 @@ namespace PokerGame.Core.Microservices
         /// Gets or sets the error code
         /// </summary>
         public string ErrorCode { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the error message
+        /// </summary>
+        public string ErrorMessage { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets additional details about the error
+        /// </summary>
+        public string Details { get; set; } = string.Empty;
+    }
+    
+    /// <summary>
+    /// Payload for generic response messages
+    /// </summary>
+    public class GenericResponsePayload
+    {
+        /// <summary>
+        /// Gets or sets whether the operation was successful
+        /// </summary>
+        [JsonPropertyName("success")]
+        public bool Success { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the type of the original message being responded to
+        /// </summary>
+        [JsonPropertyName("originalMessageType")]
+        public MessageType OriginalMessageType { get; set; }
+        
+        /// <summary>
+        /// Gets or sets an optional message
+        /// </summary>
+        [JsonPropertyName("message")]
+        public string Message { get; set; } = string.Empty;
         
         /// <summary>
         /// Gets or sets the error message

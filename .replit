@@ -30,7 +30,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "./poker-services.sh start-client --port-offset 200 --curses"
+args = "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 200 --curses"
 
 [[workflows.workflow]]
 name = "poker_curses"
@@ -38,7 +38,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "./poker-services.sh curses --port-offset=200"
+args = "cd /home/runner/workspace && ./poker-services.sh curses --port-offset=200"
 
 [[workflows.workflow]]
 name = "clean_poker_test"
@@ -46,10 +46,10 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "./poker-services.sh services-and-curses --port-offset 5000 --verbose"
+args = "cd /home/runner/workspace && ./poker-services.sh services-and-curses --port-offset 5000 --verbose"
 
 [deployment]
-run = ["sh", "-c", "./poker-services.sh start-client --port-offset 200 --curses"]
+run = ["sh", "-c", "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 200 --curses"]
 
 [[ports]]
 localPort = 5570

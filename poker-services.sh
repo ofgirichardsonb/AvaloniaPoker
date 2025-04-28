@@ -41,10 +41,10 @@ run_launcher() {
     done
     
     # Print the command to be executed
-    echo "Executing: dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --no-build -- ${args[*]}"
+    echo "Executing: dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --configuration Release --no-build -- ${args[*]}"
     
     # Run the launcher with the specified command and processed arguments
-    dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --no-build -- "${args[@]}"
+    dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --configuration Release --no-build -- "${args[@]}"
     
     return $?
 }

@@ -668,6 +668,26 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     
                     // Always broadcast the current state after processing
                     BroadcastGameState();
+                    
+                    // Send a direct response to the sender
+                    var responseMessage = Message.Create(MessageType.GenericResponse);
+                    responseMessage.SetPayload(new GenericResponsePayload
+                    {
+                        Success = true,
+                        OriginalMessageType = MessageType.StartHand,
+                        Message = $"Hand started successfully. Current state: {_gameEngine.State}"
+                    });
+                    
+                    if (!string.IsNullOrEmpty(message.SenderId))
+                    {
+                        Console.WriteLine($"Sending StartHand response to {message.SenderId}");
+                        SendTo(responseMessage, message.SenderId);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Cannot send StartHand response - sender ID is missing");
+                        Broadcast(responseMessage); // Fallback to broadcast
+                    }
                     break;
                     
                 case MessageType.PlayerAction:
@@ -717,14 +737,14 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             BroadcastGameState();
                             
                             // Send a response back to the UI
-                            var responseMessage = Message.Create(MessageType.ActionResponse);
-                            responseMessage.SetPayload(new ActionResponsePayload
+                            var actionResponseMessage = Message.Create(MessageType.ActionResponse);
+                            actionResponseMessage.SetPayload(new ActionResponsePayload
                             {
                                 Success = true,
                                 ActionType = actionPayload.ActionType,
                                 Message = $"Action {actionPayload.ActionType} processed successfully"
                             });
-                            SendTo(responseMessage, message.SenderId);
+                            SendTo(actionResponseMessage, message.SenderId);
                         }
                         catch (Exception ex)
                         {
@@ -732,14 +752,14 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             Console.WriteLine(ex.StackTrace);
                             
                             // Send failure response
-                            var responseMessage = Message.Create(MessageType.ActionResponse);
-                            responseMessage.SetPayload(new ActionResponsePayload
+                            var actionErrorResponseMessage = Message.Create(MessageType.ActionResponse);
+                            actionErrorResponseMessage.SetPayload(new ActionResponsePayload
                             {
                                 Success = false,
                                 ActionType = actionPayload.ActionType,
                                 Message = $"Error: {ex.Message}"
                             });
-                            SendTo(responseMessage, message.SenderId);
+                            SendTo(actionErrorResponseMessage, message.SenderId);
                         }
                     }
                     else
