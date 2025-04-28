@@ -5,6 +5,7 @@ using System.Threading;
 using PokerGame.Core.Game;
 using PokerGame.Core.Interfaces;
 using PokerGame.Core.Models;
+using GameStateEnum = PokerGame.Core.Game.GameState;
 
 namespace PokerGame.Console
 {
@@ -63,7 +64,7 @@ namespace PokerGame.Console
                     if (string.IsNullOrWhiteSpace(name))
                         name = $"Player {i+1}";
                         
-                    players.Add(new Player(name, 1000)); // Start with 1000 chips
+                    players.Add(new Player(name, "1000")); // Start with 1000 chips
                 }
                 
                 // Initialize game
@@ -368,8 +369,8 @@ namespace PokerGame.Console
                     
                     if (winner.CurrentHand != null)
                     {
-                        System.Console.WriteLine($"║  Winning hand: {winner.CurrentHand.Rank}".PadRight(57) + " ║");
-                        System.Console.WriteLine($"║  Cards: {FormatCards(winner.CurrentHand.Cards)}".PadRight(57) + " ║");
+                        System.Console.WriteLine($"║  Winning hand: {winner.CurrentHand}".PadRight(57) + " ║");
+                        System.Console.WriteLine($"║  Cards: {FormatCards(winner.HoleCards)}".PadRight(57) + " ║");
                     }
                 }
                 else
@@ -385,7 +386,7 @@ namespace PokerGame.Console
                     var firstWinner = winners[0];
                     if (firstWinner.CurrentHand != null)
                     {
-                        System.Console.WriteLine($"║  Winning hand: {firstWinner.CurrentHand.Rank}".PadRight(57) + " ║");
+                        System.Console.WriteLine($"║  Winning hand: {firstWinner.CurrentHand}".PadRight(57) + " ║");
                     }
                 }
                 

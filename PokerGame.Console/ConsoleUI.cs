@@ -4,6 +4,7 @@ using System.Linq;
 using PokerGame.Core.Game;
 using PokerGame.Core.Interfaces;
 using PokerGame.Core.Models;
+using GameStateEnum = PokerGame.Core.Game.GameState;
 
 namespace PokerGame.Console
 {
@@ -60,8 +61,8 @@ namespace PokerGame.Console
             {
                 switch (_gameEngine.State)
                 {
-                    case GameState.WaitingToStart:
-                    case GameState.HandComplete:
+                    case GameStateEnum.WaitingToStart:
+                    case GameStateEnum.HandComplete:
                         // Ask to start a new hand or exit
                         System.Console.WriteLine();
                         System.Console.WriteLine("Press Enter to start a new hand or 'Q' to quit.");
@@ -162,7 +163,7 @@ namespace PokerGame.Console
         /// <param name="gameEngine">The current game engine instance</param>
         public void UpdateGameState(PokerGameEngine gameEngine)
         {
-            if (gameEngine.State == GameState.HandComplete)
+            if (gameEngine.State == GameStateEnum.HandComplete)
                 return;
                 
             System.Console.WriteLine();
