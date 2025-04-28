@@ -225,7 +225,7 @@ namespace PokerGame.Core.Messaging
         /// Publishes a message
         /// </summary>
         /// <param name="message">The message to publish</param>
-        public void Publish(SimpleMessage message)
+        public void Publish(NetworkMessage message)
         {
             if (_disposed)
             {
@@ -403,7 +403,7 @@ namespace PokerGame.Core.Messaging
                                 try
                                 {
                                     // Deserialize and process the message
-                                    SimpleMessage message = JsonSerializer.Deserialize<SimpleMessage>(json);
+                                    NetworkMessage message = JsonSerializer.Deserialize<NetworkMessage>(json);
                                     
                                     // Don't skip response messages that are addressed directly to us
                                     bool isResponseToUs = !string.IsNullOrEmpty(message.InResponseTo) && message.ReceiverId == _serviceId;
@@ -646,14 +646,14 @@ namespace PokerGame.Core.Messaging
         /// <summary>
         /// The received message
         /// </summary>
-        public SimpleMessage Message { get; }
+        public NetworkMessage Message { get; }
         
         /// <summary>
         /// The raw JSON of the message
         /// </summary>
         public string RawJson { get; }
         
-        public MessageReceivedEventArgs(SimpleMessage message, string rawJson)
+        public MessageReceivedEventArgs(NetworkMessage message, string rawJson)
         {
             Message = message;
             RawJson = rawJson;

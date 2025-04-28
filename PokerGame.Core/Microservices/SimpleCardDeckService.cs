@@ -126,7 +126,7 @@ namespace PokerGame.Core.Microservices
                 
                 // Send the response
                 var response = SimpleMessage.CreateResponse(SimpleMessageType.CardDeal, message, responsePayload);
-                PublishMessage(response);
+                PublishMessage(response.ToNetworkMessage());
                 
                 Logger.Log($"Dealt {dealtCards.Count} cards from deck {dealPayload.DeckId}. Remaining: {deck.RemainingCards}");
             }
@@ -175,7 +175,7 @@ namespace PokerGame.Core.Microservices
                 
                 // Send the response
                 var response = SimpleMessage.CreateResponse(SimpleMessageType.DeckShuffle, message, responsePayload);
-                PublishMessage(response);
+                PublishMessage(response.ToNetworkMessage());
                 
                 Logger.Log($"Shuffled deck {shufflePayload.DeckId}. Remaining cards: {deck.RemainingCards}");
             }
@@ -265,13 +265,13 @@ namespace PokerGame.Core.Microservices
                 // Send an acknowledgment for the original message
                 var ackMessage = SimpleMessage.CreateAcknowledgment(message);
                 ackMessage.SenderId = ServiceId;
-                PublishMessage(ackMessage);
+                PublishMessage(ackMessage.ToNetworkMessage());
                 Logger.Log($"Sent acknowledgment for message: {message.MessageId}");
                 
                 // Send a specific response - use DeckCreate response type
                 var response = SimpleMessage.CreateResponse(SimpleMessageType.DeckCreate, message, responsePayload);
                 response.SenderId = ServiceId;
-                PublishMessage(response);
+                PublishMessage(response.ToNetworkMessage());
                 Logger.Log($"Sent deck create response for deck: {deckId}");
             }
             catch (Exception ex)
@@ -289,7 +289,7 @@ namespace PokerGame.Core.Microservices
         private void SendErrorResponse(SimpleMessage originalMessage, string errorMessage)
         {
             var errorResponse = SimpleMessage.CreateError(originalMessage, errorMessage);
-            PublishMessage(errorResponse);
+            PublishMessage(errorResponse.ToNetworkMessage());
             
             Logger.LogError($"Sent error response: {errorMessage}", null);
         }

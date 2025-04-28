@@ -183,7 +183,7 @@ namespace PokerGame.Core.Microservices
                 var message = SimpleMessage.Create(SimpleMessageType.DeckCreate, payload);
                 message.ReceiverId = _cardDeckServiceId;
                 
-                PublishMessage(message);
+                PublishMessage(message.ToNetworkMessage());
                 
                 // In a real implementation, we would wait for the response from the card deck service
                 // For simplicity, we just wait a moment and then use the local deck if needed
@@ -358,7 +358,7 @@ namespace PokerGame.Core.Microservices
                 
                 // Create and publish the message
                 var message = SimpleMessage.Create(SimpleMessageType.GameState, gameStatePayload);
-                PublishMessage(message);
+                PublishMessage(message.ToNetworkMessage());
                 
                 Logger.Log("Game state broadcast successful");
             }
@@ -849,7 +849,7 @@ namespace PokerGame.Core.Microservices
             
             // Broadcast the showdown results
             var message = SimpleMessage.Create(SimpleMessageType.GameState, gameStatePayload);
-            PublishMessage(message);
+            PublishMessage(message.ToNetworkMessage());
             
             // Reset the pot
             _pot = 0;

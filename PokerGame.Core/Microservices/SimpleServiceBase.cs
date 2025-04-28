@@ -179,7 +179,8 @@ namespace PokerGame.Core.Microservices
                     var heartbeatMessage = SimpleMessage.Create(SimpleMessageType.Heartbeat);
                     heartbeatMessage.SenderId = _serviceId;
                     
-                    PublishMessage(heartbeatMessage);
+                    // Convert to NetworkMessage and publish
+                    PublishMessage(heartbeatMessage.ToNetworkMessage());
                     
                     await Task.Delay(5000, _cancellationTokenSource.Token);
                 }
@@ -216,7 +217,8 @@ namespace PokerGame.Core.Microservices
                     var registrationMessage = SimpleMessage.Create(SimpleMessageType.ServiceRegistration, payload);
                     registrationMessage.SenderId = _serviceId;
                     
-                    PublishMessage(registrationMessage);
+                    // Convert to NetworkMessage and publish
+                    PublishMessage(registrationMessage.ToNetworkMessage());
                     
                     await Task.Delay(10000, _cancellationTokenSource.Token);
                 }
@@ -235,7 +237,7 @@ namespace PokerGame.Core.Microservices
         /// Publishes a message to all subscribers
         /// </summary>
         /// <param name="message">The message to publish</param>
-        protected void PublishMessage(SimpleMessage message)
+        protected void PublishMessage(NetworkMessage message)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
@@ -253,8 +255,9 @@ namespace PokerGame.Core.Microservices
         {
             if (e.Message != null)
             {
-                // The message is already a SimpleMessage, so we can just handle it directly
-                HandleMessage(e.Message);
+                // Convert NetworkMessage to SimpleMessage for backward compatibility
+                SimpleMessage simpleMessage = e.Message.ToSimpleMessage();
+                HandleMessage(simpleMessage);
             }
         }
         
@@ -338,7 +341,8 @@ namespace PokerGame.Core.Microservices
             var acknowledgment = SimpleMessage.CreateAcknowledgment(message);
             acknowledgment.SenderId = _serviceId;
             
-            PublishMessage(acknowledgment);
+            // Convert to NetworkMessage and publish
+            PublishMessage(acknowledgment.ToNetworkMessage());
         }
 
         /// <summary>
@@ -368,7 +372,8 @@ namespace PokerGame.Core.Microservices
             var ackAck = SimpleMessage.CreateAcknowledgment(message);
             ackAck.SenderId = _serviceId;
             
-            PublishMessage(ackAck);
+            // Convert to NetworkMessage and publish
+            PublishMessage(ackAck.ToNetworkMessage());
         }
 
         /// <summary>
