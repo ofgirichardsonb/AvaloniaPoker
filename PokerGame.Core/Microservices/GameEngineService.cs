@@ -8,6 +8,8 @@ using PokerGame.Core.Models;
 using PokerGame.Core.Messaging;
 using PokerGame.Core.ServiceManagement;
 using PokerGame.Abstractions;
+using System.Threading;
+using MSA.Foundation.Messaging;
 
 namespace PokerGame.Core.Microservices
 {
@@ -30,6 +32,57 @@ namespace PokerGame.Core.Microservices
         /// Gets a value indicating whether the service is currently running
         /// </summary>
         public bool IsRunning { get; private set; }
+        
+        /// <summary>
+        /// Handles a message received from another service asynchronously
+        /// </summary>
+        /// <param name="message">The message to handle</param>
+        /// <returns>A task that completes when the message is handled</returns>
+        public async Task HandleMessageAsync(MSA.Foundation.Messaging.Message message)
+        {
+            Console.WriteLine($"GameEngineService.HandleMessageAsync received message {message.MessageId}");
+            
+            try
+            {
+                // Convert MSA message to a NetworkMessage format we can handle
+                var convertedMessage = new PokerGame.Core.Messaging.NetworkMessage
+                {
+                    MessageId = message.MessageId,
+                    SenderId = message.SenderId,
+                    ReceiverId = message.ReceiverId
+                };
+                
+                // Set the message type based on a string conversion
+                if (Enum.TryParse<PokerGame.Core.Messaging.MessageType>(message.MessageType.ToString(), out var msgType))
+                {
+                    convertedMessage.Type = msgType;
+                }
+                else
+                {
+                    convertedMessage.Type = PokerGame.Core.Messaging.MessageType.Debug;
+                }
+                
+                // Add any payload data if present
+                if (message.Payload != null)
+                {
+                    convertedMessage.Payload = message.Payload;
+                }
+                
+                // Convert NetworkMessage to Message format using our utility method
+                var microserviceMessage = ConvertToMicroserviceMessage(convertedMessage);
+                
+                // Process message based on converted type
+                await HandleMessageInternalAsync(microserviceMessage);
+                
+                // Return a completed task
+                await Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling MSA message: {ex.Message}");
+                throw;
+            }
+        }
         
         // Dictionary to keep track of known services and their capabilities
         private readonly Dictionary<string, ServiceRegistrationPayload> _knownServices = new Dictionary<string, ServiceRegistrationPayload>();
@@ -229,9 +282,9 @@ namespace PokerGame.Core.Microservices
         /// Directly handle a service registration message
         /// </summary>
         /// <param name="message">The service registration message</param>
-        public void HandleServiceRegistration(Message message)
+        public void HandleServiceRegistration(PokerGame.Core.Microservices.Message message)
         {
-            if (message.Type == MessageType.ServiceRegistration)
+            if (message.Type == PokerGame.Core.Microservices.MessageType.ServiceRegistration)
             {
                 var payload = message.GetPayload<ServiceRegistrationPayload>();
                 if (payload != null)
@@ -241,6 +294,30 @@ namespace PokerGame.Core.Microservices
                     Console.WriteLine($"Directly registered service: {payload.ServiceName} (ID: {payload.ServiceId}, Type: {payload.ServiceType})");
                 }
             }
+        }
+        
+        /// <summary>
+        /// Converts between NetworkMessage and Microservice Message types
+        /// </summary>
+        private PokerGame.Core.Microservices.Message ConvertToMicroserviceMessage(PokerGame.Core.Messaging.NetworkMessage networkMessage)
+        {
+            var microserviceMessage = new PokerGame.Core.Microservices.Message
+            {
+                MessageId = networkMessage.MessageId,
+                SenderId = networkMessage.SenderId,
+                ReceiverId = networkMessage.ReceiverId,
+                InResponseTo = networkMessage.InResponseTo,
+                Payload = networkMessage.Payload
+            };
+            
+            // Set the message type appropriately based on a string mapping
+            if (Enum.TryParse<PokerGame.Core.Microservices.MessageType>(
+                networkMessage.Type.ToString(), out var msgType))
+            {
+                microserviceMessage.Type = msgType;
+            }
+            
+            return microserviceMessage;
         }
         
         /// <summary>

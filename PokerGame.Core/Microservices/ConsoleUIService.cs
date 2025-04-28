@@ -34,610 +34,309 @@ namespace PokerGame.Core.Microservices
         static ConsoleUIService() {
             Console.WriteLine("********** CONSOLE UI SERVICE LOADED - NEW VERSION WITH STARTHAND LOGGING **********");
         }
-        private GameStatePayload? _latestGameState;
-        private readonly Dictionary<string, PlayerInfo> _players = new Dictionary<string, PlayerInfo>();
-        private string? _gameEngineServiceId;
+        
+        private readonly bool _useEnhancedUI = false;
+        private object _enhancedUiInstance = null;
+        private Task _inputProcessingTask = null;
+        private string _gameEngineServiceId = null;
         private bool _waitingForPlayerAction = false;
-        private string _activePlayerId = string.Empty;
-        private bool _useEnhancedUI; // When true, use the curses UI (internal variable still called "enhanced" for backward compatibility)
-        private object? _enhancedUiInstance; // Will hold a dynamic reference to CursesUI when needed (internal var still named "enhanced" for compatibility)
-        private bool _autoPlayMode = false; // Auto-play flag for automated testing
+        private string _activePlayerId = null;
+        private Dictionary<string, Models.Player> _players = new Dictionary<string, Models.Player>();
+        private PokerGame.Core.Game.GameState _latestGameState = null;
         
         /// <summary>
-        /// Creates a new console UI service
+        /// Creates a new instance of the ConsoleUIService
         /// </summary>
-        /// <param name="publisherPort">The port to use for publishing messages</param>
-        /// <param name="subscriberPort">The port to use for subscribing to messages</param>
-        /// <param name="useCurses">Whether to use the curses UI (preferred flag name, same as enhanced UI)</param>
-        /// <param name="autoPlay">Whether to auto-play for non-interactive testing</param>
-        public ConsoleUIService(int publisherPort, int subscriberPort, bool useCurses = false, bool autoPlay = false) 
-            : base(ServiceConstants.ServiceTypes.ConsoleUI, "Console UI", publisherPort, subscriberPort)
+        /// <param name="executionContext">The microservice execution context</param>
+        /// <param name="enhancedUI">Whether to use enhanced UI mode (box drawing, etc)</param>
+        public ConsoleUIService(MSA.Foundation.ServiceManagement.ExecutionContext executionContext, bool enhancedUI = false) 
+            : base(executionContext)
         {
-            _useEnhancedUI = useCurses; // Note: the flag is called "curses" but internally still referred to as "enhanced" 
-            _autoPlayMode = autoPlay;
-            Console.WriteLine($"ConsoleUIService created with curses UI: {_useEnhancedUI}, Auto-play: {_autoPlayMode}");
+            _useEnhancedUI = enhancedUI;
             
-            // Defer initialization of the curses UI to the Start method
-            // This ensures proper sequencing with other microservices
-        }
-        
-        /// <summary>
-        /// Starts the UI service
-        /// </summary>
-        public override void Start()
-        {
-            // Initialize logging before anything else
-            PokerGame.Core.Logging.LogInitializer.InitializeLogging("ConsoleUIService");
-            
-            base.Start();
-            
-            // Log the current state of the UI flag
-            Console.WriteLine($"ConsoleUIService starting with curses UI flag: {_useEnhancedUI}");
-            PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", $"Starting with curses UI: {_useEnhancedUI}");
-            
-            // Initialize curses UI if requested - doing this here ensures proper initialization order
-            if (_useEnhancedUI && _enhancedUiInstance == null)
+            // Try to load the CursesUI if enhanced mode is requested
+            if (_useEnhancedUI)
             {
                 try
                 {
-                    Console.WriteLine("Initializing Curses UI in Start method...");
-                    PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", "Initializing Curses UI...");
-                    
-                    // Use detailed diagnostics during initialization
-                    Console.WriteLine("Curses UI initialization process:");
-                    Console.WriteLine("1. Looking for CursesUI type");
-                    
-                    // Create CursesUI instance via reflection to avoid direct dependency
-                    var cursesUIType = Type.GetType("PokerGame.Console.CursesUI, PokerGame.Console");
-                    Console.WriteLine($"   Found CursesUI type: {(cursesUIType != null ? "YES" : "NO")}");
+                    // Look for the CursesUI type in all loaded assemblies
+                    var cursesUIType = AppDomain.CurrentDomain.GetAssemblies()
+                        .SelectMany(a => a.GetTypes())
+                        .FirstOrDefault(t => t.Name == "CursesUI");
                     
                     if (cursesUIType != null)
                     {
-                        Console.WriteLine("2. Creating instance of CursesUI");
                         _enhancedUiInstance = Activator.CreateInstance(cursesUIType);
-                        Console.WriteLine("   Successfully created Curses UI instance");
-                        
-                        // Call Initialize method
-                        Console.WriteLine("3. Looking for Initialize method");
-                        var initMethod = cursesUIType.GetMethod("Initialize");
-                        Console.WriteLine($"   Found Initialize method: {(initMethod != null ? "YES" : "NO")}");
-                        
-                        if (initMethod != null)
-                        {
-                            Console.WriteLine("4. Calling Initialize method");
-                            initMethod.Invoke(_enhancedUiInstance, null);
-                            Console.WriteLine("   Successfully initialized Curses UI");
-                            
-                            // Force a Console.Clear() to clean the display after initialization
-                            Console.Clear();
-                            Console.WriteLine("★★★ CURSES UI ACTIVE ★★★");
-                        }
-                        else
-                        {
-                            Console.WriteLine("   ERROR: Could not find Initialize method on CursesUI");
-                            _useEnhancedUI = false;
-                        }
+                        Console.WriteLine("CursesUI loaded successfully");
                     }
                     else
                     {
                         Console.WriteLine("   ERROR: Curses UI requested but CursesUI class not found");
-                        _useEnhancedUI = false;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error initializing curses UI: {ex.Message}");
-                    Console.WriteLine(ex.StackTrace);
-                    _useEnhancedUI = false;
+                    Console.WriteLine($"Error loading CursesUI: {ex.Message}");
                 }
             }
-            
-            // Provide clear indication whether curses UI is active
-            Console.WriteLine($"►► Console UI service using curses UI: {_useEnhancedUI} ◄◄");
-            
-            // Start the input processing task
-            Task.Run(ProcessUserInputAsync);
         }
         
         /// <summary>
-        /// Starts the console UI service asynchronously with improved service discovery
+        /// Starts the console UI service
         /// </summary>
         public override async Task StartAsync()
         {
-            // Initialize our file logger as early as possible
-            PokerGame.Core.Logging.FileLogger.Initialize();
-            string logPath = PokerGame.Core.Logging.FileLogger.GetLogFilePath();
-            Console.WriteLine($"******************************************");
-            Console.WriteLine($"* ConsoleUIService initialized FileLogger");
-            Console.WriteLine($"* Log path: {logPath}");
-            Console.WriteLine($"******************************************");
+            // Ensure the service ID is set
+            _serviceId = _serviceId ?? Guid.NewGuid().ToString();
             
-            PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", "Service starting up");
+            Console.WriteLine($"ConsoleUIService starting with ID: {_serviceId}");
             
-            await base.StartAsync();
+            // Use the base class cancellation token source that is already set up
+            _cancellationTokenSource = _cancellationTokenSource ?? new CancellationTokenSource();
             
-            Console.WriteLine("ConsoleUIService.StartAsync started - setting up enhanced service discovery");
-            PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", "Setting up enhanced service discovery");
-            
-            // Register to the broker more aggressively
-            for (int i = 0; i < 5; i++)
-            {
-                Console.WriteLine($"Publishing service registration (attempt {i+1}/5)...");
-                PublishServiceRegistration();
-                await Task.Delay(200);
-            }
-            
-            // Start active discovery process in the background
+            // Start discovery in the background
             _ = Task.Run(ActiveServiceDiscoveryAsync);
+            
+            // Start processing user input in a separate task
+            _inputProcessingTask = Task.Run(ProcessUserInputAsync);
+            
+            PublishServiceRegistration();
+            
+            Console.WriteLine("ConsoleUIService started successfully");
         }
         
         /// <summary>
-        /// Actively discovers services by repeatedly sending discovery messages
+        /// Actively discovers services by periodically sending discovery messages
         /// </summary>
         private async Task ActiveServiceDiscoveryAsync()
         {
-            int maxWaitAttempts = ServiceConstants.Discovery.MaxServiceDiscoveryAttempts;
-            int attemptDelayMs = ServiceConstants.Discovery.ServiceDiscoveryDelayMs;
+            // Use the base class cancellation token
+            var token = _cancellationTokenSource?.Token ?? CancellationToken.None;
             
-            Console.WriteLine($"Starting ACTIVE game engine discovery process (max attempts: {maxWaitAttempts}, delay: {attemptDelayMs}ms)");
-            Console.WriteLine($"ConsoleUI using ports - Publisher: {_publisherPort}, Subscriber: {_subscriberPort}");
-            
-            // Broadcast initial port configuration for debugging
-            var debugPortsMsg = Message.Create(MessageType.Debug, 
-                $"ConsoleUI [{_serviceId}] port configuration - Publisher: {_publisherPort}, Subscriber: {_subscriberPort}");
-            debugPortsMsg.SenderId = _serviceId;
-            Broadcast(debugPortsMsg);
-            
-            // Print our current service registry
-            Console.WriteLine("Current service registry contents:");
-            var serviceTypes = GetServiceTypes();
-            foreach (var svc in serviceTypes)
-            {
-                Console.WriteLine($"  - Service {svc.Key} of type {svc.Value}");
-            }
-            
-            // Try to make socket connectivity more robust
-            Console.WriteLine("Ensuring communication is initialized correctly...");
             try
             {
-                // In the refactored version, we don't directly manipulate sockets
-                // Socket management is handled by the base class and SocketCommunicationAdapter
-                Console.WriteLine($"Communication channels - Publisher: {_publisherPort}, Subscriber: {_subscriberPort}");
-                
-                // Give the sockets time to initialize
-                await Task.Delay(500);
-                Console.WriteLine("Communication channels ready.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error initializing communication: {ex.Message}");
-            }
-            
-            Console.WriteLine("USING STATIC SERVICE ID APPROACH for direct connection");
-            
-            // Start with the static ID immediately for more reliable connection
-            Console.WriteLine($"Using static game engine ID: {ServiceConstants.StaticServiceIds.GameEngine}");
-            _gameEngineServiceId = ServiceConstants.StaticServiceIds.GameEngine;
-            
-            // Send a direct registration message to the game engine
-            var regMsg = Message.Create(MessageType.Debug, 
-                $"STATIC ID CONNECTION: ConsoleUI [{_serviceId}] connecting directly to GameEngine {_gameEngineServiceId}");
-            regMsg.SenderId = _serviceId; 
-            regMsg.ReceiverId = _gameEngineServiceId;
-            SendTo(regMsg, _gameEngineServiceId);
-            
-            int waitAttempts = 0;
-            bool gameEngineFound = false;
-            
-            // Still publish registration for backward compatibility
-            for (int i = 0; i < 3; i++)
-            {
-                PublishServiceRegistration();
-                await Task.Delay(100);
-            }
-            
-            while (!gameEngineFound && waitAttempts < maxWaitAttempts)
-            {
-                waitAttempts++;
-                Console.WriteLine($"Direct connection attempt {waitAttempts}/{maxWaitAttempts}");
-                
-                // First, check if any game engine services are already registered
-                var gameEngineSvcIds = GetServicesOfType(ServiceConstants.ServiceTypes.GameEngine);
-                if (gameEngineSvcIds.Count > 0)
+                while (!token.IsCancellationRequested)
                 {
-                    _gameEngineServiceId = gameEngineSvcIds[0];
-                    Console.WriteLine($"!!! Found game engine service with ID: {_gameEngineServiceId} !!!");
-                    gameEngineFound = true;
-                    break;
-                }
-                
-                // If we don't find any services and we're on a broadcast interval, send aggressive broadcasts
-                if (waitAttempts % 3 == 0)
-                {
-                    Console.WriteLine("*** BROADCASTING AGGRESSIVE SERVICE REGISTRATION ***");
-                    
-                    // Create a very clear message for the console log
-                    var directMsg = Message.Create(MessageType.Debug,
-                        $"DIRECT CONNECTION ATTEMPT: ConsoleUI [{_serviceId}] on attempt {waitAttempts}");
-                    directMsg.SenderId = _serviceId;
-                    Console.WriteLine($"Broadcasting direct connection message with ID {directMsg.MessageId}");
-                    Broadcast(directMsg);
-                    
-                    // Send 3 registration messages in quick succession
-                    for (int i = 0; i < 3; i++)
+                    try
                     {
-                        PublishServiceRegistration();
-                        await Task.Delay(50);
+                        // Send a service discovery message
+                        var message = Message.Create(MessageType.ServiceDiscovery);
+                        message.SenderId = _serviceId;
+                        Broadcast(message);
+                        
+                        // Wait before sending again
+                        await Task.Delay(5000, token);
                     }
-                    
-                    // Try creating direct connections with each standard port offset
-                    Console.WriteLine("Trying direct connection on multiple port offsets");
-                    foreach (int portOffset in ServiceConstants.Discovery.StandardPortOffsets)
-                    {
-                        try
-                        {
-                            // Try to connect to game engine at this port offset
-                            int potentialPort = ServiceConstants.Ports.GetGameEnginePublisherPort(portOffset);
-                            Console.WriteLine($"Direct connection attempt to port {potentialPort} (offset {portOffset})");
-                            
-                            // Special registration message for this offset
-                            var portMsg = Message.Create(MessageType.Debug,
-                                $"DIRECT CONNECTION: ConsoleUI [{_serviceId}] to port {potentialPort} on offset {portOffset}");
-                            portMsg.SenderId = _serviceId;
-                            portMsg.MessageId = Guid.NewGuid().ToString();
-                            Broadcast(portMsg);
-                            
-                            // Send a service discovery message
-                            var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
-                            discoveryMsg.SenderId = _serviceId;
-                            discoveryMsg.MessageId = Guid.NewGuid().ToString();
-                            Broadcast(discoveryMsg);
-                            
-                            // Wait briefly
-                            await Task.Delay(100);
-                            
-                            // Check if we found any services after this specific attempt
-                            gameEngineSvcIds = GetServicesOfType(ServiceConstants.ServiceTypes.GameEngine);
-                            if (gameEngineSvcIds.Count > 0)
-                            {
-                                _gameEngineServiceId = gameEngineSvcIds[0];
-                                Console.WriteLine($"!!! Direct connection on port {potentialPort} found game engine: {_gameEngineServiceId} !!!");
-                                gameEngineFound = true;
-                                break;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Error in direct connection attempt on port offset {portOffset}: {ex.Message}");
-                        }
-                    }
-                    
-                    // If we found the game engine in the port loops, break out of the main loop
-                    if (gameEngineFound)
+                    catch (OperationCanceledException)
                     {
                         break;
                     }
-                }
-                
-                // Wait before next attempt
-                await Task.Delay(attemptDelayMs);
-            }
-            
-            // Final check and fallback
-            if (_gameEngineServiceId != null && gameEngineFound)
-            {
-                Console.WriteLine($"Successfully connected to game engine service: {_gameEngineServiceId}");
-                
-                // Send a message to the game engine to confirm connection
-                var confirmMsg = Message.Create(MessageType.Debug, 
-                    $"CONNECTION ESTABLISHED: ConsoleUI [{_serviceId}] to GameEngine {_gameEngineServiceId}");
-                confirmMsg.SenderId = _serviceId;
-                confirmMsg.ReceiverId = _gameEngineServiceId;
-                SendTo(confirmMsg, _gameEngineServiceId);
-                
-                // Get information about available services
-                Console.WriteLine("Available services after direct connection:");
-                foreach (var entry in GetServiceTypes())
-                {
-                    Console.WriteLine($"- {entry.Key}: {entry.Value}");
-                }
-            }
-            else
-            {
-                Console.WriteLine("ERROR: Could not find game engine service after maximum wait time.");
-                Console.WriteLine("Using dummy game engine service ID as fallback.");
-                _gameEngineServiceId = ServiceConstants.StaticServiceIds.GameEngine;
-                
-                // Display service registry one more time
-                Console.WriteLine("Final service registry contents after direct connection attempts:");
-                var finalServiceTypes = GetServiceTypes();
-                foreach (var svc in finalServiceTypes)
-                {
-                    Console.WriteLine($"  - Service {svc.Key}: {svc.Value}");
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Called when a new service is registered
-        /// </summary>
-        /// <param name="registrationInfo">The service registration information</param>
-        protected override void OnServiceRegistered(ServiceRegistrationPayload registrationInfo)
-        {
-            try
-            {
-                // Keep track of the game engine service
-                if (registrationInfo.ServiceType == ServiceConstants.ServiceTypes.GameEngine)
-                {
-                    _gameEngineServiceId = registrationInfo.ServiceId;
-                    Console.WriteLine($"Connected to game engine service: {registrationInfo.ServiceName} (ID: {registrationInfo.ServiceId})");
-                    
-                    // Print debug information
-                    Console.WriteLine("Available services:");
-                    foreach (var entry in GetServiceTypes())
+                    catch (Exception ex)
                     {
-                        Console.WriteLine($"- {entry.Key}: {entry.Value}");
+                        Console.WriteLine($"Error in service discovery: {ex.Message}");
+                        await Task.Delay(1000, token);
                     }
-                    
-                    // Log additional discovery information
-                    Console.WriteLine("Game Engine service found - no longer need to wait for it");
                 }
-                else
-                {
-                    // Print information about other service types too
-                    Console.WriteLine($"Service registered: {registrationInfo.ServiceName} (Type: {registrationInfo.ServiceType}, ID: {registrationInfo.ServiceId})");
-                }
-                
-                // Perform an additional broadcast now that we have services registered
-                PublishServiceRegistration();
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal cancellation
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in service registration: {ex.Message}");
+                Console.WriteLine($"Active service discovery exited with error: {ex.Message}");
             }
+            
+            Console.WriteLine("Service discovery task exited");
         }
         
         /// <summary>
-        /// Gets a mapping of service IDs to service types
+        /// Publishes the service registration to the network
         /// </summary>
-        /// <returns>Dictionary of service IDs to types</returns>
-        private Dictionary<string, string> GetServiceTypes()
+        protected void PublishServiceRegistration()
         {
-            // This is a debug helper method to see what services are available
-            // First, get current service registry status
-            var registry = GetServiceRegistry();
-            Console.WriteLine($"Service registry has {registry.Count} entries");
-            return registry;
+            // Socket management is handled by the base class and SocketCommunicationAdapter
+            var message = Message.Create(MessageType.ServiceRegistration);
+            message.MessageId = Guid.NewGuid().ToString();
+            message.SenderId = _serviceId;
+            message.Data = new Dictionary<string, object>
+            {
+                { "ServiceId", _serviceId },
+                { "ServiceType", "ConsoleUI" }
+            };
+            
+            // Broadcast the registration
+            Broadcast(message);
+            
+            Console.WriteLine($"Published service registration: ConsoleUI with ID {_serviceId}");
         }
         
         /// <summary>
-        /// Handles messages received from other microservices
+        /// Handles an incoming message
         /// </summary>
         /// <param name="message">The message to handle</param>
         public override async Task HandleMessageAsync(Message message)
         {
-            switch (message.Type)
+            if (message == null)
             {
-                case MessageType.GameState:
-                    var gameState = message.GetPayload<GameStatePayload>();
-                    if (gameState != null)
-                    {
-                        _latestGameState = gameState;
-                        DisplayGameState();
-                    }
-                    break;
-                    
-                case MessageType.PlayerUpdate:
-                    var playerInfo = message.GetPayload<PlayerInfo>();
-                    if (playerInfo != null)
-                    {
-                        _players[playerInfo.PlayerId] = playerInfo;
-                    }
-                    break;
-                    
-                case MessageType.DisplayUpdate:
-                    var displayText = message.GetPayload<string>();
-                    if (!string.IsNullOrEmpty(displayText))
-                    {
-                        Console.WriteLine(displayText);
-                    }
-                    break;
-                
-                case MessageType.ActionResponse:
-                    var response = message.GetPayload<ActionResponsePayload>();
-                    if (response != null)
-                    {
-                        Console.WriteLine($"Action response received: {response.Message}");
-                        if (!response.Success)
-                        {
-                            Console.WriteLine($"Error processing action: {response.Message}");
-                            // If the action failed, we might want to re-prompt the player
-                            _waitingForPlayerAction = true;
-                        }
-                    }
-                    break;
-                    
-                case MessageType.PlayerAction:
-                    var actionPlayer = message.GetPayload<PlayerInfo>();
-                    if (actionPlayer != null)
-                    {
-                        _waitingForPlayerAction = true;
-                        _activePlayerId = actionPlayer.PlayerId;
-                        
-                        // Make sure we have this player in our players dictionary
-                        if (!_players.ContainsKey(_activePlayerId))
-                        {
-                            _players[_activePlayerId] = actionPlayer;
-                        }
-                        
-                        DisplayActionPrompt(actionPlayer);
-                    }
-                    break;
-                    
-                case MessageType.Acknowledgment:
-                    Console.WriteLine("\n\n");
-                    Console.WriteLine("**********************************************************");
-                    Console.WriteLine("*                                                        *");
-                    Console.WriteLine("*         CONSOLE UI RECEIVED ACKNOWLEDGMENT             *");
-                    Console.WriteLine("*                                                        *");
-                    Console.WriteLine("**********************************************************");
-                    Console.WriteLine("\n\n");
-                    
-                    Console.WriteLine($"Acknowledgment message ID: {message.MessageId}");
-                    Console.WriteLine($"In response to message: {message.InResponseTo}");
-                    Console.WriteLine($"From: {message.SenderId}");
-                    Console.WriteLine($"To: {message.ReceiverId ?? "broadcast"}");
-                    
-                    // Use FileLogger for better tracing
-                    PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                        $"RECEIVED ACKNOWLEDGMENT - ID: {message.MessageId}, For: {message.InResponseTo}, From: {message.SenderId}");
-                    
-                    // Don't need to respond to acknowledgments - that would create an infinite loop
-                    Console.WriteLine("Acknowledgment processed successfully.");
-                    Console.WriteLine("================================================");
-                    break;
-                    
-                case MessageType.GenericResponse:
-                    Console.WriteLine("\n\n");
-                    Console.WriteLine("**********************************************************");
-                    Console.WriteLine("*                                                        *");
-                    Console.WriteLine("*         CONSOLE UI RECEIVED GENERIC RESPONSE           *");
-                    Console.WriteLine("*                                                        *");
-                    Console.WriteLine("**********************************************************");
-                    Console.WriteLine("\n\n");
-                    
-                    Console.WriteLine("********** RECEIVED GENERIC RESPONSE **********");
-                    Console.WriteLine($"Message ID: {message.MessageId}");
-                    Console.WriteLine($"In response to: {message.InResponseTo}");
-                    Console.WriteLine($"From service: {message.SenderId}");
-                    Console.WriteLine($"To service: {message.ReceiverId}");
-                    Console.WriteLine($"Our service ID: {_serviceId}");
-                    
-                    // Check if this message is actually for us
-                    if (!string.IsNullOrEmpty(message.ReceiverId) && message.ReceiverId != _serviceId)
-                    {
-                        Console.WriteLine($"WARNING: This message is not for us! It's for {message.ReceiverId}, but we are {_serviceId}");
-                        // Still process the message anyway, as it might be a broadcast or incorrectly addressed
-                    }
-                    
-                    // Use improved file logger - no need to specify path
-                    PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                        $"RECEIVED GENERIC RESPONSE - ID: {message.MessageId}, InResponseTo: {message.InResponseTo}, From: {message.SenderId}, To: {message.ReceiverId}");
-                    
-                    // Also echo to console with more visibility
-                    Console.WriteLine($">>>>>> MESSAGE TRACE: [ConsoleUI] RECEIVED GENERIC RESPONSE - ID: {message.MessageId}, InResponseTo: {message.InResponseTo}, From: {message.SenderId} <<<<<<");
-                    
-                    var genericResponse = message.GetPayload<GenericResponsePayload>();
-                    if (genericResponse != null)
-                    {
-                        Console.WriteLine($"Response for message type: {genericResponse.OriginalMessageType}");
-                        Console.WriteLine($"Success: {genericResponse.Success}");
-                        Console.WriteLine($"Message: {genericResponse.Message}");
-                        
-                        PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                            $"Response payload: Type={genericResponse.OriginalMessageType}, Success={genericResponse.Success}, Message={genericResponse.Message}");
-                        
-                        // Handle specific responses
-                        if (genericResponse.OriginalMessageType == MessageType.StartHand ||
-                            genericResponse.ResponseType == "StartHandAcknowledgment" ||
-                            (genericResponse.Message?.Contains("StartHand") == true))
-                        {
-                            Console.WriteLine("\n\n");
-                            Console.WriteLine("##########################################################");
-                            Console.WriteLine("#                                                        #");
-                            Console.WriteLine("#             STARTHAND RESPONSE RECEIVED                #");
-                            Console.WriteLine("#                                                        #");
-                            Console.WriteLine("#                   MARKED: V2                           #");
-                            Console.WriteLine("#                                                        #");
-                            Console.WriteLine("##########################################################");
-                            Console.WriteLine("\n\n");
-                            
-                            PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                                "########## STARTHAND RESPONSE RECEIVED WITH V2 MARKER! ##########");
-                                
-                            // Check if this is a tracked message
-                            if (!string.IsNullOrEmpty(message.InResponseTo))
-                            {
-                                Console.WriteLine($"Message {message.InResponseTo} is a response - marking as received");
-                                
-                                // Try to find the original message ID in the response
-                                string origMessageId = message.InResponseTo;
-                                if (!string.IsNullOrEmpty(genericResponse.OriginalMessageId))
-                                {
-                                    origMessageId = genericResponse.OriginalMessageId;
-                                }
-                                
-                                Console.WriteLine($"Original message ID: {origMessageId}");
-                                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                                    $"TRACKING STARTHAND RESPONSE: Original message ID = {origMessageId}");
-                            }
-                                
-                            // Send an acknowledgment response for the message
-                            Console.WriteLine("Sending acknowledgment for the StartHand response");
-                            
-                            var initialAckMessage = Message.Create(MessageType.Acknowledgment);
-                            initialAckMessage.MessageId = Guid.NewGuid().ToString();
-                            initialAckMessage.SenderId = _serviceId;
-                            initialAckMessage.ReceiverId = message.SenderId;
-                            initialAckMessage.InResponseTo = message.MessageId;
-                            
-                            // Try multiple delivery methods
-                            Console.WriteLine($"Sending acknowledgment to {message.SenderId}");
-                            SendTo(initialAckMessage, message.SenderId);
-                            Broadcast(initialAckMessage); // Also broadcast for redundancy
-                            
-                            // Also update the startHand message tracking
-                            Console.WriteLine("Updating StartHand tracking - response received");
-                            PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                                "StartHand message flow complete - response received and acknowledged!");
-                                
-                            if (genericResponse.Success)
-                            {
-                                Console.WriteLine("Hand started successfully!");
-                                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", "Hand started successfully!");
-                                
-                                // Acknowledge the message explicitly
-                                var successAckMessage = Message.Create(MessageType.Acknowledgment);
-                                successAckMessage.SenderId = _serviceId;
-                                successAckMessage.ReceiverId = message.SenderId;
-                                successAckMessage.InResponseTo = message.MessageId;
-                                Console.WriteLine($"Sending explicit acknowledgment for message {message.MessageId} to {message.SenderId}");
-                                
-                                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                                    $"Sending explicit acknowledgment for message {message.MessageId} to {message.SenderId}");
-                                    
-                                // Try multiple approaches to ensure delivery
-                                
-                                // 1. Broadcast the ack first
-                                Console.WriteLine("1. Broadcasting acknowledgment to all services");
-                                Broadcast(successAckMessage);
-                                
-                                // 2. Then direct send for targeted delivery
-                                Console.WriteLine($"2. Direct sending acknowledgment to {message.SenderId}");
-                                SendTo(successAckMessage, message.SenderId);
-                                
-                                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                                    "Acknowledgment sent using multiple delivery methods");
-                            }
-                            else
-                            {
-                                Console.WriteLine($"Error starting hand: {genericResponse.Message}");
-                                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                                    $"Error starting hand: {genericResponse.Message}");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("Warning: Received GenericResponse with null payload");
-                        PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                            "Warning: Received GenericResponse with null payload");
-                    }
-                    Console.WriteLine("************************************************");
-                    break;
+                Console.WriteLine("Warning: Received null message in ConsoleUIService");
+                return;
             }
             
-            await Task.CompletedTask;
+            try
+            {
+                // Check message type
+                switch (message.MessageType)
+                {
+                    case MessageType.ServiceRegistration:
+                        if (message.Data != null && 
+                            message.Data.ContainsKey("ServiceType") && 
+                            message.Data["ServiceType"].ToString() == "GameEngine")
+                        {
+                            string serviceId = message.SenderId;
+                            if (string.IsNullOrEmpty(_gameEngineServiceId))
+                            {
+                                _gameEngineServiceId = serviceId;
+                                Console.WriteLine($"Connected to game engine service: {_gameEngineServiceId}");
+                            }
+                        }
+                        break;
+                        
+                    case MessageType.ServiceDiscoveryResponse:
+                        if (message.Data != null && 
+                            message.Data.ContainsKey("ServiceType") && 
+                            message.Data["ServiceType"].ToString() == "GameEngine")
+                        {
+                            string serviceId = message.SenderId;
+                            if (string.IsNullOrEmpty(_gameEngineServiceId))
+                            {
+                                _gameEngineServiceId = serviceId;
+                                Console.WriteLine($"Connected to game engine service: {_gameEngineServiceId}");
+                            }
+                        }
+                        break;
+                        
+                    case MessageType.GameUpdate:
+                        // Process a game update
+                        if (message.Data != null && _gameEngineServiceId == message.SenderId)
+                        {
+                            if (message.Data.ContainsKey("GameState"))
+                            {
+                                _latestGameState = (PokerGame.Core.Game.GameState)message.Data["GameState"];
+                                await DisplayGameStateAsync(_latestGameState);
+                            }
+                            
+                            if (message.Data.ContainsKey("Players") && message.Data["Players"] is Dictionary<string, Models.Player> players)
+                            {
+                                _players = players;
+                            }
+                        }
+                        break;
+                        
+                    case MessageType.PlayerActionRequest:
+                        // Handle a request for player action
+                        if (message.Data != null && _gameEngineServiceId == message.SenderId)
+                        {
+                            if (message.Data.ContainsKey("PlayerId"))
+                            {
+                                _activePlayerId = message.Data["PlayerId"].ToString();
+                                _waitingForPlayerAction = true;
+                                
+                                Console.WriteLine($"Your turn! Player: {_activePlayerId}");
+                                Console.WriteLine("Enter F (fold), C (check/call), or R (raise):");
+                            }
+                        }
+                        break;
+                        
+                    case MessageType.GameResult:
+                        // Handle game results
+                        if (message.Data != null && _gameEngineServiceId == message.SenderId)
+                        {
+                            if (message.Data.ContainsKey("Winners") && message.Data["Winners"] is List<string> winnerIds)
+                            {
+                                Console.WriteLine("==== GAME RESULTS ====");
+                                foreach (var winnerId in winnerIds)
+                                {
+                                    if (_players.ContainsKey(winnerId))
+                                    {
+                                        var winner = _players[winnerId];
+                                        Console.WriteLine($"Winner: {winner.Name} with {winner.Chips} chips");
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine($"Winner ID: {winnerId} (Player info not available)");
+                                    }
+                                }
+                                Console.WriteLine("=====================");
+                            }
+                        }
+                        break;
+                        
+                    case MessageType.Debug:
+                        // Log debug messages
+                        Console.WriteLine($"Debug message from {message.SenderId}: {message.Data}");
+                        break;
+                        
+                    case MessageType.StartHand:
+                        Console.WriteLine("RECEIVED STARTHAND MESSAGE RESPONSE");
+                        break;
+                        
+                    default:
+                        Console.WriteLine($"Unhandled message type: {message.MessageType} from {message.SenderId}");
+                        break;
+                }
+                
+                // Acknowledge the message if requested
+                if (message.Data != null && 
+                    message.Data.ContainsKey("RequireAck") && 
+                    (bool)message.Data["RequireAck"])
+                {
+                    var ackMessage = Message.Create(MessageType.Acknowledgement);
+                    ackMessage.MessageId = Guid.NewGuid().ToString();
+                    ackMessage.SenderId = _serviceId;
+                    ackMessage.ReceiverId = message.SenderId;
+                    ackMessage.Data = new Dictionary<string, object>
+                    {
+                        { "AcknowledgedMessageId", message.MessageId }
+                    };
+                    
+                    SendTo(ackMessage, message.SenderId);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling message: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Displays the current game state
+        /// </summary>
+        /// <param name="gameState">The game state to display</param>
+        private async Task DisplayGameStateAsync(PokerGame.Core.Game.GameState gameState)
+        {
+            if (gameState == null) return;
+            
+            try
+            {
+                // Clear the console for a fresh display
+                Console.Clear();
+                
+                if (_useEnhancedUI && _enhancedUiInstance != null)
+                {
+                    // Enhanced UI with box drawing characters
+                    await DisplayGameStateEnhancedAsync(gameState);
+                }
+                else
+                {
+                    // Simple text-based UI
+                    await DisplayGameStateSimpleAsync(gameState);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error displaying game state: {ex.Message}");
+            }
         }
         
         /// <summary>
@@ -645,186 +344,202 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         private async Task ProcessUserInputAsync()
         {
-            // Setup initial game
-            await SetupGameAsync();
-            
-            while (true)
+            try
             {
-                try
+                // Setup initial game
+                await SetupGameAsync();
+                
+                // Use the cancellation token from the base class
+                var token = _cancellationTokenSource?.Token ?? CancellationToken.None;
+                
+                while (!token.IsCancellationRequested)
                 {
-                    if (_waitingForPlayerAction)
+                    try
                     {
-                        // Process player action
-                        string input = Console.ReadLine()?.ToUpper() ?? "";
-                        
-                        // Check for auto-play mode
-                        if (input.Contains("[AUTO]") || input.Trim() == "")
+                        if (_waitingForPlayerAction)
                         {
-                            Console.WriteLine("Auto-play mode detected. Making automatic decision...");
+                            // Process player action
+                            string input = Console.ReadLine()?.ToUpper() ?? "";
                             
-                            // Logic for auto decision - typically call/check or fold with bad hands
-                            if (_latestGameState != null)
+                            // Check for auto-play mode
+                            if (input.Contains("[AUTO]") || input.Trim() == "")
                             {
-                                // Simple auto-play logic: 
-                                // - Always call if bet is small (<= 10% of chips)
-                                // - Always check if possible
-                                // - Otherwise fold
-                                var playerInfo = _players[_activePlayerId];
-                                bool canCheck = _latestGameState.CurrentBet == playerInfo.CurrentBet;
-                                int betToCall = _latestGameState.CurrentBet - playerInfo.CurrentBet;
+                                Console.WriteLine("Auto-play mode detected. Making automatic decision...");
                                 
-                                // Auto-decision making
-                                if (canCheck)
+                                // Logic for auto decision - typically call/check or fold with bad hands
+                                if (_latestGameState != null)
                                 {
-                                    Console.WriteLine("[AUTO] Checking");
-                                    SendPlayerAction("check");
-                                }
-                                else if (betToCall <= playerInfo.Chips * 0.1) // Call if bet is <= 10% of chips
-                                {
-                                    Console.WriteLine($"[AUTO] Calling {betToCall}");
-                                    SendPlayerAction("call");
+                                    // Simple auto-play logic: 
+                                    // - Always call if bet is small (<= 10% of chips)
+                                    // - Always check if possible
+                                    // - Otherwise fold
+                                    var playerInfo = _players[_activePlayerId];
+                                    bool canCheck = _latestGameState.CurrentBet == playerInfo.CurrentBet;
+                                    int betToCall = _latestGameState.CurrentBet - playerInfo.CurrentBet;
+                                    
+                                    // Auto-decision making
+                                    if (canCheck)
+                                    {
+                                        Console.WriteLine("[AUTO] Checking");
+                                        SendPlayerAction("check");
+                                    }
+                                    else if (betToCall <= playerInfo.Chips * 0.1) // Call if bet is <= 10% of chips
+                                    {
+                                        Console.WriteLine($"[AUTO] Calling {betToCall}");
+                                        SendPlayerAction("call");
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("[AUTO] Folding");
+                                        SendPlayerAction("fold");
+                                    }
                                 }
                                 else
                                 {
-                                    Console.WriteLine("[AUTO] Folding");
-                                    SendPlayerAction("fold");
+                                    // Default to call if no game state available
+                                    Console.WriteLine("[AUTO] Calling (default)");
+                                    SendPlayerAction("call");
                                 }
                             }
                             else
                             {
-                                // Default to call if no game state available
-                                Console.WriteLine("[AUTO] Calling (default)");
-                                SendPlayerAction("call");
+                                // Manual play mode
+                                switch (input)
+                                {
+                                    case "F":
+                                        SendPlayerAction("fold");
+                                        break;
+                                        
+                                    case "C":
+                                        // This will be check or call depending on the current game state
+                                        var playerInfo = _players[_activePlayerId];
+                                        bool canCheck = _latestGameState != null &&
+                                                      playerInfo.CurrentBet == _latestGameState.CurrentBet;
+                                        
+                                        SendPlayerAction(canCheck ? "check" : "call");
+                                        break;
+                                        
+                                    case "R":
+                                        Console.Write("Enter raise amount: ");
+                                        if (int.TryParse(Console.ReadLine(), out int raiseAmount))
+                                        {
+                                            SendPlayerAction("raise", raiseAmount);
+                                        }
+                                        else
+                                        {
+                                            Console.WriteLine("Invalid amount. Try again.");
+                                        }
+                                        break;
+                                        
+                                    default:
+                                        Console.WriteLine("Invalid action. Use F (fold), C (check/call), or R (raise).");
+                                        break;
+                                }
                             }
                         }
-                        else
+                        else if (_latestGameState?.CurrentState == GameState.HandComplete ||
+                                _latestGameState?.CurrentState == GameState.WaitingToStart)
                         {
-                            // Manual play mode
-                            switch (input)
+                            // Ask to start a new hand
+                            Console.WriteLine("Press Enter to start a new hand or 'Q' to quit.");
+                            string input = Console.ReadLine()?.ToUpper() ?? "";
+                            
+                            if (input == "Q")
                             {
-                                case "F":
-                                    SendPlayerAction("fold");
-                                    break;
+                                break;
+                            }
+                            else if (string.IsNullOrWhiteSpace(input) && _gameEngineServiceId != null)
+                            {
+                                // Start a new hand with enhanced logging
+                                Console.WriteLine("\n\n");
+                                Console.WriteLine("**********************************************************");
+                                Console.WriteLine("*                                                        *");
+                                Console.WriteLine("*            CONSOLE UI SENDING STARTHAND                *");
+                                Console.WriteLine("*                                                        *");
+                                Console.WriteLine("**********************************************************");
+                                Console.WriteLine("\n\n");
+                                
+                                var message = Message.Create(MessageType.StartHand);
+                                message.MessageId = Guid.NewGuid().ToString(); // Ensure unique message ID
+                                message.SenderId = _serviceId; // Set sender ID explicitly
+                                message.ReceiverId = _gameEngineServiceId; // Explicitly target the game engine
+                                
+                                Console.WriteLine($"StartHand message ID: {message.MessageId}");
+                                Console.WriteLine($"StartHand sender ID: {message.SenderId}");
+                                Console.WriteLine($"StartHand recipient ID: {_gameEngineServiceId}");
+                                
+                                // Log to file - using improved FileLogger that finds writable location
+                                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                                    $"SENDING STARTHAND MESSAGE - ID: {message.MessageId}, Recipient: {_gameEngineServiceId}");
                                     
-                                case "C":
-                                    // This will be check or call depending on the current game state
-                                    var playerInfo = _players[_activePlayerId];
-                                    bool canCheck = _latestGameState != null &&
-                                                  playerInfo.CurrentBet == _latestGameState.CurrentBet;
-                                    
-                                    SendPlayerAction(canCheck ? "check" : "call");
-                                    break;
-                                    
-                                case "R":
-                                    Console.Write("Enter raise amount: ");
-                                    if (int.TryParse(Console.ReadLine(), out int raiseAmount))
+                                // Also echo to console with more visibility
+                                Console.WriteLine($">>>>>> MESSAGE TRACE: [ConsoleUI] SENDING STARTHAND MESSAGE - ID: {message.MessageId}, Recipient: {_gameEngineServiceId} <<<<<<");
+                                
+                                // Try multiple delivery methods to ensure reliability
+                                Console.WriteLine("1. Broadcasting StartHand message to all services");
+                                Broadcast(message);
+                                
+                                Console.WriteLine("2. Direct sending StartHand to " + _gameEngineServiceId);
+                                SendTo(message, _gameEngineServiceId);
+                                
+                                // Also try the most reliable method with acknowledgment
+                                try 
+                                {
+                                    Console.WriteLine("3. Attempting send with acknowledgment");
+                                    bool sent = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
+                                        this, 
+                                        message, 
+                                        _gameEngineServiceId, 
+                                        timeoutMs: 5000, 
+                                        maxRetries: 3,
+                                        useExponentialBackoff: true);
+                                        
+                                    if (sent)
                                     {
-                                        SendPlayerAction("raise", raiseAmount);
+                                        Console.WriteLine("StartHand sent with acknowledgment!");
                                     }
                                     else
                                     {
-                                        Console.WriteLine("Invalid amount. Try again.");
+                                        Console.WriteLine("Failed to send StartHand with acknowledgment after retries");
+                                        Console.WriteLine("But don't worry, we already tried broadcast and direct send methods");
                                     }
-                                    break;
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Error sending with acknowledgment: {ex.Message}");
+                                    // Stack trace might be too verbose, but helpful for debugging
+                                    Console.WriteLine(ex.StackTrace);
+                                }
+                                
+                                Console.WriteLine("StartHand message sent using multiple delivery methods, waiting for response...");
+                                
+                                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                                    "StartHand message sent using multiple delivery methods, waiting for response...");
                                     
-                                default:
-                                    Console.WriteLine("Invalid action. Use F (fold), C (check/call), or R (raise).");
-                                    break;
+                                Console.WriteLine("================================================");
                             }
                         }
-                    }
-                    else if (_latestGameState?.CurrentState == GameState.HandComplete ||
-                            _latestGameState?.CurrentState == GameState.WaitingToStart)
-                    {
-                        // Ask to start a new hand
-                        Console.WriteLine("Press Enter to start a new hand or 'Q' to quit.");
-                        string input = Console.ReadLine()?.ToUpper() ?? "";
                         
-                        if (input == "Q")
-                        {
-                            break;
-                        }
-                        else if (string.IsNullOrWhiteSpace(input) && _gameEngineServiceId != null)
-                        {
-                            // Start a new hand with enhanced logging
-                            Console.WriteLine("\n\n");
-                            Console.WriteLine("**********************************************************");
-                            Console.WriteLine("*                                                        *");
-                            Console.WriteLine("*            CONSOLE UI SENDING STARTHAND                *");
-                            Console.WriteLine("*                                                        *");
-                            Console.WriteLine("**********************************************************");
-                            Console.WriteLine("\n\n");
-                            
-                            var message = Message.Create(MessageType.StartHand);
-                            message.MessageId = Guid.NewGuid().ToString(); // Ensure unique message ID
-                            message.SenderId = _serviceId; // Set sender ID explicitly
-                            message.ReceiverId = _gameEngineServiceId; // Explicitly target the game engine
-                            
-                            Console.WriteLine($"StartHand message ID: {message.MessageId}");
-                            Console.WriteLine($"StartHand sender ID: {message.SenderId}");
-                            Console.WriteLine($"StartHand recipient ID: {_gameEngineServiceId}");
-                            
-                            // Log to file - using improved FileLogger that finds writable location
-                            PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                                $"SENDING STARTHAND MESSAGE - ID: {message.MessageId}, Recipient: {_gameEngineServiceId}");
-                                
-                            // Also echo to console with more visibility
-                            Console.WriteLine($">>>>>> MESSAGE TRACE: [ConsoleUI] SENDING STARTHAND MESSAGE - ID: {message.MessageId}, Recipient: {_gameEngineServiceId} <<<<<<");
-                            
-                            // Try multiple delivery methods to ensure reliability
-                            Console.WriteLine("1. Broadcasting StartHand message to all services");
-                            Broadcast(message);
-                            
-                            Console.WriteLine("2. Direct sending StartHand to " + _gameEngineServiceId);
-                            SendTo(message, _gameEngineServiceId);
-                            
-                            // Also try the most reliable method with acknowledgment
-                            try 
-                            {
-                                Console.WriteLine("3. Attempting send with acknowledgment");
-                                bool sent = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
-                                    this, 
-                                    message, 
-                                    _gameEngineServiceId, 
-                                    timeoutMs: 5000, 
-                                    maxRetries: 3,
-                                    useExponentialBackoff: true);
-                                    
-                                if (sent)
-                                {
-                                    Console.WriteLine("StartHand sent with acknowledgment!");
-                                }
-                                else
-                                {
-                                    Console.WriteLine("Failed to send StartHand with acknowledgment after retries");
-                                    Console.WriteLine("But don't worry, we already tried broadcast and direct send methods");
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"Error sending with acknowledgment: {ex.Message}");
-                                // Stack trace might be too verbose, but helpful for debugging
-                                Console.WriteLine(ex.StackTrace);
-                            }
-                            
-                            Console.WriteLine("StartHand message sent using multiple delivery methods, waiting for response...");
-                            
-                            PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                                "StartHand message sent using multiple delivery methods, waiting for response...");
-                                
-                            Console.WriteLine("================================================");
-                        }
+                        await Task.Delay(100, token); // Small pause to prevent CPU overuse
                     }
-                    
-                    await Task.Delay(100); // Small pause to prevent CPU overuse
+                    catch (OperationCanceledException)
+                    {
+                        // Handle normal cancellation
+                        Console.WriteLine("User input processing cancelled.");
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error processing input: {ex.Message}");
+                    }
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error processing input: {ex.Message}");
-                }
+                
+                Console.WriteLine("Thanks for playing!");
             }
-            
-            Console.WriteLine("Thanks for playing!");
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ProcessUserInputAsync exited with error: {ex.Message}");
+            }
         }
         
         /// <summary>
@@ -935,7 +650,7 @@ namespace PokerGame.Core.Microservices
             // Get player information using the Curses UI if available, otherwise fallback to console
             string[] playerNames;
             int numPlayers = 3; // Default
-
+            
             if (_useEnhancedUI && _enhancedUiInstance != null)
             {
                 try
@@ -952,7 +667,7 @@ namespace PokerGame.Core.Microservices
                     {
                         clearMethod.Invoke(_enhancedUiInstance, null);
                     }
-
+                    
                     // Try to get the GetPlayerSetup method
                     var setupMethod = cursesUIType.GetMethod("GetPlayerSetup");
                     if (setupMethod != null)
@@ -980,237 +695,101 @@ namespace PokerGame.Core.Microservices
                     }
                     else
                     {
-                        // If method not found, try the alternative approach - creating our own UI in Curses
-                        var drawTextMethod = cursesUIType.GetMethod("DrawText");
-                        var drawBorderMethod = cursesUIType.GetMethod("DrawBorder");
-                        var readInputMethod = cursesUIType.GetMethod("ReadInput");
-                        var refreshMethod = cursesUIType.GetMethod("Refresh");
-                        
-                        if (drawTextMethod != null && readInputMethod != null && refreshMethod != null)
+                        // Fallback using default players
+                        numPlayers = 3;
+                        playerNames = new string[numPlayers];
+                        for (int i = 0; i < numPlayers; i++)
                         {
-                            // Create our own player setup screen with the Curses primitives
-                            if (clearMethod != null)
-                                clearMethod.Invoke(_enhancedUiInstance, null);
-                                
-                            if (drawBorderMethod != null)
-                                drawBorderMethod.Invoke(_enhancedUiInstance, new object[] { 1, 1, 78, 20 });
-                                
-                            drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 30, 2, "POKER GAME SETUP", System.Drawing.Color.Yellow });
-                            drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 10, 5, "How many players? (2-8):", System.Drawing.Color.White });
-                            refreshMethod.Invoke(_enhancedUiInstance, null);
-                            
-                            var numPlayersInput = readInputMethod.Invoke(_enhancedUiInstance, new object[] { 40, 5, 2 });
-                            if (numPlayersInput is string numStr && int.TryParse(numStr, out int result) && result >= 2 && result <= 8)
-                            {
-                                numPlayers = result;
-                            }
-                            else
-                            {
-                                numPlayers = 3; // Default
-                                drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 10, 6, "Invalid input. Using default: 3 players", System.Drawing.Color.Red });
-                                refreshMethod.Invoke(_enhancedUiInstance, null);
-                                Thread.Sleep(1500); // Show the message briefly
-                            }
-                            
-                            playerNames = new string[numPlayers];
-                            
-                            if (clearMethod != null)
-                                clearMethod.Invoke(_enhancedUiInstance, null);
-                                
-                            if (drawBorderMethod != null)
-                                drawBorderMethod.Invoke(_enhancedUiInstance, new object[] { 1, 1, 78, 20 });
-                                
-                            drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 30, 2, "PLAYER SETUP", System.Drawing.Color.Yellow });
-                            
-                            for (int i = 0; i < numPlayers; i++)
-                            {
-                                drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 10, 5 + (i * 2), $"Enter name for Player {i+1}: ", System.Drawing.Color.White });
-                                refreshMethod.Invoke(_enhancedUiInstance, null);
-                                
-                                var nameInput = readInputMethod.Invoke(_enhancedUiInstance, new object[] { 40, 5 + (i * 2), 15 });
-                                string defaultName = $"Player {i+1}";
-                                
-                                if (nameInput is string name && !string.IsNullOrWhiteSpace(name))
-                                {
-                                    playerNames[i] = name;
-                                }
-                                else
-                                {
-                                    playerNames[i] = defaultName;
-                                }
-                            }
-                            
-                            // Show summary
-                            if (clearMethod != null)
-                                clearMethod.Invoke(_enhancedUiInstance, null);
-                                
-                            if (drawBorderMethod != null)
-                                drawBorderMethod.Invoke(_enhancedUiInstance, new object[] { 1, 1, 78, 20 });
-                                
-                            drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 25, 2, "GAME READY TO START", System.Drawing.Color.Green });
-                            drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 10, 4, $"Players: {numPlayers}", System.Drawing.Color.White });
-                            
-                            for (int i = 0; i < numPlayers; i++)
-                            {
-                                drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 10, 6 + i, $"Player {i+1}: {playerNames[i]}", System.Drawing.Color.Cyan });
-                            }
-                            
-                            drawTextMethod.Invoke(_enhancedUiInstance, new object[] { 10, 7 + numPlayers, "Press Enter to start the game...", System.Drawing.Color.Yellow });
-                            refreshMethod.Invoke(_enhancedUiInstance, null);
-                            
-                            // Wait for Enter
-                            readInputMethod.Invoke(_enhancedUiInstance, new object[] { 10, 20, 1 });
+                            playerNames[i] = $"Player {i+1}";
                         }
-                        else
-                        {
-                            // Fallback if we can't create our UI
-                            PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", "Required Curses methods not found, using defaults");
-                            numPlayers = 3;
-                            playerNames = new string[numPlayers];
-                            for (int i = 0; i < numPlayers; i++)
-                            {
-                                playerNames[i] = $"Player {i+1}";
-                            }
-                        }
+                        PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", "GetPlayerSetup method not found, using defaults");
                     }
                 }
                 catch (Exception ex)
                 {
-                    // Log the exception and fall back to defaults
-                    Console.WriteLine($"Error using Curses UI for player setup: {ex.Message}");
-                    PokerGame.Core.Logging.FileLogger.Error("ConsoleUI", $"Error in Curses UI player setup: {ex.Message}");
-                    PokerGame.Core.Logging.FileLogger.Error("ConsoleUI", ex.StackTrace);
-                    
+                    // Fallback if there's any error with the Curses UI
                     numPlayers = 3;
                     playerNames = new string[numPlayers];
                     for (int i = 0; i < numPlayers; i++)
                     {
                         playerNames[i] = $"Player {i+1}";
                     }
+                    PokerGame.Core.Logging.FileLogger.Error("ConsoleUI", $"Error in Curses UI player setup: {ex.Message}");
+                    Console.WriteLine($"Error in Curses UI: {ex.Message}");
                 }
             }
             else
             {
-                // Fallback to console input if enhanced UI is not available
-                Console.WriteLine("Enhanced UI not available, using console input");
+                // Simple console-based setup
+                Console.WriteLine("How many players? (2-8): ");
+                string input = Console.ReadLine() ?? "";
                 
-                // Get number of players from console
-                bool validInput = false;
-                int maxAttempts = 3;
-                int attempts = 0;
-                
-                while (!validInput && attempts < maxAttempts)
+                if (int.TryParse(input, out int parsedNumPlayers) && parsedNumPlayers >= 2 && parsedNumPlayers <= 8)
                 {
-                    Console.Write("Enter number of players (2-8): ");
-                    string input = Console.ReadLine() ?? "";
-                    
-                    if (int.TryParse(input, out numPlayers) && numPlayers >= 2 && numPlayers <= 8)
-                    {
-                        validInput = true;
-                    }
-                    else
-                    {
-                        attempts++;
-                        Console.WriteLine("Please enter a number between 2 and 8.");
-                        
-                        if (attempts >= maxAttempts)
-                        {
-                            numPlayers = 3; // Default to 3 players
-                            Console.WriteLine("Using default: 3 players");
-                            validInput = true;
-                        }
-                    }
-                }
-                
-                // Get player names from console
-                playerNames = new string[numPlayers];
-                for (int i = 0; i < numPlayers; i++)
-                {
-                    string defaultName = $"Player {i+1}";
-                    Console.Write($"Enter name for player {i+1} (or press Enter for '{defaultName}'): ");
-                    string name = Console.ReadLine() ?? "";
-                    playerNames[i] = string.IsNullOrWhiteSpace(name) ? defaultName : name;
-                }
-            }
-            
-            // Start the game
-            Console.WriteLine($"Sending GameStart message to {_gameEngineServiceId} with {playerNames.Length} players");
-            var gameStartMessage = Message.Create(MessageType.StartGame, playerNames);
-            SendTo(gameStartMessage, _gameEngineServiceId);
-            
-            // Small delay to let the game engine process the start message
-            await Task.Delay(1000);
-            
-            // Now send a message to start the hand
-            Console.WriteLine("\n\n");
-            Console.WriteLine("**********************************************************");
-            Console.WriteLine("*                                                        *");
-            Console.WriteLine("*            CONSOLE UI SENDING STARTHAND                *");
-            Console.WriteLine("*                                                        *");
-            Console.WriteLine("**********************************************************");
-            Console.WriteLine("\n\n");
-        
-            Console.WriteLine($"Sending StartHand message to {_gameEngineServiceId}");
-            var startHandMessage = Message.Create(MessageType.StartHand);
-            startHandMessage.MessageId = Guid.NewGuid().ToString(); // Ensure unique message ID
-            startHandMessage.SenderId = _serviceId; // Set sender ID explicitly
-            startHandMessage.ReceiverId = _gameEngineServiceId; // Explicitly set receiver ID
-            
-            Console.WriteLine($"StartHand message ID: {startHandMessage.MessageId}");
-            Console.WriteLine($"StartHand sender ID: {startHandMessage.SenderId}");
-            Console.WriteLine($"StartHand recipient ID: {_gameEngineServiceId}");
-            
-            // Log to file - using improved FileLogger that finds writable location
-            PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                $"SENDING STARTHAND MESSAGE - ID: {startHandMessage.MessageId}, Recipient: {_gameEngineServiceId}");
-                
-            // Also echo to console with more visibility
-            Console.WriteLine($">>>>>> MESSAGE TRACE: [ConsoleUI] SENDING STARTHAND MESSAGE - ID: {startHandMessage.MessageId}, Recipient: {_gameEngineServiceId} <<<<<<");
-            
-            // Try multiple approaches to ensure delivery
-            
-            // 1. First, broadcast the message (ensures it's visible to all services)
-            Console.WriteLine("1. Broadcasting StartHand message to all services");
-            Broadcast(startHandMessage);
-            
-            // 2. Then, direct send (explicit targeting)
-            Console.WriteLine($"2. Direct sending StartHand to {_gameEngineServiceId}");
-            SendTo(startHandMessage, _gameEngineServiceId);
-            
-            // 3. Finally, try the most reliable method (with acknowledgment)
-            try
-            {
-                Console.WriteLine("3. Attempting send with acknowledgment");
-                bool sent = await PokerGame.Core.Messaging.MessageBrokerExtensions.SendWithAcknowledgmentAsync(
-                    this, 
-                    startHandMessage, 
-                    _gameEngineServiceId, 
-                    timeoutMs: 5000,
-                    maxRetries: 3,
-                    useExponentialBackoff: true);
-                    
-                if (sent)
-                {
-                    Console.WriteLine("StartHand sent with acknowledgment!");
+                    numPlayers = parsedNumPlayers;
                 }
                 else
                 {
-                    Console.WriteLine("Failed to send StartHand with acknowledgment after retries");
-                    Console.WriteLine("But don't worry, we already tried broadcast and direct send methods");
+                    Console.WriteLine("Invalid input. Using default: 3 players");
+                    numPlayers = 3;
+                }
+                
+                playerNames = new string[numPlayers];
+                
+                for (int i = 0; i < numPlayers; i++)
+                {
+                    Console.WriteLine($"Enter name for Player {i+1}: ");
+                    string name = Console.ReadLine() ?? "";
+                    
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
+                        playerNames[i] = $"Player {i+1}";
+                    }
+                    else
+                    {
+                        playerNames[i] = name;
+                    }
                 }
             }
-            catch (Exception ex)
+            
+            // Create the game setup message
+            var setupMessage = Message.Create(MessageType.GameSetup);
+            setupMessage.SenderId = _serviceId;
+            setupMessage.ReceiverId = _gameEngineServiceId;
+            
+            var playerInfos = new Dictionary<string, object>();
+            for (int i = 0; i < numPlayers; i++)
             {
-                Console.WriteLine($"Error sending with acknowledgment: {ex.Message}");
-                Console.WriteLine("But don't worry, we already tried broadcast and direct send methods");
+                string playerId = $"Player_{i+1}";
+                playerInfos[playerId] = new Dictionary<string, object>
+                {
+                    { "Name", playerNames[i] },
+                    { "Chips", 1000 }, // Starting chips
+                    { "IsHuman", i == 0 } // Only the first player is human
+                };
             }
             
-            Console.WriteLine("StartHand message sent using multiple delivery methods, waiting for response");
-            PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
-                "StartHand message sent using multiple delivery methods, waiting for response...");
-                
-            // Give some time for processing
-            await Task.Delay(1000);
+            setupMessage.Data = new Dictionary<string, object>
+            {
+                { "PlayerInfos", playerInfos },
+                { "AnteAmount", 10 },
+                { "BlindAmount", 20 }
+            };
+            
+            // Send the setup message
+            Console.WriteLine("Sending game setup message...");
+            SendTo(setupMessage, _gameEngineServiceId);
+            
+            // Wait a short time for the game engine to process
+            await Task.Delay(500);
+            
+            // Now send a start hand message to begin the game
+            var startHandMessage = Message.Create(MessageType.StartHand);
+            startHandMessage.SenderId = _serviceId;
+            startHandMessage.ReceiverId = _gameEngineServiceId;
+            
+            Console.WriteLine("Sending initial start hand message...");
+            SendTo(startHandMessage, _gameEngineServiceId);
         }
         
         /// <summary>
@@ -1224,465 +803,192 @@ namespace PokerGame.Core.Microservices
             {
                 Console.WriteLine($"Sending player action: {actionType} with bet amount: {betAmount}");
                 
-                var payload = new PlayerActionPayload
+                var message = Message.Create(MessageType.PlayerAction);
+                message.SenderId = _serviceId;
+                message.ReceiverId = _gameEngineServiceId;
+                message.Data = new Dictionary<string, object>
                 {
-                    PlayerId = _activePlayerId,
-                    ActionType = actionType,
-                    BetAmount = betAmount
+                    { "PlayerId", _activePlayerId },
+                    { "ActionType", actionType },
+                    { "BetAmount", betAmount }
                 };
                 
-                var message = Message.Create(MessageType.PlayerAction, payload);
-                
-                // Set the sender ID explicitly
-                message.SenderId = ServiceId;
-                
-                Console.WriteLine($"Sending action to game engine {_gameEngineServiceId}");
                 SendTo(message, _gameEngineServiceId);
                 
-                // Give some time for processing before next action
-                Thread.Sleep(100);
-                
+                // Reset waiting flag
                 _waitingForPlayerAction = false;
-                Console.WriteLine("Player action sent, waiting for response");
-                
-                // Request a game state update after sending the action
-                // This ensures we see the latest state even if the response handling has issues
-                RequestGameStateUpdate();
+            }
+        }
+        
+        /// <summary>
+        /// Displays the game state using a simple text-based UI
+        /// </summary>
+        /// <param name="gameState">The game state to display</param>
+        private async Task DisplayGameStateSimpleAsync(PokerGame.Core.Game.GameState gameState)
+        {
+            Console.WriteLine("=== POKER GAME ===");
+            Console.WriteLine($"Pot: {gameState.Pot}  Current Bet: {gameState.CurrentBet}");
+            Console.WriteLine($"Game State: {gameState.CurrentState}");
+            
+            // Display community cards
+            Console.Write("Community Cards: ");
+            if (gameState.CommunityCards != null && gameState.CommunityCards.Count > 0)
+            {
+                foreach (var card in gameState.CommunityCards)
+                {
+                    Console.Write(FormatCard(card) + " ");
+                }
             }
             else
             {
-                Console.WriteLine($"Cannot send player action: gameEngineServiceId={_gameEngineServiceId}, waitingForPlayerAction={_waitingForPlayerAction}");
-            }
-        }
-        
-        /// <summary>
-        /// Requests a game state update from the game engine
-        /// </summary>
-        private void RequestGameStateUpdate()
-        {
-            if (_gameEngineServiceId != null)
-            {
-                // Create a simple message to request game state
-                var message = Message.Create(MessageType.GameState);
-                SendTo(message, _gameEngineServiceId);
-            }
-        }
-        
-        /// <summary>
-        /// Displays the current game state
-        /// </summary>
-        private void DisplayGameState()
-        {
-            if (_latestGameState == null)
-            {
-                Console.WriteLine("[DEBUG] DisplayGameState called but _latestGameState is null");
-                return;
-            }
-                
-            if (_useEnhancedUI)
-            {
-                Console.WriteLine("[DEBUG] Using curses UI for game state display");
-                DisplayCursesGameState();
-                return;
-            }
-            else
-            {
-                Console.WriteLine("[DEBUG] Using standard UI for game state display");
-            }
-            
-            Console.WriteLine();
-            Console.WriteLine("=============================================");
-            Console.WriteLine($"CURRENT STATE: {_latestGameState.CurrentState}");
-            
-            // Show community cards
-            string communityCardsText = _latestGameState.CommunityCards.Count > 0 
-                ? CardListToString(_latestGameState.CommunityCards) 
-                : "[None]";
-            Console.WriteLine($"Community Cards: {communityCardsText}");
-            
-            // Show pot and current bet
-            Console.WriteLine($"Pot: ${_latestGameState.Pot}");
-            if (_latestGameState.CurrentBet > 0)
-            {
-                Console.WriteLine($"Current bet: ${_latestGameState.CurrentBet}");
+                Console.Write("None");
             }
             Console.WriteLine();
             
-            // Show player information
-            Console.WriteLine("PLAYERS:");
-            foreach (var player in _latestGameState.Players)
+            // Display player information
+            Console.WriteLine("\nPlayers:");
+            foreach (var player in _players.Values)
             {
-                string status = "";
-                if (player.HasFolded) status = " (Folded)";
-                else if (player.IsAllIn) status = " (All-In)";
+                string status = player.IsOut ? "OUT" : player.IsFolded ? "FOLDED" : "IN";
+                string holeCards = "";
                 
-                Console.WriteLine($"- {player.Name}{status}: ${player.Chips} chips");
-            }
-            
-            Console.WriteLine("=============================================");
-        }
-        
-        /// <summary>
-        /// Displays a game state using our curses console UI
-        /// </summary>
-        private void DisplayCursesGameState()
-        {
-            if (_enhancedUiInstance != null && _latestGameState != null)
-            {
-                try
+                if (player.HoleCards != null && player.HoleCards.Count > 0)
                 {
-                    // Always clear the console first to avoid display issues
-                    Console.Clear();
-                    
-                    // Display a fancy header at the top
-                    Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
-                    Console.WriteLine("║        TEXAS HOLD'EM POKER (CURSES CONSOLE UI)          ║");
-                    Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
-                    Console.WriteLine();
-                    
-                    // Create a local game state for the CursesUI to display
-                    var gameEngine = CreateLocalGameEngineFromState();
-                    
-                    // Call CursesUI.UpdateGameState via reflection
-                    var updateMethod = _enhancedUiInstance.GetType().GetMethod("UpdateGameState");
-                    if (updateMethod != null)
+                    foreach (var card in player.HoleCards)
                     {
-                        updateMethod.Invoke(_enhancedUiInstance, new[] { gameEngine });
-                        return; // Success, early return
-                    }
-                    else
-                    {
-                        Console.WriteLine("ERROR: UpdateGameState method not found in CursesUI");
+                        holeCards += FormatCard(card) + " ";
                     }
                 }
-                catch (Exception ex)
+                else
                 {
-                    // If anything fails, fall back to text UI
-                    Console.WriteLine($"Error in curses UI: {ex.Message}");
-                    Console.WriteLine(ex.StackTrace);
+                    holeCards = "Hidden";
                 }
+                
+                Console.WriteLine($"{player.Name} - Chips: {player.Chips} - Bet: {player.CurrentBet} - Status: {status}");
+                Console.WriteLine($"  Cards: {holeCards}");
             }
             
-            // Fallback to a prettier text UI with box drawing characters
-            Console.WriteLine();
+            Console.WriteLine("\nActions: F (Fold), C (Check/Call), R (Raise)");
+            
+            await Task.CompletedTask; // This method doesn't need async, but keeping it async for interface consistency
+        }
+        
+        /// <summary>
+        /// Displays the game state using an enhanced UI with box drawing characters
+        /// </summary>
+        /// <param name="gameState">The game state to display</param>
+        private async Task DisplayGameStateEnhancedAsync(PokerGame.Core.Game.GameState gameState)
+        {
+            // Table border
             Console.WriteLine("╔═════════════════════════════════════════════════════════╗");
-            Console.WriteLine($"║  CURRENT STATE: {_latestGameState?.CurrentState,-40} ║");
+            Console.WriteLine("║                     POKER GAME                          ║");
             Console.WriteLine("╠═════════════════════════════════════════════════════════╣");
             
-            // Show community cards
-            string communityCardsText = _latestGameState?.CommunityCards?.Count > 0 
-                ? CardListToString(_latestGameState.CommunityCards) 
-                : "[None]";
-            Console.WriteLine($"║  Community Cards: {communityCardsText,-37} ║");
+            // Game state information
+            Console.WriteLine($"║  Pot: {gameState.Pot,-6}  Current Bet: {gameState.CurrentBet,-6}  State: {gameState.CurrentState,-12} ║");
             
-            // Show pot and current bet
-            Console.WriteLine($"║  Pot: ${_latestGameState?.Pot,-44} ║");
-            if (_latestGameState?.CurrentBet > 0)
+            // Community cards
+            Console.Write("║  Community Cards: ");
+            if (gameState.CommunityCards != null && gameState.CommunityCards.Count > 0)
             {
-                Console.WriteLine($"║  Current bet: ${_latestGameState.CurrentBet,-38} ║");
-            }
-            Console.WriteLine("║                                                         ║");
-            
-            // Show player information
-            Console.WriteLine("║  PLAYERS:                                               ║");
-            if (_latestGameState?.Players != null)
-            {
-                foreach (var player in _latestGameState.Players)
+                foreach (var card in gameState.CommunityCards)
                 {
-                    string status = "";
-                    if (player.HasFolded) status = " (Folded)";
-                    else if (player.IsAllIn) status = " (All-In)";
-                    
-                    string playerInfo = $"  - {player.Name}{status}: ${player.Chips} chips";
-                    Console.WriteLine($"║{playerInfo,-57} ║");
+                    Console.Write(FormatCard(card) + " ");
                 }
+                // Padding to align the box
+                int padding = 48 - (gameState.CommunityCards.Count * 5);
+                Console.Write(new string(' ', padding > 0 ? padding : 1));
+            }
+            else
+            {
+                Console.Write("None" + new string(' ', 43));
+            }
+            Console.WriteLine("║");
+            
+            Console.WriteLine("╠═════════════════════════════════════════════════════════╣");
+            
+            // Player information
+            Console.WriteLine("║                       PLAYERS                           ║");
+            Console.WriteLine("╠═════════════════════════════════════════════════════════╣");
+            
+            foreach (var player in _players.Values)
+            {
+                string status = player.IsOut ? "OUT" : player.IsFolded ? "FOLDED" : "IN";
+                
+                Console.WriteLine($"║  {player.Name,-15} Chips: {player.Chips,-6} Bet: {player.CurrentBet,-6} Status: {status,-8} ║");
+                
+                Console.Write("║    Cards: ");
+                if (player.HoleCards != null && player.HoleCards.Count > 0)
+                {
+                    foreach (var card in player.HoleCards)
+                    {
+                        Console.Write(FormatCard(card) + " ");
+                    }
+                    // Padding
+                    int padding = 41 - (player.HoleCards.Count * 5);
+                    Console.Write(new string(' ', padding > 0 ? padding : 1));
+                }
+                else
+                {
+                    Console.Write("Hidden" + new string(' ', 36));
+                }
+                Console.WriteLine("║");
+                
+                // Add a separator between players
+                Console.WriteLine("╟─────────────────────────────────────────────────────────╢");
             }
             
+            // Actions
+            Console.WriteLine("║  Actions: F (Fold), C (Check/Call), R (Raise)             ║");
             Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
+            
+            await Task.CompletedTask; // This method doesn't need async, but keeping it async for interface consistency
         }
         
         /// <summary>
-        /// Creates a local game engine object from the current state for use with the CursesUI
+        /// Formats a card for display
         /// </summary>
-        private object CreateLocalGameEngineFromState()
-        {
-            // We need to create a dynamic PokerGameEngine instance that the CursesUI can use
-            // This acts as an adapter between the microservice state and the local UI
-            
-            if (_latestGameState == null)
-                throw new InvalidOperationException("No game state available");
-            
-            // Create a Mock UI for the engine
-            Type? uiInterfaceType = Type.GetType("PokerGame.Core.Interfaces.IPokerGameUI, PokerGame.Core");
-            if (uiInterfaceType == null)
-                throw new InvalidOperationException("Could not find IPokerGameUI interface");
-            
-            // Create a proxy UI that does nothing
-            var proxyUI = new MockPokerGameUI();
-            
-            // Create the engine with the proxy UI
-            Type? engineType = Type.GetType("PokerGame.Core.Game.PokerGameEngine, PokerGame.Core");
-            if (engineType == null)
-                throw new InvalidOperationException("Could not find PokerGameEngine type");
-                
-            // Create the engine with our mock UI
-            object? gameEngine = Activator.CreateInstance(engineType, new[] { proxyUI });
-            if (gameEngine == null)
-                throw new InvalidOperationException("Failed to create game engine instance");
-            
-            // We need to set the private fields directly via reflection since the properties are read-only
-            SetField(gameEngine, "_pot", _latestGameState.Pot);
-            SetField(gameEngine, "_currentBet", _latestGameState.CurrentBet);
-            SetField(gameEngine, "_gameState", _latestGameState.CurrentState);
-            
-            // Set community cards - need to access the private field
-            var communityCardsField = engineType.GetField("_communityCards", 
-                System.Reflection.BindingFlags.Instance | 
-                System.Reflection.BindingFlags.NonPublic);
-                
-            if (communityCardsField != null)
-            {
-                // Get the existing list from the field
-                var communityCardsList = communityCardsField.GetValue(gameEngine) as List<Card>;
-                if (communityCardsList != null)
-                {
-                    // Clear it and add the new cards
-                    communityCardsList.Clear();
-                    foreach (var card in _latestGameState.CommunityCards)
-                    {
-                        communityCardsList.Add(card);
-                    }
-                }
-            }
-            
-            // Set players - need to access the private field
-            var playersField = engineType.GetField("_players", 
-                System.Reflection.BindingFlags.Instance | 
-                System.Reflection.BindingFlags.NonPublic);
-                
-            if (playersField != null)
-            {
-                // Convert PlayerInfo to Player
-                var players = new List<Player>();
-                
-                foreach (var p in _latestGameState.Players)
-                {
-                    var player = new Player(p.Name, p.Chips);
-                    
-                    // Add hole cards - work around read-only collection
-                    if (p.HoleCards != null && p.HoleCards.Count > 0)
-                    {
-                        foreach (var card in p.HoleCards)
-                        {
-                            player.HoleCards.Add(card);
-                        }
-                    }
-                    
-                    // Handle other properties with private setters
-                    // We need to use reflection to set these properly
-                    if (p.HasFolded)
-                    {
-                        var foldMethod = typeof(Player).GetMethod("Fold");
-                        if (foldMethod != null)
-                        {
-                            foldMethod.Invoke(player, null);
-                        }
-                        else
-                        {
-                            Console.WriteLine("Warning: Could not find Fold method on Player");
-                        }
-                    }
-                    
-                    if (p.CurrentBet > 0)
-                    {
-                        var placeBetMethod = typeof(Player).GetMethod("PlaceBet");
-                        if (placeBetMethod != null)
-                        {
-                            placeBetMethod.Invoke(player, new object[] { p.CurrentBet });
-                        }
-                        else
-                        {
-                            Console.WriteLine("Warning: Could not find PlaceBet method on Player");
-                        }
-                    }
-                    
-                    // IsAllIn is set automatically by PlaceBet if chips are 0
-                    
-                    players.Add(player);
-                }
-                
-                // Set the players list to the field
-                var playersList = playersField.GetValue(gameEngine) as List<Player>;
-                if (playersList != null)
-                {
-                    playersList.Clear();
-                    foreach (var p in players)
-                    {
-                        playersList.Add(p);
-                    }
-                }
-            }
-            
-            return gameEngine;
-        }
-        
-        /// <summary>
-        /// Helper to set a property via reflection
-        /// </summary>
-        private void SetProperty(object obj, string propertyName, object value)
-        {
-            var prop = obj.GetType().GetProperty(propertyName);
-            if (prop != null && prop.CanWrite)
-            {
-                prop.SetValue(obj, value);
-            }
-        }
-        
-        /// <summary>
-        /// Helper to set a private field via reflection
-        /// </summary>
-        private void SetField(object obj, string fieldName, object value)
-        {
-            var field = obj.GetType().GetField(fieldName, 
-                System.Reflection.BindingFlags.Instance | 
-                System.Reflection.BindingFlags.NonPublic);
-                
-            if (field != null)
-            {
-                field.SetValue(obj, value);
-            }
-            else
-            {
-                Console.WriteLine($"Warning: Could not find field '{fieldName}' on {obj.GetType().Name}");
-            }
-        }
-        
-        /// <summary>
-        /// Displays the action prompt for a player
-        /// </summary>
-        /// <param name="player">The player taking action</param>
-        private void DisplayActionPrompt(PlayerInfo player)
-        {
-            // Calculate can check once for use in all parts of this method
-            bool canCheck = _latestGameState != null && player.CurrentBet == _latestGameState.CurrentBet;
-            int callAmount = _latestGameState != null ? _latestGameState.CurrentBet - player.CurrentBet : 0;
-            int minRaise = _latestGameState != null ? _latestGameState.CurrentBet + 10 : 10;
-            
-            if (_useEnhancedUI)
-            {
-                // Curses UI action prompt
-                Console.WriteLine("\n╔═════════════════════════════════════════════════════════╗");
-                Console.WriteLine($"║  ★ {player.Name}'s turn ★                               ║");
-                Console.WriteLine("╠═════════════════════════════════════════════════════════╣");
-                
-                // Show player's hole cards with colored symbols if possible
-                Console.WriteLine($"║  Your hole cards: {CardListToString(player.HoleCards),-40} ║");
-                
-                // Show available actions
-                Console.WriteLine("║  Available actions:                                     ║");
-                
-                if (canCheck)
-                    Console.WriteLine("║  - Check (C)                                            ║");
-                else
-                    Console.WriteLine($"║  - Call {callAmount} (C)                                    ║");
-                    
-                Console.WriteLine("║  - Fold (F)                                             ║");
-                Console.WriteLine($"║  - Raise (R) (Minimum raise: {minRaise,-5})                   ║");
-                
-                Console.WriteLine("╚═════════════════════════════════════════════════════════╝");
-                Console.Write("Enter your action: ");
-            }
-            else
-            {
-                // Standard UI action prompt
-                Console.WriteLine();
-                Console.WriteLine($"=== {player.Name}'s turn ===");
-                
-                // Show player's hole cards
-                Console.WriteLine($"Your hole cards: {CardListToString(player.HoleCards)}");
-                
-                // Show available actions
-                Console.WriteLine("Available actions:");
-                
-                if (canCheck)
-                    Console.WriteLine("- Check (C)");
-                else
-                    Console.WriteLine($"- Call {callAmount} (C)");
-                    
-                Console.WriteLine("- Fold (F)");
-                Console.WriteLine($"- Raise (R) (Minimum raise: {minRaise})");
-                
-                Console.Write("Enter your action: ");
-            }
-            
-            // For automated testing in microservice mode, automatically use a reasonable action
-            // This will prevent the "Invalid action" messages from continuously being displayed
-            if (Environment.GetEnvironmentVariable("AUTOMATED_TEST") == "1" || 
-                Environment.CommandLine.Contains("--microservices"))
-            {
-                string autoAction = canCheck ? "C" : "C"; // Defaults to check/call as safest option
-                Console.WriteLine($"[AUTO] {autoAction}");
-                
-                // Small delay to simulate thinking
-                Task.Delay(500).Wait();
-                
-                // Process this action
-                if (canCheck)
-                    SendPlayerAction("check");
-                else
-                    SendPlayerAction("call");
-                
-                _waitingForPlayerAction = false;
-            }
-        }
-        
-        /// <summary>
-        /// Converts a list of cards to a readable string
-        /// </summary>
-        private string CardListToString(List<Card> cards)
-        {
-            return string.Join(" ", cards.Select(c => GetCardDisplay(c)));
-        }
-        
-        /// <summary>
-        /// Gets a display representation for a card
-        /// </summary>
-        private string GetCardDisplay(Card card)
+        /// <param name="card">The card to format</param>
+        /// <returns>A formatted string representation of the card</returns>
+        private string FormatCard(PokerGame.Core.Models.Card card)
         {
             string rank;
             switch (card.Rank)
             {
-                case Rank.Jack:
-                    rank = "J";
-                    break;
-                case Rank.Queen:
-                    rank = "Q";
-                    break;
-                case Rank.King:
-                    rank = "K";
-                    break;
-                case Rank.Ace:
+                case 14:
                     rank = "A";
                     break;
+                case 13:
+                    rank = "K";
+                    break;
+                case 12:
+                    rank = "Q";
+                    break;
+                case 11:
+                    rank = "J";
+                    break;
+                case 10:
+                    rank = "T";
+                    break;
                 default:
-                    rank = ((int)card.Rank).ToString();
+                    rank = card.Rank.ToString();
                     break;
             }
             
             string suit;
             switch (card.Suit)
             {
-                case Suit.Clubs:
-                    suit = "♣";
+                case PokerGame.Core.Models.CardSuit.Spades:
+                    suit = "♠";
                     break;
-                case Suit.Diamonds:
-                    suit = "♦";
-                    break;
-                case Suit.Hearts:
+                case PokerGame.Core.Models.CardSuit.Hearts:
                     suit = "♥";
                     break;
-                case Suit.Spades:
-                    suit = "♠";
+                case PokerGame.Core.Models.CardSuit.Diamonds:
+                    suit = "♦";
+                    break;
+                case PokerGame.Core.Models.CardSuit.Clubs:
+                    suit = "♣";
                     break;
                 default:
                     suit = "?";
@@ -1692,29 +998,57 @@ namespace PokerGame.Core.Microservices
             return $"[{rank}{suit}]";
         }
         
-
-        
         /// <summary>
         /// Clean up resources and dispose the Curses UI if it was initialized
         /// </summary>
         public override void Dispose()
         {
-            base.Dispose();
+            Console.WriteLine("ConsoleUIService.Dispose() called - beginning clean shutdown");
             
-            // Dispose the curses UI if it exists and is IDisposable
-            if (_enhancedUiInstance is IDisposable disposable)
+            try
             {
-                try
+                // Wait for the input processing task to complete
+                if (_inputProcessingTask != null && !_inputProcessingTask.IsCompleted)
                 {
-                    disposable.Dispose();
-                    Console.WriteLine("Curses UI properly disposed");
+                    Console.WriteLine("Waiting for input processing task to complete");
+                    // Don't wait indefinitely - set a timeout
+                    bool completed = _inputProcessingTask.Wait(TimeSpan.FromSeconds(3));
+                    if (!completed)
+                    {
+                        Console.WriteLine("Input processing task did not complete in time");
+                    }
                 }
-                catch (Exception ex)
+                
+                // Clean up the Curses UI if it was initialized
+                if (_enhancedUiInstance != null)
                 {
-                    Console.WriteLine($"Error disposing Curses UI: {ex.Message}");
+                    Console.WriteLine("Disposing Curses UI");
+                    try
+                    {
+                        // Use reflection to check if the instance implements IDisposable
+                        var disposable = _enhancedUiInstance as IDisposable;
+                        if (disposable != null)
+                        {
+                            disposable.Dispose();
+                            Console.WriteLine("Curses UI properly disposed");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error disposing Curses UI: {ex.Message}");
+                    }
+                    _enhancedUiInstance = null;
                 }
-                _enhancedUiInstance = null;
+                
+                // Base class handles socket cleanup
+                base.Dispose();
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in ConsoleUIService.Dispose(): {ex.Message}");
+            }
+            
+            Console.WriteLine("ConsoleUIService shutdown complete");
         }
     }
 }

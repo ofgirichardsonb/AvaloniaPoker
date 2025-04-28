@@ -1,6 +1,5 @@
 using System.Threading.Tasks;
-using PokerGame.Core.Microservices;
-using PokerGame.Core.Models;
+using MSA.Foundation.Messaging;
 
 namespace PokerGame.Abstractions
 {
@@ -33,7 +32,7 @@ namespace PokerGame.Abstractions
         /// Adds a player to the game
         /// </summary>
         /// <param name="player">The player to add</param>
-        void AddPlayer(Player player);
+        void AddPlayer(object player);
         
         /// <summary>
         /// Removes a player from the game
