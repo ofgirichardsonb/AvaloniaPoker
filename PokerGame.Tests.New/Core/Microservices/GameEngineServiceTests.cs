@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MSA.Foundation.Messaging;
-using MSAFoundationEC = MSA.Foundation.ServiceManagement.ExecutionContext;
+// Using the alias from global Usings.cs file
 using MSA.Foundation.ServiceManagement;
 using PokerGame.Core.Models;
 using PokerGame.Core.Microservices;

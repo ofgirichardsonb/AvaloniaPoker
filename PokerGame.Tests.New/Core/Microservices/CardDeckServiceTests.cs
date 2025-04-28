@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MSA.Foundation.Messaging;
-using MSAFoundationEC = MSA.Foundation.ServiceManagement.ExecutionContext;
+// Using the alias from global Usings.cs file
 using MSA.Foundation.ServiceManagement;
 using PokerGame.Core.Models;
 using PokerGame.Core.Microservices;
@@ -19,7 +19,7 @@ namespace PokerGame.Tests.New.Core.Microservices
         public void Constructor_WithValidParameters_ShouldInitializeCorrectly()
         {
             // Arrange
-            var executionContext = new MSAFoundationEC("test-service");
+            var executionContext = new MSAEC("test-service");
             
             // Act
             var service = new CardDeckService(executionContext);

@@ -103,13 +103,20 @@ namespace PokerGame.Core.Microservices
                 }
                 
                 // Check if the deck exists
-                if (!_decks.TryGetValue(dealPayload.DeckId, out Deck deck))
+                if (!_decks.TryGetValue(dealPayload.DeckId, out Deck? deck))
                 {
                     // Create a new deck if it doesn't exist
                     deck = CreateDeck(dealPayload.DeckId);
-                    _decks[dealPayload.DeckId] = deck;
-                    
-                    Logger.Log($"Created new deck with ID: {dealPayload.DeckId}");
+                    if (deck != null)
+                    {
+                        _decks[dealPayload.DeckId] = deck;
+                        Logger.Log($"Created new deck with ID: {dealPayload.DeckId}");
+                    }
+                    else
+                    {
+                        SendErrorResponse(message, $"Failed to create deck with ID: {dealPayload.DeckId}");
+                        return;
+                    }
                 }
                 
                 // Deal the requested number of cards
@@ -153,13 +160,20 @@ namespace PokerGame.Core.Microservices
                 }
                 
                 // Check if the deck exists
-                if (!_decks.TryGetValue(shufflePayload.DeckId, out Deck deck))
+                if (!_decks.TryGetValue(shufflePayload.DeckId, out Deck? deck))
                 {
                     // Create a new deck if it doesn't exist
                     deck = CreateDeck(shufflePayload.DeckId);
-                    _decks[shufflePayload.DeckId] = deck;
-                    
-                    Logger.Log($"Created new deck with ID: {shufflePayload.DeckId}");
+                    if (deck != null)
+                    {
+                        _decks[shufflePayload.DeckId] = deck;
+                        Logger.Log($"Created new deck with ID: {shufflePayload.DeckId}");
+                    }
+                    else
+                    {
+                        SendErrorResponse(message, $"Failed to create deck with ID: {shufflePayload.DeckId}");
+                        return;
+                    }
                 }
                 
                 // Shuffle the deck
@@ -291,7 +305,7 @@ namespace PokerGame.Core.Microservices
             var errorResponse = SimpleMessage.CreateError(originalMessage, errorMessage);
             PublishMessage(errorResponse.ToNetworkMessage());
             
-            Logger.LogError($"Sent error response: {errorMessage}", null);
+            Logger.LogError($"Sent error response: {errorMessage}", new Exception("Error in card deck service"));
         }
     }
     
