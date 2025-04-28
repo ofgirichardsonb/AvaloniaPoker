@@ -267,11 +267,10 @@ namespace PokerGame.Core.Microservices
         /// Handles messages received from other microservices
         /// </summary>
         /// <param name="message">The message to handle</param>
-        // This method is no longer needed since we implemented the interface method that takes an object
-protected virtual async Task HandleMessageAsync(Message message)
-{
-    await HandleMessageAsync((object)message);
-}
+        protected override async Task HandleMessageAsync(Message message)
+        {
+            await HandleMessageAsync((object)message);
+        }
 
 /// <summary>
 /// Handles messages received from other microservices via the IGameEngineService interface
@@ -523,7 +522,13 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     break;
                     
                 case MessageType.StartHand:
-                    Console.WriteLine("Received StartHand message");
+                    Console.WriteLine("********************************************************************************");
+                    Console.WriteLine("* GAME ENGINE: Received StartHand message (ID: " + message.MessageId + ")");
+                    Console.WriteLine("* From: " + message.SenderId);
+                    Console.WriteLine("********************************************************************************");
+                    
+                    // Log to the file system too
+                    PokerGame.Core.Logging.FileLogger.Info("GameEngine", $"Received StartHand message (ID: {message.MessageId}) from {message.SenderId}");
                     
                     try
                     {
@@ -687,10 +692,12 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     Console.WriteLine($"Response message ID: {responseMessage.MessageId}");
                     Console.WriteLine($"Response in response to: {responseMessage.InResponseTo}");
                     
-                    // Log to file for debugging
-                    PokerGame.Core.Logging.FileLogger.Initialize("/home/runner/workspace/message_trace.log");
+                    // Log to file for debugging - no need to specify path with enhanced FileLogger
                     PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
                         $"SENDING StartHand RESPONSE - Original: {message.MessageId}, Response: {responseMessage.MessageId}");
+                    
+                    // Also echo to console with more visibility
+                    Console.WriteLine($">>>>>> MESSAGE TRACE: [GameEngine] SENDING StartHand RESPONSE - Original: {message.MessageId}, Response: {responseMessage.MessageId} <<<<<<");
                     
                     // Create and set payload
                     var responsePayload = new GenericResponsePayload
@@ -1425,6 +1432,16 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
             
             try
             {
+                // Initialize our file logger as early as possible
+                PokerGame.Core.Logging.FileLogger.Initialize();
+                string logPath = PokerGame.Core.Logging.FileLogger.GetLogFilePath();
+                Console.WriteLine($"******************************************");
+                Console.WriteLine($"* GameEngineService initialized FileLogger");
+                Console.WriteLine($"* Log path: {logPath}");
+                Console.WriteLine($"******************************************");
+                
+                PokerGame.Core.Logging.FileLogger.Info("GameEngine", "Service starting up");
+                
                 Console.WriteLine("Starting game engine service with DIRECT DISCOVERY...");
                 
                 // Use the base StartAsync method which does more thorough initialization

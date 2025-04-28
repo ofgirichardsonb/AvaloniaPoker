@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading;
+using System.Diagnostics;
 
 namespace PokerGame.Core.Logging
 {
@@ -11,25 +12,144 @@ namespace PokerGame.Core.Logging
     public static class FileLogger
     {
         private static readonly object _lock = new object();
-        private static string _logFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "message_trace.log");
+        private static string _logFilePath;
         private static bool _initialized = false;
+        private static bool _initializationAttempted = false;
+        
+        // Predefined locations to try for logging
+        private static readonly string[] _possibleLogDirectories = new[]
+        {
+            "/tmp",                                  // Linux/Unix temp directory
+            "/home/runner/workspace",                // Replit workspace root
+            Environment.GetFolderPath(Environment.SpecialFolder.Desktop), // Desktop
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), // AppData
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), // Documents
+            Path.GetTempPath(),                      // System temp directory
+            AppDomain.CurrentDomain.BaseDirectory,   // Application directory
+            "."                                      // Current directory
+        };
         
         /// <summary>
         /// Initializes the file logger with the specified log file path
         /// </summary>
         /// <param name="logFilePath">The path to the log file</param>
-        public static void Initialize(string logFilePath = null)
+        public static bool Initialize(string logFilePath = null)
         {
-            if (!string.IsNullOrEmpty(logFilePath))
+            if (_initialized)
             {
-                _logFilePath = logFilePath;
+                // Already initialized with a working path
+                return true;
             }
             
-            // Create an empty log file or truncate an existing one
-            File.WriteAllText(_logFilePath, $"=== Message Trace Log Started at {DateTime.Now} ===\n");
-            _initialized = true;
+            if (_initializationAttempted && string.IsNullOrEmpty(logFilePath))
+            {
+                // We've already tried and failed with the default paths
+                return false;
+            }
             
-            Log($"FileLogger initialized. Writing to {_logFilePath}");
+            _initializationAttempted = true;
+            
+            try
+            {
+                if (!string.IsNullOrEmpty(logFilePath))
+                {
+                    // Try the specified path first
+                    if (TryInitializeLogFile(logFilePath))
+                    {
+                        return true;
+                    }
+                    Console.WriteLine($"Warning: Could not write to specified log path: {logFilePath}");
+                }
+                
+                // Try each of our predefined locations
+                foreach (var directory in _possibleLogDirectories)
+                {
+                    if (string.IsNullOrEmpty(directory)) continue;
+                    
+                    string path = Path.Combine(directory, "poker_message_trace.log");
+                    if (TryInitializeLogFile(path))
+                    {
+                        return true;
+                    }
+                }
+                
+                Console.WriteLine("Warning: Could not initialize FileLogger with any path");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing FileLogger: {ex.Message}");
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Attempts to initialize the log file at the specified path
+        /// </summary>
+        private static bool TryInitializeLogFile(string path)
+        {
+            try
+            {
+                // Ensure directory exists
+                string directory = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+                
+                // Test if we can write to this file
+                File.WriteAllText(path, $"=== Message Trace Log Started at {DateTime.Now} ===\n");
+                
+                // If we got here, the path works
+                _logFilePath = path;
+                _initialized = true;
+                
+                // Log this success
+                File.AppendAllText(path, $"[{DateTime.Now:HH:mm:ss.fff}] FileLogger initialized. Writing to {path}\n");
+                
+                // Also echo to console
+                Console.WriteLine($"FileLogger initialized successfully at: {path}");
+                
+                // Add some system information to help with debugging
+                LogSystemInfo();
+                
+                return true;
+            }
+            catch
+            {
+                // This path didn't work, try another
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Logs basic system information to help with debugging
+        /// </summary>
+        private static void LogSystemInfo()
+        {
+            try
+            {
+                Log("===== System Information =====");
+                Log($"OS: {Environment.OSVersion}");
+                Log($"Machine Name: {Environment.MachineName}");
+                Log($"Current Directory: {Environment.CurrentDirectory}");
+                Log($"Base Directory: {AppDomain.CurrentDomain.BaseDirectory}");
+                Log($"Process ID: {Process.GetCurrentProcess().Id}");
+                Log($"Process Name: {Process.GetCurrentProcess().ProcessName}");
+                Log("============================");
+            }
+            catch (Exception ex)
+            {
+                Log($"Error logging system info: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Gets the current log file path
+        /// </summary>
+        public static string GetLogFilePath()
+        {
+            return _logFilePath;
         }
         
         /// <summary>
@@ -38,9 +158,11 @@ namespace PokerGame.Core.Logging
         /// <param name="message">The message to log</param>
         public static void Log(string message)
         {
-            if (!_initialized)
+            if (!_initialized && !Initialize())
             {
-                Initialize();
+                // If initialization failed, just output to console
+                Console.WriteLine($"Console Fallback: {message}");
+                return;
             }
             
             try
@@ -54,6 +176,7 @@ namespace PokerGame.Core.Logging
             {
                 // Fallback to console if file logging fails
                 Console.WriteLine($"Error writing to log file: {ex.Message}");
+                Console.WriteLine($"Console Fallback: {message}");
             }
         }
         

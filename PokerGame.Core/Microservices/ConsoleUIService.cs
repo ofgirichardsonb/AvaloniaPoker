@@ -65,10 +65,14 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         public override void Start()
         {
+            // Initialize logging before anything else
+            PokerGame.Core.Logging.LogInitializer.InitializeLogging("ConsoleUIService");
+            
             base.Start();
             
             // Log the current state of the UI flag
             Console.WriteLine($"ConsoleUIService starting with curses UI flag: {_useEnhancedUI}");
+            PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", $"Starting with curses UI: {_useEnhancedUI}");
             
             // Initialize curses UI if requested - doing this here ensures proper initialization order
             if (_useEnhancedUI && _enhancedUiInstance == null)
@@ -76,6 +80,7 @@ namespace PokerGame.Core.Microservices
                 try
                 {
                     Console.WriteLine("Initializing Curses UI in Start method...");
+                    PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", "Initializing Curses UI...");
                     
                     // Use detailed diagnostics during initialization
                     Console.WriteLine("Curses UI initialization process:");
@@ -138,9 +143,20 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         public override async Task StartAsync()
         {
+            // Initialize our file logger as early as possible
+            PokerGame.Core.Logging.FileLogger.Initialize();
+            string logPath = PokerGame.Core.Logging.FileLogger.GetLogFilePath();
+            Console.WriteLine($"******************************************");
+            Console.WriteLine($"* ConsoleUIService initialized FileLogger");
+            Console.WriteLine($"* Log path: {logPath}");
+            Console.WriteLine($"******************************************");
+            
+            PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", "Service starting up");
+            
             await base.StartAsync();
             
             Console.WriteLine("ConsoleUIService.StartAsync started - setting up enhanced service discovery");
+            PokerGame.Core.Logging.FileLogger.Info("ConsoleUI", "Setting up enhanced service discovery");
             
             // Register to the broker more aggressively
             for (int i = 0; i < 5; i++)
@@ -463,10 +479,12 @@ namespace PokerGame.Core.Microservices
                     Console.WriteLine($"In response to: {message.InResponseTo}");
                     Console.WriteLine($"From service: {message.SenderId}");
                     
-                    // Initialize file logger
-                    PokerGame.Core.Logging.FileLogger.Initialize("/home/runner/workspace/message_trace.log");
+                    // Use improved file logger - no need to specify path
                     PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
                         $"RECEIVED GENERIC RESPONSE - ID: {message.MessageId}, InResponseTo: {message.InResponseTo}");
+                    
+                    // Also echo to console with more visibility
+                    Console.WriteLine($">>>>>> MESSAGE TRACE: [ConsoleUI] RECEIVED GENERIC RESPONSE - ID: {message.MessageId}, InResponseTo: {message.InResponseTo} <<<<<<");
                     
                     var genericResponse = message.GetPayload<GenericResponsePayload>();
                     if (genericResponse != null)
@@ -635,9 +653,6 @@ namespace PokerGame.Core.Microservices
                             // Start a new hand with enhanced logging
                             Console.WriteLine("========== SENDING STARTHAND MESSAGE ==========");
                             
-                            // Initialize file logger
-                            PokerGame.Core.Logging.FileLogger.Initialize("/home/runner/workspace/message_trace.log");
-                            
                             var message = Message.Create(MessageType.StartHand);
                             message.MessageId = Guid.NewGuid().ToString(); // Ensure unique message ID
                             message.SenderId = _serviceId; // Set sender ID explicitly
@@ -646,9 +661,12 @@ namespace PokerGame.Core.Microservices
                             Console.WriteLine($"StartHand sender ID: {message.SenderId}");
                             Console.WriteLine($"StartHand recipient ID: {_gameEngineServiceId}");
                             
-                            // Log to file
+                            // Log to file - using improved FileLogger that finds writable location
                             PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
                                 $"SENDING STARTHAND MESSAGE - ID: {message.MessageId}, Recipient: {_gameEngineServiceId}");
+                                
+                            // Also echo to console with more visibility
+                            Console.WriteLine($">>>>>> MESSAGE TRACE: [ConsoleUI] SENDING STARTHAND MESSAGE - ID: {message.MessageId}, Recipient: {_gameEngineServiceId} <<<<<<");
                             
                             Console.WriteLine("StartHand message sent, waiting for response...");
                             SendTo(message, _gameEngineServiceId);
@@ -829,9 +847,26 @@ namespace PokerGame.Core.Microservices
             // Now send a message to start the hand
             Console.WriteLine($"Sending StartHand message to {_gameEngineServiceId}");
             var startHandMessage = Message.Create(MessageType.StartHand);
+            startHandMessage.MessageId = Guid.NewGuid().ToString(); // Ensure unique message ID
+            startHandMessage.SenderId = _serviceId; // Set sender ID explicitly
+            
+            Console.WriteLine($"StartHand message ID: {startHandMessage.MessageId}");
+            Console.WriteLine($"StartHand sender ID: {startHandMessage.SenderId}");
+            Console.WriteLine($"StartHand recipient ID: {_gameEngineServiceId}");
+            
+            // Log to file - using improved FileLogger that finds writable location
+            PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                $"SENDING STARTHAND MESSAGE - ID: {startHandMessage.MessageId}, Recipient: {_gameEngineServiceId}");
+                
+            // Also echo to console with more visibility
+            Console.WriteLine($">>>>>> MESSAGE TRACE: [ConsoleUI] SENDING STARTHAND MESSAGE - ID: {startHandMessage.MessageId}, Recipient: {_gameEngineServiceId} <<<<<<");
+            
             SendTo(startHandMessage, _gameEngineServiceId);
             
             Console.WriteLine("StartHand message sent, waiting for response");
+            PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                "StartHand message sent, waiting for response...");
+                
             // Give some time for processing
             await Task.Delay(1000);
         }
@@ -1313,6 +1348,83 @@ namespace PokerGame.Core.Microservices
             }
             
             return $"[{rank}{suit}]";
+        }
+        
+        /// <summary>
+        /// Override message handling to process generic response messages
+        /// </summary>
+        /// <param name="message">The message to handle</param>
+        /// <returns>Task representing the asynchronous operation</returns>
+        protected override async Task HandleMessageAsync(Message message)
+        {
+            try
+            {
+                // Log all messages for easier debugging
+                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", 
+                    $"RECEIVED MESSAGE - Type: {message.Type}, ID: {message.MessageId}, From: {message.SenderId}");
+                
+                // Specifically handle GenericResponse messages to improve our acknowledgment system
+                if (message.Type == MessageType.GenericResponse)
+                {
+                    try
+                    {
+                        // Extract response payload
+                        var payload = message.GetPayload<GenericResponsePayload>();
+                        if (payload != null)
+                        {
+                            // Log important visibility markers
+                            string visibleMsg = $"***** GENERIC RESPONSE RECEIVED *****\n" +
+                                               $"Response to message ID: {message.InResponseTo}\n" +
+                                               $"Original message type: {payload.OriginalMessageType}\n" +
+                                               $"Success: {payload.Success}\n" +
+                                               $"Message: {payload.Message}";
+                            
+                            // Log to console
+                            Console.WriteLine(visibleMsg);
+                            
+                            // Log to file
+                            PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", visibleMsg);
+                            
+                            // If this is a response to a StartHand message, add even more visibility
+                            if (payload.OriginalMessageType == MessageType.StartHand)
+                            {
+                                string startHandMsg = $"★★★★★ STARTHAND ACKNOWLEDGMENT RECEIVED! ★★★★★\n" +
+                                                     $"SUCCESS: {payload.Success}\n" +
+                                                     $"MESSAGE: {payload.Message}";
+                                                     
+                                Console.WriteLine(startHandMsg);
+                                PokerGame.Core.Logging.FileLogger.MessageTrace("ConsoleUI", startHandMsg);
+                            }
+                            
+                            return; // Successfully handled
+                        }
+                        else
+                        {
+                            // Log error if payload extraction failed
+                            Console.WriteLine("Error: Received GenericResponse but couldn't extract payload");
+                            PokerGame.Core.Logging.FileLogger.Error("ConsoleUI", 
+                                $"Failed to extract GenericResponsePayload from message ID: {message.MessageId}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log any errors during processing
+                        Console.WriteLine($"Error processing GenericResponse: {ex.Message}");
+                        PokerGame.Core.Logging.FileLogger.Error("ConsoleUI", 
+                            $"Error processing GenericResponse: {ex.Message}\n{ex.StackTrace}");
+                    }
+                }
+                
+                // Let the base class handle the message if we didn't handle it
+                await base.HandleMessageAsync(message);
+            }
+            catch (Exception ex)
+            {
+                // Log any errors in the message handling itself
+                Console.WriteLine($"Error in HandleMessageAsync: {ex.Message}");
+                PokerGame.Core.Logging.FileLogger.Error("ConsoleUI", 
+                    $"HandleMessageAsync error: {ex.Message}\n{ex.StackTrace}");
+            }
         }
         
         /// <summary>
