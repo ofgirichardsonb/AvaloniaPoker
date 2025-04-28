@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using PokerGame.Core.Game;
 using PokerGame.Core.Interfaces;
 using PokerGame.Core.Models;
+using GameState = PokerGame.Core.Game.GameState;
 using ReactiveUI;
 
 namespace PokerGame.Avalonia.ViewModels

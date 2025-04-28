@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using PokerGame.Core.Microservices;
 using PokerGame.Abstractions;
 using PokerGame.Core.Messaging;
-using IGameEngineService = PokerGame.Services.IGameEngineService;
+using MSA.Foundation.Messaging;
+using CoreMessage = PokerGame.Core.Microservices.Message;
 
 namespace PokerGame.Services
 {
@@ -91,13 +93,48 @@ namespace PokerGame.Services
             public string ServiceType => _service.ServiceType;
             public bool IsRunning => true; // Approximate based on service being created
             
-            public void AddPlayer(Core.Models.Player player) => _service.AddPlayer(player);
+            public void AddPlayer(object player)
+            {
+                if (player is Core.Models.Player typedPlayer)
+                {
+                    _service.AddPlayer(typedPlayer);
+                }
+                else
+                {
+                    throw new ArgumentException("Player must be of type PokerGame.Core.Models.Player", nameof(player));
+                }
+            }
+            
             public void BroadcastGameState() => _service.BroadcastGameState();
-            public Task HandleMessageAsync(Core.Microservices.Message message) => _service.HandleMessageAsync(message);
+            
+            public Task HandleMessageAsync(MSA.Foundation.Messaging.Message message)
+            {
+                // Convert MSA.Foundation.Messaging.Message to PokerGame.Core.Microservices.Message
+                // This is a simplified adapter that relies on similar message structures
+                // Create a new CoreMessage instance with values from the MSA.Foundation message
+                var coreMessage = new CoreMessage
+                {
+                    MessageId = message.MessageId,
+                    SenderId = message.SenderId,
+                    ReceiverId = message.ReceiverId,
+                    Payload = message.Payload,
+                    // Map the MessageType to the appropriate CoreMessage.Type enum value
+                    Type = MapMessageType(message.MessageType)
+                };
+                
+                // The Type property may need special handling depending on how the enums are structured
+                return _service.HandleMessageAsync(coreMessage);
+            }
+            
             public void RemovePlayer(string playerId) => _service.RemovePlayer(playerId);
-            public Task<bool> ProcessPlayerActionAsync(string playerId, string action, int amount) => _service.ProcessPlayerActionAsync(playerId, action, amount);
+            
+            public Task<bool> ProcessPlayerActionAsync(string playerId, string action, int amount) 
+                => _service.ProcessPlayerActionAsync(playerId, action, amount);
+                
             public Task StartHandAsync() => _service.StartHandAsync();
+            
             public Task StartAsync() => _service.StartAsync();
+            
             public Task StopAsync() => _service.StopAsync();
         }
         
@@ -135,5 +172,30 @@ namespace PokerGame.Services
         /// Gets the telemetry service instance
         /// </summary>
         public static ITelemetryService TelemetryService => _telemetryService;
+        
+        /// <summary>
+        /// Maps MSA.Foundation.Messaging.MessageType to PokerGame.Core.Microservices.MessageType
+        /// </summary>
+        /// <param name="messageType">The MSA Foundation message type</param>
+        /// <returns>The equivalent PokerGame Core message type</returns>
+        private static PokerGame.Core.Microservices.MessageType MapMessageType(MSA.Foundation.Messaging.MessageType messageType)
+        {
+            // Simple mapping between message types
+            switch (messageType)
+            {
+                case MSA.Foundation.Messaging.MessageType.Acknowledgment:
+                    return PokerGame.Core.Microservices.MessageType.Acknowledgment;
+                case MSA.Foundation.Messaging.MessageType.Request:
+                    return PokerGame.Core.Microservices.MessageType.Ping;
+                case MSA.Foundation.Messaging.MessageType.Response:
+                    return PokerGame.Core.Microservices.MessageType.GenericResponse;
+                case MSA.Foundation.Messaging.MessageType.Error:
+                    return PokerGame.Core.Microservices.MessageType.Error;
+                case MSA.Foundation.Messaging.MessageType.Event:
+                    return PokerGame.Core.Microservices.MessageType.Notification;
+                default:
+                    return PokerGame.Core.Microservices.MessageType.Debug;
+            }
+        }
     }
 }

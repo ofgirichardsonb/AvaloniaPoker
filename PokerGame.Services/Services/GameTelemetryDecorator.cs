@@ -5,6 +5,7 @@ using System.Diagnostics;
 using PokerGame.Abstractions;
 using PokerGame.Core.Microservices;
 using PokerGame.Core.Models;
+using MSA.Foundation.Messaging;
 
 namespace PokerGame.Services
 {
@@ -51,13 +52,22 @@ namespace PokerGame.Services
         /// Adds a player to the game, with telemetry tracking
         /// </summary>
         /// <param name="player">The player to add</param>
-        public void AddPlayer(Player player)
+        public void AddPlayer(object player)
         {
             try
             {
                 var stopwatch = Stopwatch.StartNew();
                 _decoratedService.AddPlayer(player);
                 stopwatch.Stop();
+
+                string playerType = player?.GetType().Name ?? "Unknown";
+                string playerId = "Unknown";
+                
+                // Try to extract the ID if it's a Player object
+                if (player is Player typedPlayer)
+                {
+                    playerId = typedPlayer.Id ?? "Unknown";
+                }
 
                 _telemetryService.TrackRequest(
                     "AddPlayer", 
@@ -67,17 +77,26 @@ namespace PokerGame.Services
                     true,
                     new Dictionary<string, string>
                     {
-                        ["PlayerType"] = player?.GetType().Name ?? "Unknown",
-                        ["PlayerId"] = player?.Id ?? "Unknown"
+                        ["PlayerType"] = playerType,
+                        ["PlayerId"] = playerId
                     });
             }
             catch (Exception ex)
             {
+                string playerType = player?.GetType().Name ?? "Unknown";
+                string playerId = "Unknown";
+                
+                // Try to extract the ID if it's a Player object
+                if (player is Player typedPlayer)
+                {
+                    playerId = typedPlayer.Id ?? "Unknown";
+                }
+                
                 _telemetryService.TrackException(ex, new Dictionary<string, string>
                 {
                     ["Operation"] = "AddPlayer",
-                    ["PlayerType"] = player?.GetType().Name ?? "Unknown",
-                    ["PlayerId"] = player?.Id ?? "Unknown"
+                    ["PlayerType"] = playerType,
+                    ["PlayerId"] = playerId
                 });
                 throw;
             }
@@ -192,14 +211,16 @@ namespace PokerGame.Services
         /// Handles a message, with telemetry tracking
         /// </summary>
         /// <param name="message">The message to handle</param>
-        public async Task HandleMessageAsync(Message message)
+        public async Task HandleMessageAsync(MSA.Foundation.Messaging.Message message)
         {
             try
             {
-                string messageType = message?.Type.ToString() ?? "Unknown";
+                string messageType = message?.MessageType.ToString() ?? "Unknown";
                 string messageId = message?.MessageId ?? "Unknown";
                 
                 var stopwatch = Stopwatch.StartNew();
+                // Pass the MSA.Foundation.Messaging.Message directly to the decorated service
+                // The GameEngineService.HandleMessageAsync method already handles MSA.Foundation.Messaging.Message types
                 await _decoratedService.HandleMessageAsync(message);
                 stopwatch.Stop();
 
@@ -218,7 +239,7 @@ namespace PokerGame.Services
             }
             catch (Exception ex)
             {
-                string messageType = message?.Type.ToString() ?? "Unknown";
+                string messageType = message?.MessageType.ToString() ?? "Unknown";
                 string messageId = message?.MessageId ?? "Unknown";
                 
                 _telemetryService.TrackException(ex, new Dictionary<string, string>
@@ -327,6 +348,30 @@ namespace PokerGame.Services
                     ["ServiceId"] = ServiceId
                 });
                 throw;
+            }
+        }
+        /// <summary>
+        /// Maps MSA.Foundation.Messaging.MessageType to PokerGame.Core.Microservices.MessageType
+        /// </summary>
+        /// <param name="messageType">The MSA Foundation message type</param>
+        /// <returns>The equivalent PokerGame Core message type</returns>
+        private static PokerGame.Core.Microservices.MessageType MapMessageType(MSA.Foundation.Messaging.MessageType messageType)
+        {
+            // Simple mapping between message types
+            switch (messageType)
+            {
+                case MSA.Foundation.Messaging.MessageType.Acknowledgment:
+                    return PokerGame.Core.Microservices.MessageType.Acknowledgment;
+                case MSA.Foundation.Messaging.MessageType.Request:
+                    return PokerGame.Core.Microservices.MessageType.Ping;
+                case MSA.Foundation.Messaging.MessageType.Response:
+                    return PokerGame.Core.Microservices.MessageType.GenericResponse;
+                case MSA.Foundation.Messaging.MessageType.Error:
+                    return PokerGame.Core.Microservices.MessageType.Error;
+                case MSA.Foundation.Messaging.MessageType.Event:
+                    return PokerGame.Core.Microservices.MessageType.Notification;
+                default:
+                    return PokerGame.Core.Microservices.MessageType.Debug;
             }
         }
     }
