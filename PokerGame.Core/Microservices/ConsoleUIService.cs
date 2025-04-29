@@ -589,11 +589,17 @@ namespace PokerGame.Core.Microservices
                 
                 Console.WriteLine($"Discovery attempt {attempt + 1}/{maxAttempts}...");
                 
-                // Send a service discovery message through central broker
-                var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
-                discoveryMsg.SenderId = _serviceId;
-                Console.WriteLine($"====> [PlayerUI {_serviceId}] Broadcasting message {discoveryMsg.Type} (ID: {discoveryMsg.MessageId}) through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(discoveryMsg.ToNetworkMessage());
+                // Send a service discovery message through central broker using direct NetworkMessage creation
+                var discoveryNetworkMsg = new NetworkMessage
+                {
+                    MessageId = Guid.NewGuid().ToString(),
+                    Type = Messaging.MessageType.ServiceDiscovery,  // Use Messaging.MessageType directly
+                    SenderId = _serviceId,
+                    Timestamp = DateTime.UtcNow
+                };
+                
+                Console.WriteLine($"====> [PlayerUI {_serviceId}] Broadcasting message {discoveryNetworkMsg.Type} (ID: {discoveryNetworkMsg.MessageId}) through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(discoveryNetworkMsg);
                 
                 // Wait a bit
                 await Task.Delay(delayMs);
@@ -610,15 +616,20 @@ namespace PokerGame.Core.Microservices
                 
                 Console.WriteLine($"Using fallback static game engine ID: {_gameEngineServiceId}");
                 
-                // Send a debug message through the broker instead of direct
-                var connectMsg = Message.Create(MessageType.Debug);
-                connectMsg.SenderId = _serviceId;
-                connectMsg.ReceiverId = _gameEngineServiceId;
-                connectMsg.SetPayload($"Connection attempt from ConsoleUI ({_serviceId}) to GameEngine via central broker");
+                // Send a debug message through the broker using direct NetworkMessage creation
+                var debugNetworkMsg = new NetworkMessage
+                {
+                    MessageId = Guid.NewGuid().ToString(),
+                    Type = Messaging.MessageType.Debug,  // Use Messaging.MessageType directly
+                    SenderId = _serviceId,
+                    ReceiverId = _gameEngineServiceId,
+                    Timestamp = DateTime.UtcNow,
+                    Payload = $"Connection attempt from ConsoleUI ({_serviceId}) to GameEngine via central broker"
+                };
                 
-                // Important: Use Broadcast through the central broker instead of direct send
-                Console.WriteLine($"Sending message type {connectMsg.Type} to {_gameEngineServiceId} through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(connectMsg.ToNetworkMessage());
+                // Important: Use CentralBroker to publish the message
+                Console.WriteLine($"DIRECT: Sending message type {debugNetworkMsg.Type} to {_gameEngineServiceId} through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(debugNetworkMsg);
                 
                 // For logging
                 Console.WriteLine($"Starting game with engine: {_gameEngineServiceId}");
@@ -652,19 +663,21 @@ namespace PokerGame.Core.Microservices
                     new PlayerInfo { PlayerId = "Player4", Name = "Dave", Chips = 1000 }
                 };
                 
-                // First, send a service discovery message through central broker
-                var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
-                discoveryMsg.SenderId = _serviceId;
-                Console.WriteLine($"====> [PlayerUI {_serviceId}] Broadcasting message {discoveryMsg.Type} (ID: {discoveryMsg.MessageId}) through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(discoveryMsg.ToNetworkMessage());
+                // First, send a service discovery message through central broker using direct NetworkMessage creation
+                var discoveryNetworkMsg = new NetworkMessage
+                {
+                    MessageId = Guid.NewGuid().ToString(),
+                    Type = Messaging.MessageType.ServiceDiscovery,  // Use Messaging.MessageType directly
+                    SenderId = _serviceId,
+                    Timestamp = DateTime.UtcNow
+                };
+                
+                Console.WriteLine($"====> [PlayerUI {_serviceId}] Broadcasting message {discoveryNetworkMsg.Type} (ID: {discoveryNetworkMsg.MessageId}) through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(discoveryNetworkMsg);
                 
                 await Task.Delay(500);
                 
-                // Send a setup message to configure the game
-                var setupMessage = Message.Create(MessageType.StartGame);
-                setupMessage.SenderId = _serviceId;
-                setupMessage.ReceiverId = _gameEngineServiceId;
-                
+                // Send a setup message to configure the game using direct NetworkMessage creation
                 // Create game config payload
                 var gameConfig = new
                 {
@@ -675,36 +688,53 @@ namespace PokerGame.Core.Microservices
                     Players = players
                 };
                 
-                setupMessage.SetPayload(gameConfig);
+                // Create the setup message directly as a NetworkMessage
+                var setupNetworkMsg = new NetworkMessage
+                {
+                    MessageId = Guid.NewGuid().ToString(),
+                    Type = Messaging.MessageType.StartGame,  // Use Messaging.MessageType directly
+                    SenderId = _serviceId,
+                    ReceiverId = _gameEngineServiceId,
+                    Timestamp = DateTime.UtcNow,
+                    Payload = System.Text.Json.JsonSerializer.Serialize(gameConfig)
+                };
                 
                 Console.WriteLine("Sending game setup message...");
-                // Use central broker instead of direct send
-                Console.WriteLine($"Sending message type {setupMessage.Type} to {_gameEngineServiceId} through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(setupMessage.ToNetworkMessage());
+                Console.WriteLine($"DIRECT: Sending message type {setupNetworkMsg.Type} to {_gameEngineServiceId} through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(setupNetworkMsg);
                 
                 await Task.Delay(500);
                 
-                // Send a message to start the game
-                var startMessage = Message.Create(MessageType.StartGame);
-                startMessage.SenderId = _serviceId;
-                startMessage.ReceiverId = _gameEngineServiceId;
+                // Send a message to start the game using direct NetworkMessage creation
+                var startNetworkMsg = new NetworkMessage
+                {
+                    MessageId = Guid.NewGuid().ToString(),
+                    Type = Messaging.MessageType.StartGame,  // Use Messaging.MessageType directly
+                    SenderId = _serviceId,
+                    ReceiverId = _gameEngineServiceId,
+                    Timestamp = DateTime.UtcNow
+                };
                 
                 Console.WriteLine("Sending start game message...");
-                // Use central broker instead of direct send
-                Console.WriteLine($"Sending message type {startMessage.Type} to {_gameEngineServiceId} through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(startMessage.ToNetworkMessage());
+                Console.WriteLine($"DIRECT: Sending message type {startNetworkMsg.Type} to {_gameEngineServiceId} through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(startNetworkMsg);
                 
                 await Task.Delay(500);
                 
                 // Send a message to start the first hand
-                var startHandMessage = Message.Create(MessageType.StartHand);
-                startHandMessage.SenderId = _serviceId;
-                startHandMessage.ReceiverId = _gameEngineServiceId;
+                // Create a NetworkMessage directly for StartHand to avoid conversion issues 
+                var networkMessage = new NetworkMessage
+                {
+                    MessageId = Guid.NewGuid().ToString(),
+                    Type = Messaging.MessageType.StartHand,  // Use Messaging.MessageType directly
+                    SenderId = _serviceId,
+                    ReceiverId = _gameEngineServiceId,
+                    Timestamp = DateTime.UtcNow
+                };
                 
                 Console.WriteLine("Sending start hand message...");
-                // Use central broker instead of direct send
-                Console.WriteLine($"Sending message type {startHandMessage.Type} to {_gameEngineServiceId} through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(startHandMessage.ToNetworkMessage());
+                Console.WriteLine($"DIRECT: Sending message type {networkMessage.Type} to {_gameEngineServiceId} through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(networkMessage);
             }
             catch (Exception ex)
             {
@@ -727,10 +757,7 @@ namespace PokerGame.Core.Microservices
             
             try
             {
-                var message = Message.Create(MessageType.PlayerAction);
-                message.SenderId = _serviceId;
-                message.ReceiverId = _gameEngineServiceId;
-                
+                // Create player action payload
                 var actionPayload = new PlayerActionPayload
                 {
                     PlayerId = _activePlayerId,
@@ -738,12 +765,20 @@ namespace PokerGame.Core.Microservices
                     BetAmount = betAmount
                 };
                 
-                message.SetPayload(actionPayload);
+                // Create the player action message directly as a NetworkMessage
+                var actionNetworkMsg = new NetworkMessage
+                {
+                    MessageId = Guid.NewGuid().ToString(),
+                    Type = Messaging.MessageType.PlayerAction,  // Use Messaging.MessageType directly
+                    SenderId = _serviceId,
+                    ReceiverId = _gameEngineServiceId,
+                    Timestamp = DateTime.UtcNow,
+                    Payload = System.Text.Json.JsonSerializer.Serialize(actionPayload)
+                };
                 
                 Console.WriteLine($"Sending player action: {actionType} {(betAmount > 0 ? $"with bet {betAmount}" : "")}");
-                // Use central broker instead of direct send
-                Console.WriteLine($"Sending message type {message.Type} to {_gameEngineServiceId} through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(message.ToNetworkMessage());
+                Console.WriteLine($"DIRECT: Sending message type {actionNetworkMsg.Type} to {_gameEngineServiceId} through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(actionNetworkMsg);
                 
                 _waitingForPlayerAction = false;
             }
@@ -825,14 +860,19 @@ namespace PokerGame.Core.Microservices
                                 // New hand
                                 if (!string.IsNullOrEmpty(_gameEngineServiceId))
                                 {
-                                    var startHandMessage = Message.Create(MessageType.StartHand);
-                                    startHandMessage.SenderId = _serviceId;
-                                    startHandMessage.ReceiverId = _gameEngineServiceId;
+                                    // Create a NetworkMessage directly to avoid message type conversion issues
+                                    var networkMessage = new NetworkMessage
+                                    {
+                                        MessageId = Guid.NewGuid().ToString(),
+                                        Type = Messaging.MessageType.StartHand,  // Use Messaging.MessageType directly
+                                        SenderId = _serviceId,
+                                        ReceiverId = _gameEngineServiceId,
+                                        Timestamp = DateTime.UtcNow
+                                    };
                                     
                                     Console.WriteLine("Sending start hand message...");
-                                    // Use central broker instead of direct send
-                                    Console.WriteLine($"Sending message type {startHandMessage.Type} to {_gameEngineServiceId} through central broker");
-                                    BrokerManager.Instance.CentralBroker?.Publish(startHandMessage.ToNetworkMessage());
+                                    Console.WriteLine($"DIRECT: Sending message type {networkMessage.Type} to {_gameEngineServiceId} through central broker");
+                                    BrokerManager.Instance.CentralBroker?.Publish(networkMessage);
                                 }
                                 break;
                                 

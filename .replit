@@ -96,7 +96,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && dotnet test MSA.Foundation.Tests"
+args = "cd /home/runner/workspace && ./run_starthand_test.sh"
 
 [[workflows.workflow]]
 name = "server-test"

@@ -27,8 +27,21 @@ namespace PokerGame.Core.Messaging
                 InResponseTo = message.InResponseTo
             };
             
-            // Convert the message type (need to cast since the enums are in different namespaces)
-            networkMessage.Type = (PokerGame.Core.Messaging.MessageType)(int)message.Type;
+            // Map the message type explicitly instead of using a straight cast
+            switch (message.Type)
+            {
+                case Microservices.MessageType.StartHand:
+                    networkMessage.Type = MessageType.StartHand;
+                    break;
+                case Microservices.MessageType.DeckShuffled:
+                    networkMessage.Type = MessageType.DeckShuffled;
+                    break;
+                default:
+                    // For other message types, a direct cast might work but could be risky
+                    // Using a string-based mapping for safer conversion
+                    networkMessage.Type = Enum.Parse<MessageType>(message.Type.ToString());
+                    break;
+            }
             
             // Convert the payload based on message type
             if (message.Type == Microservices.MessageType.ServiceRegistration)
@@ -95,8 +108,20 @@ namespace PokerGame.Core.Messaging
                 InResponseTo = networkMessage.InResponseTo
             };
             
-            // Convert the message type (need to cast since the enums are in different namespaces)
-            message.Type = (PokerGame.Core.Microservices.MessageType)(int)networkMessage.Type;
+            // Map the message type explicitly instead of using a straight cast
+            switch (networkMessage.Type)
+            {
+                case MessageType.StartHand:
+                    message.Type = Microservices.MessageType.StartHand;
+                    break;
+                case MessageType.DeckShuffled:
+                    message.Type = Microservices.MessageType.DeckShuffled;
+                    break;
+                default:
+                    // For other message types, a string-based mapping is safer than direct casting
+                    message.Type = Enum.Parse<Microservices.MessageType>(networkMessage.Type.ToString());
+                    break;
+            }
             
             // Handle payload conversion based on message type
             if (networkMessage.Type == MessageType.ServiceRegistration)
