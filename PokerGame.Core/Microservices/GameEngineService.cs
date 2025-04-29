@@ -40,26 +40,61 @@ namespace PokerGame.Core.Microservices
         /// <returns>A task that completes when the message is handled</returns>
         public async Task HandleMessageAsync(MSA.Foundation.Messaging.Message message)
         {
-            Console.WriteLine($"GameEngineService.HandleMessageAsync received message {message.MessageId}");
+            Console.WriteLine($"GameEngineService.HandleMessageAsync received message {message.MessageId} of type {message.MessageType}");
             
             try
             {
+                string inResponseTo = null;
+                // Check for original message ID in headers (MSA.Foundation uses Headers instead of InResponseTo)
+                if (message.Headers.TryGetValue("OriginalMessageId", out string originalMsgId))
+                {
+                    inResponseTo = originalMsgId;
+                    Console.WriteLine($"Found OriginalMessageId in headers: {originalMsgId}");
+                }
+                // Also check AcknowledgmentId (used for ack messages)
+                else if (!string.IsNullOrEmpty(message.AcknowledgmentId))
+                {
+                    inResponseTo = message.AcknowledgmentId;
+                    Console.WriteLine($"Using AcknowledgmentId as InResponseTo: {inResponseTo}");
+                }
+                
                 // Convert MSA message to a NetworkMessage format we can handle
                 var convertedMessage = new PokerGame.Core.Messaging.NetworkMessage
                 {
                     MessageId = message.MessageId,
                     SenderId = message.SenderId,
-                    ReceiverId = message.ReceiverId
+                    ReceiverId = message.ReceiverId,
+                    InResponseTo = inResponseTo,
+                    Timestamp = DateTime.UtcNow
                 };
                 
-                // Set the message type based on a string conversion
-                if (Enum.TryParse<PokerGame.Core.Messaging.MessageType>(message.MessageType.ToString(), out var msgType))
+                // Handle special message types explicitly to avoid string conversion issues
+                if (message.MessageType == MSA.Foundation.Messaging.MessageType.Event)
+                {
+                    // For Event type messages, look at payload to determine if it's StartHand
+                    if (!string.IsNullOrEmpty(message.Payload) && 
+                        message.Payload.Contains("StartHand", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine("Detected StartHand event from payload check - setting correct type");
+                        convertedMessage.Type = PokerGame.Core.Messaging.MessageType.StartHand;
+                    }
+                    // Check headers for additional clues
+                    else if (message.Headers.ContainsKey("MessageSubType") && 
+                             message.Headers["MessageSubType"].Contains("StartHand", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine("Detected StartHand from message headers - setting correct type");
+                        convertedMessage.Type = PokerGame.Core.Messaging.MessageType.StartHand;
+                    }
+                }
+                else if (Enum.TryParse<PokerGame.Core.Messaging.MessageType>(message.MessageType.ToString(), out var msgType))
                 {
                     convertedMessage.Type = msgType;
                 }
                 else
                 {
+                    // Default fallback
                     convertedMessage.Type = PokerGame.Core.Messaging.MessageType.Debug;
+                    Console.WriteLine($"WARNING: Could not map message type {message.MessageType}, defaulting to Debug");
                 }
                 
                 // Add any payload data if present
@@ -68,19 +103,47 @@ namespace PokerGame.Core.Microservices
                     convertedMessage.Payload = message.Payload;
                 }
                 
+                // Special debug logging for StartHand messages
+                if (convertedMessage.Type == PokerGame.Core.Messaging.MessageType.StartHand)
+                {
+                    Console.WriteLine("\n\n");
+                    Console.WriteLine("##########################################################");
+                    Console.WriteLine("#                                                        #");
+                    Console.WriteLine("#         GAME ENGINE CONVERTING STARTHAND MESSAGE       #");
+                    Console.WriteLine("#                                                        #");
+                    Console.WriteLine("##########################################################");
+                    Console.WriteLine($"# Original MSA Message Type: {message.MessageType}");
+                    Console.WriteLine($"# Converted To Network Message Type: {convertedMessage.Type}");
+                    Console.WriteLine($"# Message ID: {convertedMessage.MessageId}");
+                    Console.WriteLine($"# From Sender: {convertedMessage.SenderId}");
+                    Console.WriteLine("##########################################################");
+                    Console.WriteLine("\n\n");
+                }
+                
                 // Convert NetworkMessage to Message format using our utility method
                 var microserviceMessage = ConvertToMicroserviceMessage(convertedMessage);
                 
+                // Additional debug logging for StartHand in Microservice format
+                if (microserviceMessage.Type == PokerGame.Core.Microservices.MessageType.StartHand)
+                {
+                    Console.WriteLine("\n\n");
+                    Console.WriteLine("##########################################################");
+                    Console.WriteLine("#                                                        #");
+                    Console.WriteLine("#       MICROSERVICE MESSAGE CONVERTED SUCCESSFULLY      #");
+                    Console.WriteLine("#                                                        #");
+                    Console.WriteLine("##########################################################");
+                    Console.WriteLine($"# Final Microservice Message Type: {microserviceMessage.Type}");
+                    Console.WriteLine("##########################################################");
+                    Console.WriteLine("\n\n");
+                }
+                
                 // Process message based on converted type
                 await HandleMessageInternalAsync(microserviceMessage);
-                
-                // Return a completed task
-                await Task.CompletedTask;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error handling MSA message: {ex.Message}");
-                throw;
+                Console.WriteLine(ex.StackTrace);
             }
         }
         
@@ -613,7 +676,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     Console.WriteLine("#                                                        #");
                     Console.WriteLine("#             GAME ENGINE RECEIVED STARTHAND             #");
                     Console.WriteLine("#                                                        #");
-                    Console.WriteLine("#                    MARKED: V2                          #");
+                    Console.WriteLine("#                 MARKED: V3 (FIXED)                     #");
                     Console.WriteLine("#                                                        #");
                     Console.WriteLine("##########################################################");
                     Console.WriteLine($"# GAME ENGINE: Received StartHand message (ID: {message.MessageId})");
@@ -692,6 +755,46 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             $"SENT ACKNOWLEDGMENT - For: {message.MessageId}, To: {message.SenderId}, AckID: {ackMessage.MessageId}");
                         PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
                             $"SENT GENERIC RESPONSE - For: {message.MessageId}, To: {message.SenderId}, ResponseID: {genericResponseMessage.MessageId}");
+                        
+                        // NEW ADDITION - SEND DECK SHUFFLED MESSAGE DIRECTLY
+                        // This ensures the game flow continues properly
+                        Console.WriteLine("\n");
+                        Console.WriteLine("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+                        Console.WriteLine("@                                                         @");
+                        Console.WriteLine("@        SENDING DIRECT DECKSHUFFLED RESPONSE            @");
+                        Console.WriteLine("@                                                         @");
+                        Console.WriteLine("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+                        Console.WriteLine("\n");
+                        
+                        // Create a DeckShuffled response using NetworkMessage to avoid conversion issues
+                        var deckShuffledResponse = new NetworkMessage
+                        {
+                            MessageId = Guid.NewGuid().ToString(),
+                            Type = MessageType.DeckShuffled,  // Use explicit type
+                            SenderId = _serviceId,
+                            ReceiverId = message.SenderId,
+                            InResponseTo = message.MessageId,
+                            Timestamp = DateTime.UtcNow,
+                            Headers = new Dictionary<string, string>
+                            {
+                                { "OriginalMessageId", message.MessageId },
+                                { "ResponseType", "DeckShuffled" }
+                            }
+                        };
+                        
+                        // Send through the central broker directly for maximum reliability
+                        Console.WriteLine($"Publishing DeckShuffled response directly through CentralMessageBroker");
+                        Console.WriteLine($"DeckShuffled Message ID: {deckShuffledResponse.MessageId}");
+                        Console.WriteLine($"In Response To: {deckShuffledResponse.InResponseTo}");
+                        Console.WriteLine($"From: {deckShuffledResponse.SenderId}");
+                        Console.WriteLine($"To: {deckShuffledResponse.ReceiverId}");
+                        
+                        // Publish via central broker
+                        BrokerManager.Instance.CentralBroker?.Publish(deckShuffledResponse);
+                        
+                        // Log the DeckShuffled message
+                        PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
+                            $"SENT DECKSHUFFLED - For: {message.MessageId}, To: {message.SenderId}, ID: {deckShuffledResponse.MessageId}");
                     }
                     catch (Exception ex) {
                         Console.WriteLine($"ERROR sending acknowledgment: {ex.Message}");
