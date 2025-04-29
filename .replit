@@ -66,8 +66,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && ./rebuild.sh && ./poker-services.sh start --port-offset 0 --verbose --curses"
-waitForPort = 5000
+args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
 
 [[workflows.workflow]]
 name = "poker-game-5000"
@@ -76,7 +75,6 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
-waitForPort = 5000
 
 [[workflows.workflow]]
 name = "message-flow-test"
@@ -84,7 +82,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && dotnet run --project BasicMessageTest/BasicMessageTest.csproj --configuration Release"
+args = "cd /home/runner/workspace/MessageFlowTestMinimal && dotnet build -c Debug && dotnet run -c Debug"
 
 [[workflows.workflow]]
 name = "poker-test"
@@ -93,7 +91,6 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 0 --verbose"
-waitForPort = 5000
 
 [[workflows.workflow]]
 name = "rebuild"

@@ -1,38 +1,3 @@
-#!/bin/bash
-# Debug message flow test
-echo "========================================================"
-echo "Starting focused message flow test"
-echo "========================================================"
-
-# Create a minimal test directory
-cd /home/runner/workspace
-mkdir -p MessageFlowTestMinimal
-cd MessageFlowTestMinimal
-
-# Create a minimal project to test message flow
-cat > MessageFlowTest.csproj << 'EOF'
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-  <ItemGroup>
-    <Reference Include="MSA.Foundation">
-      <HintPath>../MSA.Foundation/bin/Release/net8.0/MSA.Foundation.dll</HintPath>
-    </Reference>
-    <Reference Include="PokerGame.Abstractions">
-      <HintPath>../PokerGame.Abstractions/bin/Release/net8.0/PokerGame.Abstractions.dll</HintPath>
-    </Reference>
-    <Reference Include="PokerGame.Core">
-      <HintPath>../PokerGame.Core/bin/Debug/net8.0/PokerGame.Core.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-</Project>
-EOF
-
-# Create a minimal test program
-cat > Program.cs << 'EOF'
 using System;
 using System.Threading.Tasks;
 using System.Threading;
@@ -128,13 +93,3 @@ class Program
         cts.Cancel();
     }
 }
-EOF
-
-# Build and run
-echo "Building minimal message flow test..."
-dotnet build -c Debug
-
-echo "\nRunning minimal message flow test..."
-dotnet run -c Debug
-
-echo "\nTest complete!"
