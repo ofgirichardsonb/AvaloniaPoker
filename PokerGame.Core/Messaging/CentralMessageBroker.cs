@@ -32,6 +32,16 @@ namespace PokerGame.Core.Messaging
         private readonly bool _verbose;
         
         /// <summary>
+        /// Gets the port used for publishing messages
+        /// </summary>
+        public int PublisherPort => _port;
+        
+        /// <summary>
+        /// Gets the port used for subscribing to messages (publisher port + 1)
+        /// </summary>
+        public int SubscriberPort => _port + 1;
+        
+        /// <summary>
         /// Creates a new central message broker
         /// </summary>
         /// <param name="executionContext">The execution context to use</param>

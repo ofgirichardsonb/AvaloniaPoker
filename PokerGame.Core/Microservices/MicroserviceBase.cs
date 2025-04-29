@@ -138,57 +138,17 @@ namespace PokerGame.Core.Microservices
             _serviceName = serviceName;
             _serviceType = serviceType;
             _heartbeatIntervalMs = heartbeatIntervalMs;
+            // Store port values for logging, but don't use them directly
+            // The CentralMessageBroker handles actual port assignments
             _publisherPort = publisherPort;
             _subscriberPort = subscriberPort;
             
-            // Set up the publisher socket with retry logic
-            int maxRetries = 3;
-            int currentRetry = 0;
-            bool publisherBound = false;
+            // We no longer create direct sockets here
+            // The central broker pattern means services should CONNECT not BIND
+            // Let the BrokerManager start and initialize the CentralMessageBroker
+            Console.WriteLine($"[{_serviceType} {_serviceId}] Using CentralMessageBroker architecture - no direct socket binding");
             
-            while (!publisherBound && currentRetry < maxRetries)
-            {
-                try
-                {
-                    // Try to create and bind the publisher socket
-                    _publisherSocket = new PublisherSocket();
-                    _publisherSocket.Options.SendHighWatermark = 1000;
-                    _publisherSocket.Bind($"tcp://127.0.0.1:{publisherPort}");
-                    publisherBound = true;
-                    Console.WriteLine($"Successfully bound publisher socket on port {publisherPort}");
-                }
-                catch (NetMQ.AddressAlreadyInUseException)
-                {
-                    currentRetry++;
-                    
-                    // Dispose of failed socket attempt
-                    if (_publisherSocket != null)
-                    {
-                        _publisherSocket.Dispose();
-                        _publisherSocket = null;
-                    }
-                    
-                    if (currentRetry < maxRetries)
-                    {
-                        Console.WriteLine($"Port {publisherPort} already in use, retrying with port {publisherPort + currentRetry}");
-                        publisherPort += currentRetry;
-                        Thread.Sleep(500); // Give time for potential cleanup
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Failed to bind publisher after {maxRetries} attempts");
-                        throw; // Rethrow after max retries
-                    }
-                }
-            }
-            
-            // Set up the subscriber socket (for receiving messages)
-            _subscriberSocket = new SubscriberSocket();
-            _subscriberSocket.Options.ReceiveHighWatermark = 1000;
-            _subscriberSocket.Connect($"tcp://127.0.0.1:{subscriberPort}");
-            
-            // Subscribe to all messages
-            _subscriberSocket.Subscribe("");
+            // The socket initialization happens in Start() method now
             
             Console.WriteLine($"{_serviceName} ({_serviceType}) started with STATIC ID: {_serviceId}");
         }
@@ -224,6 +184,15 @@ namespace PokerGame.Core.Microservices
             if (!centralBrokerFound)
             {
                 Console.WriteLine($"====> [{_serviceType} {_serviceId}] WARNING: Could not find central broker, will use direct communication fallback");
+            }
+            else
+            {
+                // Initialize sockets for the central broker architecture
+                try {
+                    InitializeCentralBrokerSockets(centralBroker);
+                } catch (Exception ex) {
+                    Console.WriteLine($"====> [{_serviceType} {_serviceId}] Error initializing sockets: {ex.Message}");
+                }
             }
             
             // Start the message processing task
@@ -338,6 +307,68 @@ namespace PokerGame.Core.Microservices
             }
             
             Dispose();
+        }
+        
+        /// <summary>
+        /// Initializes or reinitializes sockets to work with the central broker architecture
+        /// </summary>
+        /// <param name="centralBroker">The central message broker to connect to</param>
+        private void InitializeCentralBrokerSockets(CentralMessageBroker centralBroker)
+        {
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Initializing sockets for central broker architecture");
+            
+            // Close and dispose existing sockets properly if they exist
+            if (_publisherSocket != null)
+            {
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Closing existing publisher socket...");
+                _publisherSocket.Close();
+                _publisherSocket.Dispose();
+                _publisherSocket = null;
+            }
+            
+            if (_subscriberSocket != null)
+            {
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Closing existing subscriber socket...");
+                _subscriberSocket.Close();
+                _subscriberSocket.Dispose();
+                _subscriberSocket = null;
+            }
+            
+            // Ensure cleanup - this will help prevent port conflicts
+            NetMQContextHelper.ScheduleCleanup(200);
+            Thread.Sleep(100); // Small delay to let cleanup complete
+            
+            // Get the publisher and subscriber ports from the central broker
+            int brokerPublisherPort = centralBroker.PublisherPort;
+            int brokerSubscriberPort = centralBroker.SubscriberPort;
+            
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Using central broker ports: publisher={brokerPublisherPort}, subscriber={brokerSubscriberPort}");
+            
+            try
+            {
+                // Create new publisher socket
+                _publisherSocket = new PublisherSocket();
+                // Important: Services should CONNECT to the central broker's subscriber port,
+                // not bind to their own port - they're the clients in this architecture
+                _publisherSocket.Connect($"tcp://localhost:{brokerSubscriberPort}");
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Publisher socket connected to broker subscriber port {brokerSubscriberPort}");
+                
+                // Create new subscriber socket
+                _subscriberSocket = new SubscriberSocket();
+                // Subscribe to all messages
+                _subscriberSocket.Subscribe("");
+                // Connect to the central broker's publisher port
+                _subscriberSocket.Connect($"tcp://localhost:{brokerPublisherPort}");
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Subscriber socket connected to broker publisher port {brokerPublisherPort}");
+                
+                // Log the configuration
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Sockets successfully initialized for central broker architecture");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] ERROR initializing sockets: {ex.Message}");
+                throw;
+            }
         }
         
         /// <summary>
@@ -753,27 +784,40 @@ namespace PokerGame.Core.Microservices
                         Console.WriteLine("Socket(s) no longer available, attempting to reconnect...");
                         try
                         {
-                            // Try to recreate the publisher socket if necessary
-                            if (_publisherSocket == null)
+                            // Get broker ports from the central broker
+                            var centralBroker = BrokerManager.Instance.CentralBroker;
+                            if (centralBroker == null)
                             {
-                                Console.WriteLine($"Attempting to recreate publisher socket on port {_publisherPort}...");
-                                _publisherSocket = new PublisherSocket();
-                                _publisherSocket.Options.SendHighWatermark = 1000;
-                                int publisherPort = _publisherPort > 0 ? _publisherPort : 5559; // Default if not set
-                                _publisherSocket.Bind($"tcp://127.0.0.1:{publisherPort}");
-                                Console.WriteLine($"Publisher socket recreated successfully on port {publisherPort}");
+                                Console.WriteLine("Cannot recreate sockets: CentralMessageBroker not available");
+                                await Task.Delay(500, token);
+                                continue;
                             }
                             
-                            // Try to recreate the subscriber socket if necessary
+                            // Get the correct ports from the broker
+                            int publisherPort = centralBroker.PublisherPort;
+                            int subscriberPort = centralBroker.SubscriberPort;
+                            
+                            Console.WriteLine($"Using CentralMessageBroker ports - publisher: {publisherPort}, subscriber: {subscriberPort}");
+                            
+                            // Connect to broker's publisher port (we subscribe to it)
                             if (_subscriberSocket == null)
                             {
-                                Console.WriteLine($"Attempting to recreate subscriber socket on port {_subscriberPort}...");
+                                Console.WriteLine($"Connecting subscriber socket to broker's publisher port {publisherPort}...");
                                 _subscriberSocket = new SubscriberSocket();
                                 _subscriberSocket.Options.ReceiveHighWatermark = 1000;
-                                int subscriberPort = _subscriberPort > 0 ? _subscriberPort : 5560; // Default if not set
-                                _subscriberSocket.Connect($"tcp://localhost:{subscriberPort}");
+                                _subscriberSocket.Connect($"tcp://localhost:{publisherPort}");
                                 _subscriberSocket.SubscribeToAnyTopic();
-                                Console.WriteLine($"Subscriber socket recreated successfully on port {subscriberPort}");
+                                Console.WriteLine($"Subscriber socket connected successfully to broker's publisher port {publisherPort}");
+                            }
+                            
+                            // Connect to broker's subscriber port (we publish to it)
+                            if (_publisherSocket == null)
+                            {
+                                Console.WriteLine($"Connecting publisher socket to broker's subscriber port {subscriberPort}...");
+                                _publisherSocket = new PublisherSocket();
+                                _publisherSocket.Options.SendHighWatermark = 1000;
+                                _publisherSocket.Connect($"tcp://localhost:{subscriberPort}");
+                                Console.WriteLine($"Publisher socket connected successfully to broker's subscriber port {subscriberPort}");
                             }
                             
                             // Give the sockets a moment to fully initialize
