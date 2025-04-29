@@ -71,12 +71,12 @@ namespace PokerGame.Core.Messaging
                 // Store the execution context
                 _executionContext = executionContext ?? new ExecutionContext();
                 
-                // Automatically create a central broker on the default port for better interoperability
+                // Automatically create a central broker with in-process communication
                 // This ensures that services can find the broker without explicit initialization
                 if (_centralBroker == null)
                 {
-                    Console.WriteLine("BrokerManager: Automatically creating central broker on default port");
-                    var defaultPort = 25555; // Default central broker port
+                    Console.WriteLine("BrokerManager: Automatically creating central message broker with in-process communication");
+                    var defaultPort = 25555; // Default central broker port (used for backward compatibility only)
                     _centralBroker = new CentralMessageBroker(_executionContext, defaultPort, true);
                     _centralBroker.Start();
                     
@@ -89,12 +89,12 @@ namespace PokerGame.Core.Messaging
                     // Log central broker start
                     _telemetryService.TrackEvent("CentralMessageBrokerStarted", new Dictionary<string, string>
                     {
-                        ["Port"] = defaultPort.ToString(),
+                        ["InProcessAddress"] = Microservices.NetMQContextHelper.InProcessBrokerAddress,
                         ["Verbose"] = "true",
                         ["AutoCreated"] = "true"
                     });
                     
-                    Console.WriteLine($"BrokerManager: Central broker automatically created on port {defaultPort}");
+                    Console.WriteLine($"BrokerManager: Central broker automatically created using in-process address: {Microservices.NetMQContextHelper.InProcessBrokerAddress}");
                 }
                 
                 // Set started flag
@@ -134,6 +134,7 @@ namespace PokerGame.Core.Messaging
                 // Create the central broker if it doesn't exist
                 if (_centralBroker == null)
                 {
+                    Console.WriteLine("BrokerManager: Creating central message broker with in-process communication");
                     _centralBroker = new CentralMessageBroker(context, port, verbose);
                     _centralBroker.Start();
                     
@@ -146,9 +147,11 @@ namespace PokerGame.Core.Messaging
                     // Log central broker start
                     _telemetryService.TrackEvent("CentralMessageBrokerStarted", new Dictionary<string, string>
                     {
-                        ["Port"] = port.ToString(),
+                        ["InProcessAddress"] = Microservices.NetMQContextHelper.InProcessBrokerAddress,
                         ["Verbose"] = verbose.ToString()
                     });
+                    
+                    Console.WriteLine($"BrokerManager: Central broker created using in-process address: {Microservices.NetMQContextHelper.InProcessBrokerAddress}");
                 }
                 
                 return _centralBroker;

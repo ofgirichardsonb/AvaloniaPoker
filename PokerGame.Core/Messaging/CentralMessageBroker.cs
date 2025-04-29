@@ -32,12 +32,19 @@ namespace PokerGame.Core.Messaging
         private readonly bool _verbose;
         
         /// <summary>
+        /// Gets the address used for in-process communication
+        /// </summary>
+        public string BrokerAddress => Microservices.NetMQContextHelper.InProcessBrokerAddress;
+        
+        /// <summary>
         /// Gets the port used for publishing messages
+        /// This is kept for backward compatibility but is not used with in-process communication
         /// </summary>
         public int PublisherPort => _port;
         
         /// <summary>
         /// Gets the port used for subscribing to messages (publisher port + 1)
+        /// This is kept for backward compatibility but is not used with in-process communication
         /// </summary>
         public int SubscriberPort => _port + 1;
         
@@ -63,7 +70,8 @@ namespace PokerGame.Core.Messaging
             _port = port;
             _verbose = verbose;
             _logger = new Logger("CentralMessageBroker", _verbose);
-            _logger.Log($"Central message broker created on port {_port}");
+            _logger.Log($"Central message broker created (port parameters ignored, using in-process communication)");
+            _logger.Log($"Using in-process broker address: {BrokerAddress}");
         }
         
         /// <summary>

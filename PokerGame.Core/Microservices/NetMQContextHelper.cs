@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using NetMQ;
+using NetMQ.Sockets;
 
 namespace PokerGame.Core.Microservices
 {
@@ -14,11 +15,41 @@ namespace PokerGame.Core.Microservices
         private static bool _cleanupComplete = false;
         private static readonly Timer? _cleanupTimer;
         
+        // Application-wide shared context info
+        private static readonly string _inprocBrokerAddress = "inproc://central-broker";
+        private static PublisherSocket? _sharedPublisher;
+        private static SubscriberSocket? _sharedSubscriber;
+        
+        /// <summary>
+        /// Gets the in-process broker address
+        /// </summary>
+        public static string InProcessBrokerAddress => _inprocBrokerAddress;
+        
         /// <summary>
         /// Static constructor to initialize the context helper
         /// </summary>
         static NetMQContextHelper()
         {
+            Console.WriteLine("Initializing NetMQ context helper and shared sockets");
+            
+            try
+            {
+                // Initialize the shared publisher socket
+                _sharedPublisher = new PublisherSocket();
+                _sharedPublisher.Bind(_inprocBrokerAddress);
+                Console.WriteLine($"Bound shared publisher to {_inprocBrokerAddress}");
+                
+                // Initialize the shared subscriber socket
+                _sharedSubscriber = new SubscriberSocket();
+                _sharedSubscriber.Connect(_inprocBrokerAddress);
+                _sharedSubscriber.SubscribeToAnyTopic();
+                Console.WriteLine($"Connected shared subscriber to {_inprocBrokerAddress}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing shared sockets: {ex.Message}");
+            }
+            
             // Create a timer that will perform cleanup if it hasn't happened by application exit
             _cleanupTimer = new Timer(_ => PerformCleanup(), null, Timeout.Infinite, Timeout.Infinite);
             
@@ -27,6 +58,74 @@ namespace PokerGame.Core.Microservices
                 Console.WriteLine("Process exit detected - performing NetMQ cleanup");
                 PerformCleanup();
             };
+        }
+        
+        /// <summary>
+        /// Gets the shared publisher socket for communicating with the central broker
+        /// </summary>
+        /// <returns>A reference to the shared publisher socket</returns>
+        public static PublisherSocket GetSharedPublisher()
+        {
+            if (_sharedPublisher == null)
+            {
+                lock (_lockObject)
+                {
+                    if (_sharedPublisher == null && !_cleanupComplete)
+                    {
+                        _sharedPublisher = new PublisherSocket();
+                        _sharedPublisher.Bind(_inprocBrokerAddress);
+                        Console.WriteLine($"Created new shared publisher bound to {_inprocBrokerAddress}");
+                    }
+                }
+            }
+            
+            return _sharedPublisher!;
+        }
+        
+        /// <summary>
+        /// Gets the shared subscriber socket for communicating with the central broker
+        /// </summary>
+        /// <returns>A reference to the shared subscriber socket</returns>
+        public static SubscriberSocket GetSharedSubscriber()
+        {
+            if (_sharedSubscriber == null)
+            {
+                lock (_lockObject)
+                {
+                    if (_sharedSubscriber == null && !_cleanupComplete)
+                    {
+                        _sharedSubscriber = new SubscriberSocket();
+                        _sharedSubscriber.Connect(_inprocBrokerAddress);
+                        _sharedSubscriber.SubscribeToAnyTopic();
+                        Console.WriteLine($"Created new shared subscriber connected to {_inprocBrokerAddress}");
+                    }
+                }
+            }
+            
+            return _sharedSubscriber!;
+        }
+        
+        /// <summary>
+        /// Creates a new subscriber socket connected to the in-process broker
+        /// </summary>
+        /// <returns>A new subscriber socket</returns>
+        public static SubscriberSocket CreateServiceSubscriber()
+        {
+            var socket = new SubscriberSocket();
+            socket.Connect(_inprocBrokerAddress);
+            socket.SubscribeToAnyTopic();
+            return socket;
+        }
+        
+        /// <summary>
+        /// Creates a new publisher socket for services to send messages to the broker
+        /// </summary>
+        /// <returns>A new publisher socket</returns>
+        public static PublisherSocket CreateServicePublisher()
+        {
+            var socket = new PublisherSocket();
+            socket.Connect(_inprocBrokerAddress);
+            return socket;
         }
         
         /// <summary>
@@ -64,6 +163,22 @@ namespace PokerGame.Core.Microservices
                     
                     // Set a flag to indicate cleanup is happening
                     _cleanupComplete = true;
+                    
+                    // Close shared sockets before general cleanup
+                    try
+                    {
+                        _sharedPublisher?.Close();
+                        _sharedSubscriber?.Close();
+                        _sharedPublisher?.Dispose();
+                        _sharedSubscriber?.Dispose();
+                        _sharedPublisher = null;
+                        _sharedSubscriber = null;
+                        Console.WriteLine("Closed and disposed shared sockets");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error closing shared sockets: {ex.Message}");
+                    }
                     
                     // Terminate the NetMQ context - this will affect all running sockets
                     NetMQConfig.Cleanup(false);

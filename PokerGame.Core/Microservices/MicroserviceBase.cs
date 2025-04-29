@@ -96,9 +96,22 @@ namespace PokerGame.Core.Microservices
             _subscriberPort = 0; // Not used in this constructor but initialized for completeness
             
             // Use the provided execution context to set up messaging
-            // The broker will handle the actual communication
-            Console.WriteLine($"Creating microservice {serviceName} ({serviceType}) with execution context");
-            Console.WriteLine($"Using STATIC SERVICE ID: {_serviceId}");
+            // Create sockets using in-process communication
+            try 
+            {
+                // Initialize publisher and subscriber sockets using in-process communication
+                _publisherSocket = NetMQContextHelper.CreateServicePublisher();
+                _subscriberSocket = NetMQContextHelper.CreateServiceSubscriber();
+                
+                Console.WriteLine($"Creating microservice {serviceName} ({serviceType}) with execution context");
+                Console.WriteLine($"Using STATIC SERVICE ID: {_serviceId}");
+                Console.WriteLine($"Using in-process communication via {NetMQContextHelper.InProcessBrokerAddress}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing in-process sockets: {ex.Message}");
+                throw;
+            }
         }
         
         /// <summary>
@@ -143,14 +156,23 @@ namespace PokerGame.Core.Microservices
             _publisherPort = publisherPort;
             _subscriberPort = subscriberPort;
             
-            // We no longer create direct sockets here
-            // The central broker pattern means services should CONNECT not BIND
-            // Let the BrokerManager start and initialize the CentralMessageBroker
-            Console.WriteLine($"[{_serviceType} {_serviceId}] Using CentralMessageBroker architecture - no direct socket binding");
+            // Initialize in-process sockets
+            try 
+            {
+                // Initialize publisher and subscriber sockets using in-process communication
+                _publisherSocket = NetMQContextHelper.CreateServicePublisher();
+                _subscriberSocket = NetMQContextHelper.CreateServiceSubscriber();
+                
+                Console.WriteLine($"[{_serviceType} {_serviceId}] Using in-process communication via {NetMQContextHelper.InProcessBrokerAddress}");
+                Console.WriteLine($"[{_serviceType} {_serviceId}] Port parameters ignored in favor of in-process communication");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[{_serviceType} {_serviceId}] Error initializing in-process sockets: {ex.Message}");
+                throw;
+            }
             
-            // The socket initialization happens in Start() method now
-            
-            Console.WriteLine($"{_serviceName} ({_serviceType}) started with STATIC ID: {_serviceId}");
+            Console.WriteLine($"{_serviceName} ({_serviceType}) initialized with STATIC ID: {_serviceId}");
         }
         
         /// <summary>
@@ -174,6 +196,7 @@ namespace PokerGame.Core.Microservices
                 {
                     centralBrokerFound = true;
                     Console.WriteLine($"====> [{_serviceType} {_serviceId}] Successfully connected to central broker");
+                    Console.WriteLine($"====> [{_serviceType} {_serviceId}] Using in-process broker at {centralBroker.BrokerAddress}");
                     break;
                 }
                 
@@ -183,16 +206,12 @@ namespace PokerGame.Core.Microservices
             
             if (!centralBrokerFound)
             {
-                Console.WriteLine($"====> [{_serviceType} {_serviceId}] WARNING: Could not find central broker, will use direct communication fallback");
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] WARNING: Could not find central broker, services may not communicate properly");
             }
             else
             {
-                // Initialize sockets for the central broker architecture
-                try {
-                    InitializeCentralBrokerSockets(centralBroker);
-                } catch (Exception ex) {
-                    Console.WriteLine($"====> [{_serviceType} {_serviceId}] Error initializing sockets: {ex.Message}");
-                }
+                // Our sockets are already initialized with in-process communication in constructor
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Using in-process communication for messaging");
             }
             
             // Start the message processing task
@@ -311,11 +330,12 @@ namespace PokerGame.Core.Microservices
         
         /// <summary>
         /// Initializes or reinitializes sockets to work with the central broker architecture
+        /// Uses in-process communication for improved reliability and simplicity
         /// </summary>
         /// <param name="centralBroker">The central message broker to connect to</param>
         private void InitializeCentralBrokerSockets(CentralMessageBroker centralBroker)
         {
-            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Initializing sockets for central broker architecture");
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Initializing sockets using in-process communication");
             
             // Close and dispose existing sockets properly if they exist
             if (_publisherSocket != null)
@@ -334,35 +354,16 @@ namespace PokerGame.Core.Microservices
                 _subscriberSocket = null;
             }
             
-            // Ensure cleanup - this will help prevent port conflicts
-            NetMQContextHelper.ScheduleCleanup(200);
-            Thread.Sleep(100); // Small delay to let cleanup complete
-            
-            // Get the publisher and subscriber ports from the central broker
-            int brokerPublisherPort = centralBroker.PublisherPort;
-            int brokerSubscriberPort = centralBroker.SubscriberPort;
-            
-            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Using central broker ports: publisher={brokerPublisherPort}, subscriber={brokerSubscriberPort}");
-            
             try
             {
-                // Create new publisher socket
-                _publisherSocket = new PublisherSocket();
-                // Important: Services should CONNECT to the central broker's subscriber port,
-                // not bind to their own port - they're the clients in this architecture
-                _publisherSocket.Connect($"tcp://localhost:{brokerSubscriberPort}");
-                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Publisher socket connected to broker subscriber port {brokerSubscriberPort}");
+                // Use the shared context helper to create service-specific in-process sockets
+                _publisherSocket = NetMQContextHelper.CreateServicePublisher();
+                _subscriberSocket = NetMQContextHelper.CreateServiceSubscriber();
                 
-                // Create new subscriber socket
-                _subscriberSocket = new SubscriberSocket();
-                // Subscribe to all messages
-                _subscriberSocket.Subscribe("");
-                // Connect to the central broker's publisher port
-                _subscriberSocket.Connect($"tcp://localhost:{brokerPublisherPort}");
-                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Subscriber socket connected to broker publisher port {brokerPublisherPort}");
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Using in-process communication via {NetMQContextHelper.InProcessBrokerAddress}");
                 
                 // Log the configuration
-                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Sockets successfully initialized for central broker architecture");
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Sockets successfully initialized using in-process communication");
             }
             catch (Exception ex)
             {
@@ -539,6 +540,7 @@ namespace PokerGame.Core.Microservices
         
         /// <summary>
         /// Sends a message to a specific microservice through the central message broker
+        /// Uses in-process communication for improved reliability and simplicity
         /// </summary>
         /// <param name="message">The message to send</param>
         /// <param name="receiverId">The ID of the receiving service</param>
@@ -626,8 +628,9 @@ namespace PokerGame.Core.Microservices
                     return true;
                 }
                 
-                // Don't fall back to direct socket - require central broker for all messaging
+                // Don't fall back to direct socket - require central broker for all messaging with in-process communication
                 Console.WriteLine($"ERROR: Central broker not available after {maxAttempts} attempts. Message {message.MessageId} could not be sent.");
+                Console.WriteLine($"Using in-process communication requires the central broker to be initialized before messages can be sent");
                 return false;
             }
             catch (Exception ex)
@@ -657,7 +660,7 @@ namespace PokerGame.Core.Microservices
                 ServiceId = _serviceId,
                 ServiceName = _serviceName,
                 ServiceType = _serviceType,
-                Endpoint = $"tcp://127.0.0.1:{_publisherPort}", // Include the port for better visibility
+                Endpoint = NetMQContextHelper.InProcessBrokerAddress, // Using in-process endpoint for better reliability
                 Capabilities = GetServiceCapabilities()
             };
             
@@ -698,7 +701,7 @@ namespace PokerGame.Core.Microservices
                     ServiceId = _serviceId,
                     ServiceName = _serviceName,
                     ServiceType = _serviceType,
-                    Endpoint = $"tcp://127.0.0.1:{_publisherPort}",
+                    Endpoint = NetMQContextHelper.InProcessBrokerAddress, // Using in-process endpoint for better reliability
                     Capabilities = GetServiceCapabilities()
                 };
                 
@@ -779,10 +782,10 @@ namespace PokerGame.Core.Microservices
                     // Make sure we still have valid sockets before trying to use them - attempt to reconnect if needed
                     if (_subscriberSocket == null || _publisherSocket == null)
                     {
-                        Console.WriteLine("Socket(s) no longer available, attempting to reconnect...");
+                        Console.WriteLine("Socket(s) no longer available, attempting to reconnect with in-process communication...");
                         try
                         {
-                            // Get broker ports from the central broker
+                            // Get broker from BrokerManager
                             var centralBroker = BrokerManager.Instance.CentralBroker;
                             if (centralBroker == null)
                             {
@@ -791,43 +794,34 @@ namespace PokerGame.Core.Microservices
                                 continue;
                             }
                             
-                            // Get the correct ports from the broker
-                            int publisherPort = centralBroker.PublisherPort;
-                            int subscriberPort = centralBroker.SubscriberPort;
+                            Console.WriteLine($"Using in-process communication via {NetMQContextHelper.InProcessBrokerAddress}");
                             
-                            Console.WriteLine($"Using CentralMessageBroker ports - publisher: {publisherPort}, subscriber: {subscriberPort}");
-                            
-                            // Connect to broker's publisher port (we subscribe to it)
+                            // Create new in-process sockets using the shared context
                             if (_subscriberSocket == null)
                             {
-                                Console.WriteLine($"Connecting subscriber socket to broker's publisher port {publisherPort}...");
-                                _subscriberSocket = new SubscriberSocket();
-                                _subscriberSocket.Options.ReceiveHighWatermark = 1000;
-                                _subscriberSocket.Connect($"tcp://localhost:{publisherPort}");
-                                _subscriberSocket.SubscribeToAnyTopic();
-                                Console.WriteLine($"Subscriber socket connected successfully to broker's publisher port {publisherPort}");
+                                Console.WriteLine($"Creating new subscriber socket with in-process communication...");
+                                _subscriberSocket = NetMQContextHelper.CreateServiceSubscriber();
+                                Console.WriteLine($"Subscriber socket connected successfully with in-process communication");
                             }
                             
-                            // Connect to broker's subscriber port (we publish to it)
+                            // Create new in-process publisher socket
                             if (_publisherSocket == null)
                             {
-                                Console.WriteLine($"Connecting publisher socket to broker's subscriber port {subscriberPort}...");
-                                _publisherSocket = new PublisherSocket();
-                                _publisherSocket.Options.SendHighWatermark = 1000;
-                                _publisherSocket.Connect($"tcp://localhost:{subscriberPort}");
-                                Console.WriteLine($"Publisher socket connected successfully to broker's subscriber port {subscriberPort}");
+                                Console.WriteLine($"Creating new publisher socket with in-process communication...");
+                                _publisherSocket = NetMQContextHelper.CreateServicePublisher();
+                                Console.WriteLine($"Publisher socket connected successfully with in-process communication");
                             }
                             
                             // Give the sockets a moment to fully initialize
                             await Task.Delay(100, token);
-                            Console.WriteLine("Socket reconnection successful, continuing message loop");
+                            Console.WriteLine("Socket reconnection successful with in-process communication, continuing message loop");
                             
                             // Skip to the next iteration to immediately use the new sockets
                             continue;
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Failed to recreate sockets: {ex.Message}");
+                            Console.WriteLine($"Failed to recreate sockets with in-process communication: {ex.Message}");
                             
                             // Wait a bit longer before retrying to avoid rapid failures
                             await Task.Delay(1000, token);
