@@ -5,8 +5,18 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../PokerGame.Core/PokerGame.Core.csproj" />
-    <ProjectReference Include="../PokerGame.Abstractions/PokerGame.Abstractions.csproj" />
-    <ProjectReference Include="../MSA.Foundation/MSA.Foundation.csproj" />
+    <Reference Include="MSA.Foundation">
+      <HintPath>../MSA.Foundation/bin/Release/net8.0/MSA.Foundation.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="PokerGame.Abstractions">
+      <HintPath>../PokerGame.Abstractions/bin/Release/net8.0/PokerGame.Abstractions.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="PokerGame.Core">
+      <HintPath>../PokerGame.Core/bin/Release/net8.0/PokerGame.Core.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <PackageReference Include="NetMQ" Version="4.0.1.12" />
   </ItemGroup>
 </Project>

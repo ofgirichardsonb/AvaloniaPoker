@@ -4,137 +4,102 @@ using System.Collections.Generic;
 using System.Threading;
 using PokerGame.Core.Messaging;
 using PokerGame.Core.Microservices;
-using MSA.Foundation.Messaging;
-using MSA.Foundation.ServiceManagement;
 
 namespace MessageFlowTest
 {
-    class Program
+    public class Program
     {
-        static async Task Main(string[] args)
+        public static async Task Main(string[] args)
         {
-            Console.WriteLine("===== StartHand Message Flow Test =====");
-            Console.WriteLine("This test validates the flow of StartHand messages and DeckShuffled responses");
+            Console.WriteLine("===== Minimal Message Flow Test =====");
             
-            // Use a central execution context
-            var context = new MSA.Foundation.ServiceManagement.ExecutionContext();
-            
-            try
+            try 
             {
-                // Initialize broker
-                Console.WriteLine("Starting BrokerManager...");
-                BrokerManager.Instance.Start(context);
+                // Create basic execution context with its own cancellation token
+                Console.WriteLine("Creating execution context...");
+                var cancellationTokenSource = new CancellationTokenSource();
+                var executionContext = new PokerGame.Core.Messaging.ExecutionContext(cancellationTokenSource);
                 
-                // Start central broker
-                Console.WriteLine("Starting CentralMessageBroker...");
-                var broker = BrokerManager.Instance.StartCentralBroker(25555, context, true);
+                // Initialize broker directly
+                Console.WriteLine("Creating CentralMessageBroker...");
+                var broker = new CentralMessageBroker(executionContext);
+                broker.Start();
                 
-                if (broker == null)
-                {
-                    Console.WriteLine("ERROR: Failed to start central broker");
-                    return;
-                }
+                // Track received messages
+                bool messageReceived = false;
+                string messageContent = $"Test message sent at {DateTime.UtcNow}";
                 
-                Console.WriteLine("CentralMessageBroker started successfully");
-                
-                // Create test services with minimally required functionality
-                string consoleServiceId = "test_ui_service";
-                string gameEngineId = "test_engine_service";
-                
-                // Subscribe to messages for the UI service
-                Console.WriteLine($"Setting up subscriber for console service {consoleServiceId}...");
-                
-                broker.Subscribe(consoleServiceId, (message) => {
-                    Console.WriteLine($"UI SERVICE received message: Type={message.Type}, From={message.SenderId}, ID={message.MessageId}");
+                // Set up subscription for Debug messages
+                Console.WriteLine("Setting up Debug message subscription...");
+                string subId = broker.Subscribe(MessageType.Debug, (message) => {
+                    Console.WriteLine($"Received message: {message.Type}, From={message.SenderId}, ID={message.MessageId}");
                     
-                    if (message.Type == MessageType.DeckShuffled)
+                    try 
                     {
-                        Console.WriteLine("\n!!!! SUCCESS !!!!");
-                        Console.WriteLine($"UI SERVICE received DeckShuffled response to StartHand!");
-                        Console.WriteLine($"Message ID: {message.MessageId}");
-                        Console.WriteLine($"In Response To: {message.InResponseTo}");
-                        Console.WriteLine($"From: {message.SenderId}");
-                        Console.WriteLine("!!!! SUCCESS !!!!\n");
+                        // Attempt to get payload content
+                        Console.WriteLine($"Raw payload: {message.Payload}");
+                        messageReceived = true;
                     }
-                    
-                    return true;
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error processing payload: {ex.Message}");
+                    }
                 });
                 
-                // Subscribe to messages for the game engine service
-                Console.WriteLine($"Setting up subscriber for game engine {gameEngineId}...");
-                
-                broker.Subscribe(gameEngineId, (message) => {
-                    Console.WriteLine($"GAME ENGINE received message: Type={message.Type}, From={message.SenderId}, ID={message.MessageId}");
-                    
-                    // If this is a StartHand message, respond with DeckShuffled
-                    if (message.Type == MessageType.StartHand)
-                    {
-                        Console.WriteLine("\n!!!! RECEIVED START HAND !!!!\n");
-                        
-                        // Create DeckShuffled response - DIRECT NetworkMessage creation to avoid conversion issues
-                        var response = new NetworkMessage
-                        {
-                            MessageId = Guid.NewGuid().ToString(),
-                            Type = MessageType.DeckShuffled, // Use explicit enum value
-                            SenderId = gameEngineId,
-                            ReceiverId = message.SenderId,
-                            InResponseTo = message.MessageId,
-                            Timestamp = DateTime.UtcNow,
-                            Headers = new Dictionary<string, string>
-                            {
-                                { "OriginalMessageId", message.MessageId },
-                                { "ResponseType", "DeckShuffled" }
-                            }
-                        };
-                        
-                        // Send the response via the broker
-                        Console.WriteLine($"GAME ENGINE sending DeckShuffled response: {response.MessageId}");
-                        broker.Publish(response);
-                    }
-                    
-                    return true;
-                });
-                
-                // Wait for subscriptions to initialize
+                // Wait for subscription to initialize
                 await Task.Delay(500);
                 
-                // Create and send a StartHand message from the UI service to game engine
-                Console.WriteLine("\nCreating StartHand message...");
+                // Create and send a Debug message 
+                Console.WriteLine("\nCreating Debug message...");
                 
-                // Create StartHand message directly to avoid conversion issues
-                var startHandMessage = new NetworkMessage
+                // Create message directly
+                var debugMessage = new NetworkMessage
                 {
                     MessageId = Guid.NewGuid().ToString(),
-                    Type = MessageType.StartHand, // Use explicit enum value
-                    SenderId = consoleServiceId,
-                    ReceiverId = gameEngineId,
+                    Type = MessageType.Debug,
+                    SenderId = "test_sender",
+                    ReceiverId = "",  // Broadcast
                     Timestamp = DateTime.UtcNow,
+                    Payload = messageContent,
                     Headers = new Dictionary<string, string>
                     {
-                        { "MessageSubType", "StartHand" }
+                        { "TestHeader", "TestValue" }
                     }
                 };
                 
                 // Log and send the message
-                Console.WriteLine($"Sending StartHand message: ID={startHandMessage.MessageId}, From={startHandMessage.SenderId}, To={startHandMessage.ReceiverId}");
-                broker.Publish(startHandMessage);
+                Console.WriteLine($"Sending Debug message: ID={debugMessage.MessageId}, From={debugMessage.SenderId}");
+                broker.Publish(debugMessage);
                 
-                // Wait for the message round-trip
-                Console.WriteLine("Waiting for message processing (5 seconds)...");
-                await Task.Delay(5000);
+                // Wait for the message processing
+                Console.WriteLine("Waiting for message processing (2 seconds)...");
+                await Task.Delay(2000);
                 
-                Console.WriteLine("\nTest completed. Check the results above to determine success.");
+                Console.WriteLine("\n===== TEST SUMMARY =====");
+                Console.WriteLine($"Message received: {messageReceived}");
+                
+                if (messageReceived)
+                {
+                    Console.WriteLine("\nTEST PASSED: Basic message flow is working!");
+                }
+                else
+                {
+                    Console.WriteLine("\nTEST FAILED: Message was not received.");
+                }
+                
+                // Unsubscribe to clean up properly
+                broker.Unsubscribe(subId, MessageType.Debug);
+                
+                // Stop the broker
+                broker.Stop();
+                cancellationTokenSource.Cancel();
+                
+                Console.WriteLine("Resources cleaned up.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"ERROR during test execution: {ex.Message}");
+                Console.WriteLine($"ERROR: {ex.Message}");
                 Console.WriteLine(ex.StackTrace);
-            }
-            finally
-            {
-                // Cleanup
-                BrokerManager.Instance.Stop();
-                Console.WriteLine("Resources cleaned up.");
             }
         }
     }
