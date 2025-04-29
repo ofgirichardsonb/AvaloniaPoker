@@ -391,8 +391,9 @@ namespace PokerGame.Core.Microservices
                         ackMessage.ReceiverId = message.SenderId;
                         ackMessage.InResponseTo = message.MessageId;
                         
-                        // Send the acknowledgment
-                        base.Broadcast(ackMessage);
+                        // Send the acknowledgment through central broker instead of direct broadcast
+                        Console.WriteLine($"Sending acknowledgment for message {message.MessageId} through central broker");
+                        BrokerManager.Instance.CentralBroker?.Publish(ackMessage.ToNetworkMessage());
                     }
                 }
                 catch (Exception ex)
@@ -588,10 +589,11 @@ namespace PokerGame.Core.Microservices
                 
                 Console.WriteLine($"Discovery attempt {attempt + 1}/{maxAttempts}...");
                 
-                // Send a service discovery message
+                // Send a service discovery message through central broker
                 var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
                 discoveryMsg.SenderId = _serviceId;
-                Broadcast(discoveryMsg);
+                Console.WriteLine($"====> [PlayerUI {_serviceId}] Broadcasting message {discoveryMsg.Type} (ID: {discoveryMsg.MessageId}) through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(discoveryMsg.ToNetworkMessage());
                 
                 // Wait a bit
                 await Task.Delay(delayMs);
@@ -650,10 +652,11 @@ namespace PokerGame.Core.Microservices
                     new PlayerInfo { PlayerId = "Player4", Name = "Dave", Chips = 1000 }
                 };
                 
-                // First, send a service discovery message
+                // First, send a service discovery message through central broker
                 var discoveryMsg = Message.Create(MessageType.ServiceDiscovery);
                 discoveryMsg.SenderId = _serviceId;
-                Broadcast(discoveryMsg);
+                Console.WriteLine($"====> [PlayerUI {_serviceId}] Broadcasting message {discoveryMsg.Type} (ID: {discoveryMsg.MessageId}) through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(discoveryMsg.ToNetworkMessage());
                 
                 await Task.Delay(500);
                 

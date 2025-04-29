@@ -524,9 +524,10 @@ namespace PokerGame.Core.Microservices
                     return;
                 }
                 
-                // Fallback to direct socket if central broker isn't available
-                Console.WriteLine($"WARNING: Central broker not available after {maxAttempts} attempts, using fallback direct socket for message {message.MessageId}");
-                _publisherSocket?.SendFrame(message.ToJson());
+                // No longer using fallback to direct socket if central broker isn't available
+                Console.WriteLine($"ERROR: Central broker not available after {maxAttempts} attempts for message {message.MessageId} - message NOT sent");
+                // Do not use direct socket as fallback - this creates socket conflicts
+                // _publisherSocket?.SendFrame(message.ToJson());
             }
             catch (Exception ex)
             {
@@ -873,10 +874,10 @@ namespace PokerGame.Core.Microservices
                                 
                                 Console.WriteLine($"====> [{_serviceType} {_serviceId}] Sending IMMEDIATE ACK for {message.Type}, ID: {message.MessageId} to {message.SenderId}");
                                 
-                                // Broadcast the acknowledgment
-                                var serializedAck = ackMessage.ToJson();
-                                Console.WriteLine($"====> [{_serviceType} {_serviceId}] SENDING RAW SOCKET FRAME FOR ACK: {serializedAck}");
-                                _publisherSocket?.SendFrame(serializedAck);
+                                // Broadcast the acknowledgment through central broker
+                                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Publishing ACK through central broker");
+                                var networkAck = ackMessage.ToNetworkMessage();
+                                BrokerManager.Instance.CentralBroker?.Publish(networkAck);
                                 
                                 // Try sending duplicate ack with different approach for redundancy
                                 try 
@@ -946,10 +947,10 @@ namespace PokerGame.Core.Microservices
                                 // Multiple redundant acknowledgment methods
                                 try 
                                 {
-                                    // Method 1: Direct socket send
-                                    var serializedAck = ackMessage.ToJson();
-                                    Console.WriteLine($"====> [{_serviceType} {_serviceId}] CRITICAL ACK 1: Raw socket for {message.Type} {message.MessageId}");
-                                    _publisherSocket?.SendFrame(serializedAck);
+                                    // Method 1: Using CentralMessageBroker instead of direct socket
+                                    Console.WriteLine($"====> [{_serviceType} {_serviceId}] CRITICAL ACK 1: CentralBroker for {message.Type} {message.MessageId}");
+                                    var networkAck = ackMessage.ToNetworkMessage();
+                                    BrokerManager.Instance.CentralBroker?.Publish(networkAck);
                                 }
                                 catch (Exception ex)
                                 {
@@ -1042,8 +1043,39 @@ namespace PokerGame.Core.Microservices
                         break;
                     }
                     
-                    // Log other errors - try to continue unless this is a fatal or repeating error
-                    Console.WriteLine($"Error in message processing loop: {ex.Message}");
+                    // Special handling for NetMQ context termination errors
+                    if (ex.Message.Contains("CheckContextTerminated") || ex.Message.Contains("Context was terminated"))
+                    {
+                        // This is a NetMQ internal error that happens during socket operations
+                        // when the context is being terminated or has been terminated
+                        Console.WriteLine("NetMQ context termination detected - attempting to recreate sockets");
+                        
+                        try
+                        {
+                            // Close and dispose sockets
+                            _publisherSocket?.Close();
+                            _subscriberSocket?.Close();
+                            _publisherSocket?.Dispose();
+                            _subscriberSocket?.Dispose();
+                            _publisherSocket = null;
+                            _subscriberSocket = null;
+                            
+                            // Allow some time for sockets to close and context to settle
+                            await Task.Delay(200);
+                            
+                            // Attempt to reconnect in the next loop iteration
+                            continue;
+                        }
+                        catch (Exception socketEx)
+                        {
+                            Console.WriteLine($"Error cleaning up sockets after context termination: {socketEx.Message}");
+                        }
+                    }
+                    else
+                    {
+                        // Log other errors - try to continue unless this is a fatal or repeating error
+                        Console.WriteLine($"Error in message processing loop: {ex.Message}");
+                    }
                     
                     // Brief pause to avoid tight error loop
                     await Task.Delay(100);
