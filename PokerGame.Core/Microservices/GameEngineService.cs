@@ -767,10 +767,11 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                         Console.WriteLine("\n");
                         
                         // Create a DeckShuffled response using NetworkMessage to avoid conversion issues
+                        // Explicitly use PokerGame.Core.Messaging.MessageType to avoid ambiguity with MSA.Foundation.Messaging.MessageType
                         var deckShuffledResponse = new NetworkMessage
                         {
                             MessageId = Guid.NewGuid().ToString(),
-                            Type = MessageType.DeckShuffled,  // Use explicit type
+                            Type = PokerGame.Core.Messaging.MessageType.DeckShuffled,  // Fully qualified to avoid ambiguity
                             SenderId = _serviceId,
                             ReceiverId = message.SenderId,
                             InResponseTo = message.MessageId,
@@ -778,7 +779,8 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             Headers = new Dictionary<string, string>
                             {
                                 { "OriginalMessageId", message.MessageId },
-                                { "ResponseType", "DeckShuffled" }
+                                { "ResponseType", "DeckShuffled" },
+                                { "MessageSubType", "DeckShuffled" }  // Add this to help with message type detection
                             }
                         };
                         
@@ -959,20 +961,22 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     Console.WriteLine("**********************************************************");
                     Console.WriteLine("\n\n");
                     
-                    var responseMessage = Message.Create(MessageType.GenericResponse);
-                    
-                    // Set message ID to ensure uniqueness
-                    responseMessage.MessageId = Guid.NewGuid().ToString();
-                    
-                    // Set in response to property for tracking the relationship
-                    responseMessage.InResponseTo = message.MessageId;
-                    
-                    // Set sender/receiver IDs for more reliable delivery
-                    responseMessage.SenderId = _serviceId;
-                    if (!string.IsNullOrEmpty(message.SenderId))
+                    // Create response as NetworkMessage directly for consistency
+                    var responseMessage = new NetworkMessage
                     {
-                        responseMessage.ReceiverId = message.SenderId;
-                    }
+                        MessageId = Guid.NewGuid().ToString(),
+                        Type = PokerGame.Core.Messaging.MessageType.HandStarted, // Use fully qualified name
+                        SenderId = _serviceId,
+                        ReceiverId = message.SenderId,
+                        InResponseTo = message.MessageId,
+                        Timestamp = DateTime.UtcNow,
+                        Headers = new Dictionary<string, string>
+                        {
+                            { "OriginalMessageId", message.MessageId },
+                            { "ResponseType", "HandStarted" },
+                            { "MessageSubType", "HandStarted" }
+                        }
+                    };
                     
                     // Make sure the sender ID is set to our service ID
                     responseMessage.SenderId = _serviceId;
@@ -1050,10 +1054,11 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     var mainResponsePayload = new GenericResponsePayload
                     {
                         Success = true,
-                        OriginalMessageType = MessageType.StartHand,
+                        OriginalMessageType = MessageType.StartHand, // Use the right MessageType for this payload
                         Message = $"Hand started successfully. Current state: {_gameEngine.State}"
                     };
-                    responseMessage.SetPayload(mainResponsePayload);
+                    // For NetworkMessage, we need to serialize the payload directly
+                    responseMessage.Payload = System.Text.Json.JsonSerializer.Serialize(mainResponsePayload);
                     
                     PokerGame.Core.Logging.FileLogger.MessageTrace("GameEngine", 
                         $"Response payload: Success={mainResponsePayload.Success}, Message={mainResponsePayload.Message}");
@@ -1063,13 +1068,13 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     if (!string.IsNullOrEmpty(message.SenderId))
                     {
                         Console.WriteLine($"Sending StartHand response directly to {message.SenderId}");
-                        Console.WriteLine($"RESPONSE PAYLOAD: {responseMessage.GetPayload<GenericResponsePayload>()?.Message}");
+                        Console.WriteLine($"RESPONSE PAYLOAD: {mainResponsePayload.Message}");
                         
-                        // Always use MicroserviceBase's SendTo method which routes through CentralMessageBroker
-                        Console.WriteLine("Sending StartHand response via MicroserviceBase.SendTo");
+                        // Send directly through CentralMessageBroker
+                        Console.WriteLine("Sending StartHand response via CentralMessageBroker");
                         
-                        // This will ensure the response is routed through CentralMessageBroker
-                        SendTo(responseMessage, message.SenderId);
+                        // Publish directly via broker
+                        BrokerManager.Instance.CentralBroker?.Publish(responseMessage);
                         
                         Console.WriteLine("StartHand response sent via CentralMessageBroker!");
                         
@@ -1083,7 +1088,10 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     {
                         Console.WriteLine("WARNING: Cannot send targeted StartHand response - sender ID is missing");
                         Console.WriteLine("Falling back to broadcast-only for StartHand response");
-                        Broadcast(responseMessage); // Fallback to broadcast
+                        // Set receiver to empty for broadcast
+                        responseMessage.ReceiverId = "";
+                        // Publish directly via broker
+                        BrokerManager.Instance.CentralBroker?.Publish(responseMessage);
                         Console.WriteLine("StartHand response broadcasted!");
                     }
                     Console.WriteLine("================================================");
@@ -1136,17 +1144,33 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             BroadcastGameState();
                             
                             // Send a response back to the UI through CentralMessageBroker
-                            var actionResponseMessage = Message.Create(MessageType.ActionResponse);
-                            actionResponseMessage.SetPayload(new ActionResponsePayload
+                            var actionResponsePayload = new ActionResponsePayload
                             {
                                 Success = true,
                                 ActionType = actionPayload.ActionType,
                                 Message = $"Action {actionPayload.ActionType} processed successfully"
-                            });
-                            // Set the response as being in response to the original message
-                            actionResponseMessage.InResponseTo = message.MessageId;
-                            // Use SendTo which now properly routes through CentralMessageBroker
-                            SendTo(actionResponseMessage, message.SenderId);
+                            };
+                            
+                            // Create response as NetworkMessage directly for consistency
+                            var actionResponseMessage = new NetworkMessage
+                            {
+                                MessageId = Guid.NewGuid().ToString(),
+                                Type = PokerGame.Core.Messaging.MessageType.GameState, // Use appropriate message type from PokerGame.Core.Messaging 
+                                SenderId = _serviceId,
+                                ReceiverId = message.SenderId,
+                                InResponseTo = message.MessageId,
+                                Timestamp = DateTime.UtcNow,
+                                Payload = System.Text.Json.JsonSerializer.Serialize(actionResponsePayload),
+                                Headers = new Dictionary<string, string>
+                                {
+                                    { "OriginalMessageId", message.MessageId },
+                                    { "ResponseType", "ActionResponse" },
+                                    { "MessageSubType", "ActionResponse" }
+                                }
+                            };
+                            
+                            // Publish directly via broker
+                            BrokerManager.Instance.CentralBroker?.Publish(actionResponseMessage);
                         }
                         catch (Exception ex)
                         {
@@ -1154,17 +1178,33 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             Console.WriteLine(ex.StackTrace);
                             
                             // Send failure response through CentralMessageBroker
-                            var actionErrorResponseMessage = Message.Create(MessageType.ActionResponse);
-                            actionErrorResponseMessage.SetPayload(new ActionResponsePayload
+                            var actionErrorPayload = new ActionResponsePayload
                             {
                                 Success = false,
                                 ActionType = actionPayload.ActionType,
                                 Message = $"Error: {ex.Message}"
-                            });
-                            // Set the response as being in response to the original message
-                            actionErrorResponseMessage.InResponseTo = message.MessageId;
-                            // Use SendTo which now properly routes through CentralMessageBroker
-                            SendTo(actionErrorResponseMessage, message.SenderId);
+                            };
+                            
+                            // Create error response as NetworkMessage directly for consistency
+                            var actionErrorResponseMessage = new NetworkMessage
+                            {
+                                MessageId = Guid.NewGuid().ToString(),
+                                Type = PokerGame.Core.Messaging.MessageType.Error, // Use Error message type from PokerGame.Core.Messaging
+                                SenderId = _serviceId,
+                                ReceiverId = message.SenderId,
+                                InResponseTo = message.MessageId,
+                                Timestamp = DateTime.UtcNow,
+                                Payload = System.Text.Json.JsonSerializer.Serialize(actionErrorPayload),
+                                Headers = new Dictionary<string, string>
+                                {
+                                    { "OriginalMessageId", message.MessageId },
+                                    { "ResponseType", "ActionResponse" },
+                                    { "MessageSubType", "ActionError" }
+                                }
+                            };
+                            
+                            // Publish directly via broker
+                            BrokerManager.Instance.CentralBroker?.Publish(actionErrorResponseMessage);
                         }
                     }
                     else

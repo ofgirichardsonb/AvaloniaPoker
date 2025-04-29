@@ -726,10 +726,14 @@ namespace PokerGame.Core.Microservices
                 var networkMessage = new NetworkMessage
                 {
                     MessageId = Guid.NewGuid().ToString(),
-                    Type = Messaging.MessageType.StartHand,  // Use Messaging.MessageType directly
+                    Type = PokerGame.Core.Messaging.MessageType.StartHand,  // Use fully qualified name
                     SenderId = _serviceId,
                     ReceiverId = _gameEngineServiceId,
-                    Timestamp = DateTime.UtcNow
+                    Timestamp = DateTime.UtcNow,
+                    Headers = new Dictionary<string, string>
+                    {
+                        { "MessageSubType", "StartHand" }  // Add explicit subtype for better routing
+                    }
                 };
                 
                 Console.WriteLine("Sending start hand message...");
@@ -769,11 +773,15 @@ namespace PokerGame.Core.Microservices
                 var actionNetworkMsg = new NetworkMessage
                 {
                     MessageId = Guid.NewGuid().ToString(),
-                    Type = Messaging.MessageType.PlayerAction,  // Use Messaging.MessageType directly
+                    Type = PokerGame.Core.Messaging.MessageType.PlayerAction,  // Use fully qualified name
                     SenderId = _serviceId,
                     ReceiverId = _gameEngineServiceId,
                     Timestamp = DateTime.UtcNow,
-                    Payload = System.Text.Json.JsonSerializer.Serialize(actionPayload)
+                    Payload = System.Text.Json.JsonSerializer.Serialize(actionPayload),
+                    Headers = new Dictionary<string, string>
+                    {
+                        { "MessageSubType", "PlayerAction" }  // Add explicit subtype for better routing
+                    }
                 };
                 
                 Console.WriteLine($"Sending player action: {actionType} {(betAmount > 0 ? $"with bet {betAmount}" : "")}");
@@ -864,10 +872,14 @@ namespace PokerGame.Core.Microservices
                                     var networkMessage = new NetworkMessage
                                     {
                                         MessageId = Guid.NewGuid().ToString(),
-                                        Type = Messaging.MessageType.StartHand,  // Use Messaging.MessageType directly
+                                        Type = PokerGame.Core.Messaging.MessageType.StartHand,  // Use fully qualified name
                                         SenderId = _serviceId,
                                         ReceiverId = _gameEngineServiceId,
-                                        Timestamp = DateTime.UtcNow
+                                        Timestamp = DateTime.UtcNow,
+                                        Headers = new Dictionary<string, string>
+                                        {
+                                            { "MessageSubType", "StartHand" }  // Add explicit subtype for better routing
+                                        }
                                     };
                                     
                                     Console.WriteLine("Sending start hand message...");

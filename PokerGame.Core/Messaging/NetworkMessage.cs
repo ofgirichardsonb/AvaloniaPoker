@@ -108,6 +108,13 @@ namespace PokerGame.Core.Messaging
         public string Payload { get; set; } = string.Empty;
         
         /// <summary>
+        /// Gets or sets additional headers/metadata for the message
+        /// This is useful for including routing or processing information
+        /// </summary>
+        [JsonPropertyName("headers")]
+        public Dictionary<string, string> Headers { get; set; } = new Dictionary<string, string>();
+        
+        /// <summary>
         /// Creates a new message with a random ID and the current timestamp
         /// </summary>
         public NetworkMessage()

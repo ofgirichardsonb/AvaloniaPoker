@@ -64,7 +64,7 @@ namespace StartHandTest
             broker.Subscribe(gameEngineId, (message) => {
                 Console.WriteLine($"GAME ENGINE received message: Type={message.Type}, From={message.SenderId}, ID={message.MessageId}");
                 
-                // If this is a StartHand message, respond with DeckShuffled
+                // If this is a StartHand message, respond with HandStarted
                 if (message.Type == MessageType.StartHand)
                 {
                     Console.WriteLine("\n!!!! RECEIVED START HAND !!!!\n");

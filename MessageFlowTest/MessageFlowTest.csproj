@@ -1,15 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="../PokerGame.Core/PokerGame.Core.csproj" />
+    <ProjectReference Include="../PokerGame.Abstractions/PokerGame.Abstractions.csproj" />
     <ProjectReference Include="../MSA.Foundation/MSA.Foundation.csproj" />
   </ItemGroup>
-
 </Project>
