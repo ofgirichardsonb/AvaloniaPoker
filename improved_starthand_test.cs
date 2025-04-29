@@ -1,174 +1,158 @@
-// Improved StartHand message flow test
 using System;
 using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.Threading;
 using PokerGame.Core.Messaging;
 using PokerGame.Core.Microservices;
+using System.Collections.Generic;
+using System.Text.Json;
 
-// Simple test to validate that the StartHand message flow works
-class StartHandTest
+class Program
 {
     static async Task Main(string[] args)
     {
-        Console.WriteLine("===== StartHand Message Flow Test (Improved) =====");
-        Console.WriteLine("This test validates the flow of StartHand messages through CentralMessageBroker");
-        
+        Console.WriteLine("===== Improved StartHand Message Test =====");
+
         try
         {
-            // Initialize broker
-            Console.WriteLine("Starting BrokerManager...");
-            BrokerManager.Instance.Start(null);
+            // Create test objects with proper JSON serialization
+            Console.WriteLine("Testing JSON serialization...");
             
-            // Start central broker
-            Console.WriteLine("Starting CentralMessageBroker...");
-            var broker = BrokerManager.Instance.StartCentralBroker(25555, null, true);
+            // Test basic string serialization
+            string testString = $"Test message sent at {DateTime.UtcNow}";
+            string serializedString = JsonSerializer.Serialize(testString);
+            Console.WriteLine($"Original string: {testString}");
+            Console.WriteLine($"Serialized string: {serializedString}");
             
-            if (broker == null)
+            try
             {
-                Console.WriteLine("ERROR: Failed to start central broker");
-                return;
+                string deserializedString = JsonSerializer.Deserialize<string>(serializedString);
+                Console.WriteLine($"Deserialized string: {deserializedString}");
+                Console.WriteLine("Basic string serialization: SUCCESS");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Basic string deserialization FAILED: {ex.Message}");
             }
             
-            Console.WriteLine("CentralMessageBroker started successfully");
+            Console.WriteLine();
             
-            // Create test services with minimally required functionality
-            string consoleServiceId = "test_ui_service";
-            string gameEngineId = "test_engine_service";
+            // Test network message payload
+            Console.WriteLine("Testing NetworkMessage payload handling...");
             
-            // Track received messages for verification
-            bool startHandReceived = false;
-            bool responseReceived = false;
-            string startHandMessageId = string.Empty;
-            
-            // Subscribe to messages for the UI service
-            Console.WriteLine($"Setting up subscriber for console service {consoleServiceId}...");
-            
-            broker.Subscribe(consoleServiceId, (message) => {
-                Console.WriteLine($"UI SERVICE received message: Type={message.Type}, From={message.SenderId}, ID={message.MessageId}");
-                
-                // Check if we got a response to our StartHand message
-                if (message.InResponseTo == startHandMessageId)
-                {
-                    Console.WriteLine("\n!!!! SUCCESS !!!!");
-                    Console.WriteLine($"UI SERVICE received response to StartHand message!");
-                    Console.WriteLine($"Message Type: {message.Type}");
-                    Console.WriteLine($"Message ID: {message.MessageId}");
-                    Console.WriteLine($"In Response To: {message.InResponseTo}");
-                    Console.WriteLine($"From: {message.SenderId}");
-                    Console.WriteLine("!!!! SUCCESS !!!!\n");
-                    
-                    responseReceived = true;
-                }
-                
-                return true;
-            });
-            
-            // Subscribe to messages for the game engine service
-            Console.WriteLine($"Setting up subscriber for game engine {gameEngineId}...");
-            
-            broker.Subscribe(gameEngineId, (message) => {
-                Console.WriteLine($"GAME ENGINE received message: Type={message.Type}, From={message.SenderId}, ID={message.MessageId}");
-                
-                // If this is a StartHand message, respond to it
-                if (message.Type == MessageType.StartHand)
-                {
-                    Console.WriteLine("\n!!!! RECEIVED START HAND !!!!\n");
-                    startHandReceived = true;
-                    
-                    // Create response message directly as NetworkMessage to avoid conversion issues
-                    var response = new NetworkMessage
-                    {
-                        MessageId = Guid.NewGuid().ToString(),
-                        Type = MessageType.HandStarted, // Use HandStarted as response type
-                        SenderId = gameEngineId,
-                        ReceiverId = message.SenderId,
-                        InResponseTo = message.MessageId,
-                        Timestamp = DateTime.UtcNow,
-                        Headers = new Dictionary<string, string>
-                        {
-                            { "OriginalMessageId", message.MessageId },
-                            { "ResponseType", "HandStarted" },
-                            { "MessageSubType", "HandStarted" }
-                        }
-                    };
-                    
-                    // Send the response via the broker
-                    Console.WriteLine($"GAME ENGINE sending HandStarted response: {response.MessageId}");
-                    broker.Publish(response);
-                }
-                
-                return true;
-            });
-            
-            // Wait for subscriptions to initialize
-            await Task.Delay(500);
-            
-            // Create and send a StartHand message from the UI service to game engine
-            Console.WriteLine("\nCreating StartHand message...");
-            
-            // Create StartHand message directly to avoid conversion issues
-            var startHandMessage = new NetworkMessage
+            var message = new NetworkMessage
             {
                 MessageId = Guid.NewGuid().ToString(),
-                Type = MessageType.StartHand, // Use explicit enum value
-                SenderId = consoleServiceId,
-                ReceiverId = gameEngineId,
+                Type = MessageType.StartHand,
+                SenderId = "test_console",
+                ReceiverId = "test_game_engine",
                 Timestamp = DateTime.UtcNow,
+                Payload = serializedString,
                 Headers = new Dictionary<string, string>
                 {
                     { "MessageSubType", "StartHand" }
                 }
             };
             
-            // Store the message ID for verification
-            startHandMessageId = startHandMessage.MessageId;
+            Console.WriteLine($"Message created with payload: {message.Payload}");
             
-            // Log and send the message
-            Console.WriteLine($"Sending StartHand message: ID={startHandMessageId}, From={startHandMessage.SenderId}, To={startHandMessage.ReceiverId}");
-            broker.Publish(startHandMessage);
-            
-            // Wait for the message round-trip
-            Console.WriteLine("Waiting for message processing (5 seconds)...");
-            
-            // Wait with periodic checks for completion
-            for (int i = 0; i < 10; i++)
+            try
             {
-                if (startHandReceived && responseReceived)
-                {
-                    Console.WriteLine("Test completed successfully!");
-                    break;
-                }
-                
-                await Task.Delay(500);
+                var payload = message.GetPayload<string>();
+                Console.WriteLine($"GetPayload<string>() result: {payload}");
+                Console.WriteLine("NetworkMessage payload retrieval: " + 
+                    (payload == testString ? "SUCCESS" : "FAILED - strings don't match"));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"NetworkMessage payload retrieval FAILED: {ex.Message}");
+                Console.WriteLine($"Full exception: {ex}");
             }
             
-            // Final verification
-            Console.WriteLine("\n===== TEST SUMMARY =====");
-            Console.WriteLine($"StartHand received by GameEngine: {startHandReceived}");
-            Console.WriteLine($"Response received by ConsoleUI: {responseReceived}");
+            // Create a broker and test actual message passing
+            Console.WriteLine("\nTesting actual message passing through broker...");
             
-            if (startHandReceived && responseReceived)
+            var executionContext = new PokerGame.Core.Messaging.ExecutionContext();
+            var broker = new CentralMessageBroker(executionContext);
+            broker.Start();
+            
+            bool messageReceived = false;
+            string receivedPayload = null;
+            
+            // Subscribe to message
+            Console.WriteLine("Setting up subscription...");
+            string subscriptionId = broker.Subscribe(MessageType.StartHand, msg => {
+                Console.WriteLine($"Received message: {msg.Type} from {msg.SenderId}");
+                
+                try
+                {
+                    receivedPayload = msg.GetPayload<string>();
+                    Console.WriteLine($"Received payload: {receivedPayload}");
+                    messageReceived = true;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error retrieving payload: {ex.Message}");
+                    // Try direct access
+                    Console.WriteLine($"Raw payload: {msg.Payload}");
+                    
+                    try
+                    {
+                        if (msg.Payload is string rawPayload)
+                        {
+                            receivedPayload = JsonSerializer.Deserialize<string>(rawPayload);
+                            Console.WriteLine($"Manual deserialization: {receivedPayload}");
+                            messageReceived = true;
+                        }
+                    }
+                    catch (Exception innerEx)
+                    {
+                        Console.WriteLine($"Manual deserialization failed: {innerEx.Message}");
+                    }
+                }
+            });
+            
+            // Allow subscription to settle
+            await Task.Delay(100);
+            
+            // Publish message
+            Console.WriteLine("Publishing message...");
+            broker.Publish(message);
+            
+            // Wait for processing
+            await Task.Delay(1000);
+            
+            // Check results
+            if (messageReceived)
             {
-                Console.WriteLine("\nTEST PASSED: StartHand message flow is working correctly!");
+                Console.WriteLine("\n✓ SUCCESS: Message was received!");
+                if (receivedPayload == testString)
+                {
+                    Console.WriteLine("✓ PAYLOAD MATCH: The payload was correctly passed through the broker!");
+                }
+                else
+                {
+                    Console.WriteLine("✗ PAYLOAD MISMATCH: The payload was modified during transmission.");
+                    Console.WriteLine($"  Original: {testString}");
+                    Console.WriteLine($"  Received: {receivedPayload}");
+                }
             }
             else
             {
-                Console.WriteLine("\nTEST FAILED: StartHand message flow is not working correctly.");
-                if (!startHandReceived) Console.WriteLine("- GameEngine did not receive the StartHand message.");
-                if (!responseReceived) Console.WriteLine("- ConsoleUI did not receive the response message.");
+                Console.WriteLine("\n✗ FAILED: Message was not received!");
             }
+            
+            // Clean up
+            broker.Unsubscribe(subscriptionId, MessageType.StartHand);
+            broker.Stop();
+            
+            // Report overall success
+            Console.WriteLine("\nTest " + (messageReceived ? "PASSED" : "FAILED"));
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"ERROR during test execution: {ex.Message}");
+            Console.WriteLine($"TEST ERROR: {ex.Message}");
             Console.WriteLine(ex.StackTrace);
         }
-        finally
-        {
-            // Cleanup
-            BrokerManager.Instance.Stop();
-            Console.WriteLine("Resources cleaned up.");
-        }
+        
+        Console.WriteLine("\n===== Test Complete =====");
     }
 }

@@ -38,22 +38,25 @@ namespace StartHandTest
             
             bool responseReceived = false;
             
-            broker.Subscribe(consoleServiceId, (message) => {
-                Console.WriteLine($"UI SERVICE received message: Type={message.Type}, From={message.SenderId}, ID={message.MessageId}");
-                
-                if (message.Type == MessageType.HandStarted)
+            // Subscribe to HandStarted messages and filter for those meant for the console service
+            broker.Subscribe(MessageType.HandStarted, (message) => {
+                // Only process messages meant for our test UI service
+                if (message.ReceiverId == consoleServiceId)
                 {
-                    Console.WriteLine("\n!!!! SUCCESS !!!!");
-                    Console.WriteLine($"UI SERVICE received HandStarted response to StartHand message!");
-                    Console.WriteLine($"Message ID: {message.MessageId}");
-                    Console.WriteLine($"In Response To: {message.InResponseTo}");
-                    Console.WriteLine($"From: {message.SenderId}");
-                    Console.WriteLine("!!!! SUCCESS !!!!\n");
+                    Console.WriteLine($"UI SERVICE received message: Type={message.Type}, From={message.SenderId}, ID={message.MessageId}");
                     
-                    responseReceived = true;
+                    if (message.Type == MessageType.HandStarted)
+                    {
+                        Console.WriteLine("\n!!!! SUCCESS !!!!");
+                        Console.WriteLine($"UI SERVICE received HandStarted response to StartHand message!");
+                        Console.WriteLine($"Message ID: {message.MessageId}");
+                        Console.WriteLine($"In Response To: {message.InResponseTo}");
+                        Console.WriteLine($"From: {message.SenderId}");
+                        Console.WriteLine("!!!! SUCCESS !!!!\n");
+                        
+                        responseReceived = true;
+                    }
                 }
-                
-                return true;
             });
             
             // Subscribe to messages for the game engine service
@@ -61,37 +64,40 @@ namespace StartHandTest
             
             bool startHandReceived = false;
             
-            broker.Subscribe(gameEngineId, (message) => {
-                Console.WriteLine($"GAME ENGINE received message: Type={message.Type}, From={message.SenderId}, ID={message.MessageId}");
-                
-                // If this is a StartHand message, respond with DeckShuffled
-                if (message.Type == MessageType.StartHand)
+            // Subscribe to StartHand messages and filter for those meant for the game engine service
+            broker.Subscribe(MessageType.StartHand, (message) => {
+                // Only process messages meant for our test game engine service
+                if (message.ReceiverId == gameEngineId)
                 {
-                    Console.WriteLine("\n!!!! RECEIVED START HAND !!!!\n");
-                    startHandReceived = true;
+                    Console.WriteLine($"GAME ENGINE received message: Type={message.Type}, From={message.SenderId}, ID={message.MessageId}");
                     
-                    // Create response message directly for consistency
-                    var response = new NetworkMessage
+                    // If this is a StartHand message, respond with HandStarted
+                    if (message.Type == MessageType.StartHand)
                     {
-                        MessageId = Guid.NewGuid().ToString(),
-                        Type = MessageType.HandStarted,
-                        SenderId = gameEngineId,
-                        ReceiverId = message.SenderId,
-                        InResponseTo = message.MessageId,
-                        Timestamp = DateTime.UtcNow,
-                        Headers = new Dictionary<string, string>
+                        Console.WriteLine("\n!!!! RECEIVED START HAND !!!!\n");
+                        startHandReceived = true;
+                        
+                        // Create response message directly for consistency
+                        var response = new NetworkMessage
                         {
-                            { "OriginalMessageId", message.MessageId },
-                            { "ResponseType", "HandStarted" }
-                        }
-                    };
-                    
-                    // Send the response via the broker
-                    Console.WriteLine($"GAME ENGINE sending HandStarted response: {response.MessageId}");
-                    broker.Publish(response);
+                            MessageId = Guid.NewGuid().ToString(),
+                            Type = MessageType.HandStarted,
+                            SenderId = gameEngineId,
+                            ReceiverId = message.SenderId,
+                            InResponseTo = message.MessageId,
+                            Timestamp = DateTime.UtcNow,
+                            Headers = new Dictionary<string, string>
+                            {
+                                { "OriginalMessageId", message.MessageId },
+                                { "ResponseType", "HandStarted" }
+                            }
+                        };
+                        
+                        // Send the response via the broker
+                        Console.WriteLine($"GAME ENGINE sending HandStarted response: {response.MessageId}");
+                        broker.Publish(response);
+                    }
                 }
-                
-                return true;
             });
             
             // Wait for subscriptions to initialize

@@ -4,11 +4,8 @@ using System.Collections.Generic;
 using System.Threading;
 using PokerGame.Core.Messaging;
 using PokerGame.Core.Microservices;
+using MSA.Foundation.Messaging;
 using MSA.Foundation.ServiceManagement;
-
-// Use aliases to avoid ambiguity between message types
-using PokerMessageType = PokerGame.Core.Messaging.MessageType;
-using MSAEC = MSA.Foundation.ServiceManagement.ExecutionContext;
 
 namespace MessageFlowTest
 {
@@ -20,7 +17,7 @@ namespace MessageFlowTest
             Console.WriteLine("This test validates the flow of StartHand messages and DeckShuffled responses");
             
             // Use a central execution context
-            var context = new MSAEC();
+            var context = new MSA.Foundation.ServiceManagement.ExecutionContext();
             
             try
             {
@@ -50,7 +47,7 @@ namespace MessageFlowTest
                 broker.Subscribe(consoleServiceId, (message) => {
                     Console.WriteLine($"UI SERVICE received message: Type={message.Type}, From={message.SenderId}, ID={message.MessageId}");
                     
-                    if (message.Type == PokerMessageType.DeckShuffled)
+                    if (message.Type == MessageType.DeckShuffled)
                     {
                         Console.WriteLine("\n!!!! SUCCESS !!!!");
                         Console.WriteLine($"UI SERVICE received DeckShuffled response to StartHand!");
@@ -70,7 +67,7 @@ namespace MessageFlowTest
                     Console.WriteLine($"GAME ENGINE received message: Type={message.Type}, From={message.SenderId}, ID={message.MessageId}");
                     
                     // If this is a StartHand message, respond with DeckShuffled
-                    if (message.Type == PokerMessageType.StartHand)
+                    if (message.Type == MessageType.StartHand)
                     {
                         Console.WriteLine("\n!!!! RECEIVED START HAND !!!!\n");
                         
@@ -78,7 +75,7 @@ namespace MessageFlowTest
                         var response = new NetworkMessage
                         {
                             MessageId = Guid.NewGuid().ToString(),
-                            Type = PokerMessageType.DeckShuffled, // Use explicit enum value with alias
+                            Type = MessageType.DeckShuffled, // Use explicit enum value
                             SenderId = gameEngineId,
                             ReceiverId = message.SenderId,
                             InResponseTo = message.MessageId,
@@ -108,7 +105,7 @@ namespace MessageFlowTest
                 var startHandMessage = new NetworkMessage
                 {
                     MessageId = Guid.NewGuid().ToString(),
-                    Type = PokerMessageType.StartHand, // Use explicit enum value with alias
+                    Type = MessageType.StartHand, // Use explicit enum value
                     SenderId = consoleServiceId,
                     ReceiverId = gameEngineId,
                     Timestamp = DateTime.UtcNow,

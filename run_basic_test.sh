@@ -1,12 +1,12 @@
 #!/bin/bash
-# Run improved StartHand message test
+# Run basic message test
 
 # Create a dedicated directory for our test
-mkdir -p /home/runner/workspace/StartHandTest
-cd /home/runner/workspace/StartHandTest
+mkdir -p /home/runner/workspace/BasicMessageTest
+cd /home/runner/workspace/BasicMessageTest
 
 # Create a project file
-cat > StartHandTest.csproj << 'EOF'
+cat > BasicMessageTest.csproj << 'EOF'
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -20,11 +20,11 @@ cat > StartHandTest.csproj << 'EOF'
 EOF
 
 # Copy the test program
-cp /home/runner/workspace/improved_starthand_test.cs Program.cs
+cp /home/runner/workspace/basic_message_test.cs Program.cs
 
 # Build and run the test
-echo "Building improved StartHand message test..."
+echo "Building basic message test..."
 dotnet build -c Release
 
-echo "Running improved StartHand message test..."
-dotnet run -c Release | tee starthand_test.log
+echo "Running basic message test..."
+dotnet run -c Release

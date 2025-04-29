@@ -26,10 +26,6 @@ args = "poker-game-5000"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "poker-game-updated"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "message-flow-test"
 
 [[workflows.workflow.tasks]]
@@ -83,20 +79,12 @@ args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 -
 waitForPort = 5000
 
 [[workflows.workflow]]
-name = "poker-game-updated"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
-
-[[workflows.workflow]]
 name = "message-flow-test"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && ./run_starthand_test.sh"
+args = "cd /home/runner/workspace && dotnet run --project BasicMessageTest/BasicMessageTest.csproj --configuration Release"
 
 [[workflows.workflow]]
 name = "server-test"
