@@ -241,14 +241,14 @@ namespace PokerGame.Core.Microservices
         }
         
         /// <summary>
-        /// Sends a targeted registration message directly to a specific service ID
+        /// Sends a targeted registration message to a specific service ID through the central broker
         /// </summary>
         /// <param name="targetServiceId">The ID of the service to send registration to</param>
         private new void SendTargetedRegistrationTo(string targetServiceId)
         {
             try
             {
-                Console.WriteLine($"Sending targeted registration to service ID: {targetServiceId}");
+                Console.WriteLine($"Sending targeted registration to service ID: {targetServiceId} via central broker");
                 
                 // Create registration payload
                 var payload = new ServiceRegistrationPayload
@@ -267,10 +267,10 @@ namespace PokerGame.Core.Microservices
                 registrationMessage.MessageId = Guid.NewGuid().ToString();
                 
                 // Log the attempt for debugging
-                Console.WriteLine($"====> [GameEngine {_serviceId}] Sending DIRECT registration to {targetServiceId}");
+                Console.WriteLine($"====> [GameEngine {_serviceId}] Sending registration via central broker to {targetServiceId}");
                 
-                // Send the message directly to the target
-                SendTo(registrationMessage, targetServiceId);
+                // Route through the central message broker instead of direct connection
+                Broadcast(registrationMessage);
             }
             catch (Exception ex)
             {
