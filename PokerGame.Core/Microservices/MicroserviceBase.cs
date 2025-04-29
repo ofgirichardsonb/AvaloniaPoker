@@ -625,12 +625,9 @@ namespace PokerGame.Core.Microservices
                     return true;
                 }
                 
-                // Fallback to direct socket if central broker isn't available
-                Console.WriteLine($"WARNING: Central broker not available after {maxAttempts} attempts, using fallback direct socket for message {message.MessageId}");
-                string serialized = message.ToJson();
-                _publisherSocket?.SendFrame(serialized);
-                
-                return true;
+                // Don't fall back to direct socket - require central broker for all messaging
+                Console.WriteLine($"ERROR: Central broker not available after {maxAttempts} attempts. Message {message.MessageId} could not be sent.");
+                return false;
             }
             catch (Exception ex)
             {

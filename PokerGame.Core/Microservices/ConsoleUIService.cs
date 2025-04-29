@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using PokerGame.Core.Game;
 using PokerGame.Core.Models;
 using PokerGame.Core.ServiceManagement;
+using PokerGame.Core.Messaging;
 using MSA.Foundation.Messaging;
 
 namespace PokerGame.Core.Microservices
@@ -600,15 +601,25 @@ namespace PokerGame.Core.Microservices
             if (string.IsNullOrEmpty(_gameEngineServiceId))
             {
                 Console.WriteLine("WARNING: Could not discover game engine service after multiple attempts");
-                // Fall back to static ID for testing
-                _gameEngineServiceId = "GameEngine";
                 
-                // Try to send a debug message to the default game engine ID
+                // Fall back to static ID for testing 
+                // This needs to match the static ID set in GameEngineService
+                _gameEngineServiceId = "static_game_engine_service";
+                
+                Console.WriteLine($"Using fallback static game engine ID: {_gameEngineServiceId}");
+                
+                // Send a debug message through the broker instead of direct
                 var connectMsg = Message.Create(MessageType.Debug);
                 connectMsg.SenderId = _serviceId;
                 connectMsg.ReceiverId = _gameEngineServiceId;
-                connectMsg.SetPayload($"Direct connection attempt from ConsoleUI ({_serviceId}) to default GameEngine ID");
-                SendTo(connectMsg, _gameEngineServiceId);
+                connectMsg.SetPayload($"Connection attempt from ConsoleUI ({_serviceId}) to GameEngine via central broker");
+                
+                // Important: Use Broadcast through the central broker instead of direct send
+                Console.WriteLine($"Sending message type {connectMsg.Type} to {_gameEngineServiceId} through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(connectMsg.ToNetworkMessage());
+                
+                // For logging
+                Console.WriteLine($"Starting game with engine: {_gameEngineServiceId}");
             }
             
             // Start the game automatically for testing
@@ -664,7 +675,9 @@ namespace PokerGame.Core.Microservices
                 setupMessage.SetPayload(gameConfig);
                 
                 Console.WriteLine("Sending game setup message...");
-                SendTo(setupMessage, _gameEngineServiceId);
+                // Use central broker instead of direct send
+                Console.WriteLine($"Sending message type {setupMessage.Type} to {_gameEngineServiceId} through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(setupMessage.ToNetworkMessage());
                 
                 await Task.Delay(500);
                 
@@ -674,7 +687,9 @@ namespace PokerGame.Core.Microservices
                 startMessage.ReceiverId = _gameEngineServiceId;
                 
                 Console.WriteLine("Sending start game message...");
-                SendTo(startMessage, _gameEngineServiceId);
+                // Use central broker instead of direct send
+                Console.WriteLine($"Sending message type {startMessage.Type} to {_gameEngineServiceId} through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(startMessage.ToNetworkMessage());
                 
                 await Task.Delay(500);
                 
@@ -684,7 +699,9 @@ namespace PokerGame.Core.Microservices
                 startHandMessage.ReceiverId = _gameEngineServiceId;
                 
                 Console.WriteLine("Sending start hand message...");
-                SendTo(startHandMessage, _gameEngineServiceId);
+                // Use central broker instead of direct send
+                Console.WriteLine($"Sending message type {startHandMessage.Type} to {_gameEngineServiceId} through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(startHandMessage.ToNetworkMessage());
             }
             catch (Exception ex)
             {
@@ -721,7 +738,9 @@ namespace PokerGame.Core.Microservices
                 message.SetPayload(actionPayload);
                 
                 Console.WriteLine($"Sending player action: {actionType} {(betAmount > 0 ? $"with bet {betAmount}" : "")}");
-                SendTo(message, _gameEngineServiceId);
+                // Use central broker instead of direct send
+                Console.WriteLine($"Sending message type {message.Type} to {_gameEngineServiceId} through central broker");
+                BrokerManager.Instance.CentralBroker?.Publish(message.ToNetworkMessage());
                 
                 _waitingForPlayerAction = false;
             }
@@ -808,7 +827,9 @@ namespace PokerGame.Core.Microservices
                                     startHandMessage.ReceiverId = _gameEngineServiceId;
                                     
                                     Console.WriteLine("Sending start hand message...");
-                                    SendTo(startHandMessage, _gameEngineServiceId);
+                                    // Use central broker instead of direct send
+                                    Console.WriteLine($"Sending message type {startHandMessage.Type} to {_gameEngineServiceId} through central broker");
+                                    BrokerManager.Instance.CentralBroker?.Publish(startHandMessage.ToNetworkMessage());
                                 }
                                 break;
                                 
