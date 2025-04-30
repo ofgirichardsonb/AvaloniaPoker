@@ -3,11 +3,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
 using MSA.Foundation.Messaging;
 using MSAEC = MSA.Foundation.ServiceManagement.ExecutionContext;
 using PokerGame.Core.Messaging;
 using PokerGame.Core.Models;
 using PokerGame.Core.Game;
+using MSAMessage = MSA.Foundation.Messaging.Message;
+using MSAMessageBroker = MSA.Foundation.Messaging.MessageBroker; 
+using MSAMessageType = MSA.Foundation.Messaging.MessageType;
+using CoreMessageType = PokerGame.Core.Microservices.MessageType;
+using Models = PokerGame.Core.Models; // Using alias to avoid ambiguity with types
 
 namespace PokerGame.Core.Microservices
 {
@@ -71,20 +77,20 @@ namespace PokerGame.Core.Microservices
         private void RegisterMessageHandlers()
         {
             // Core message types
-            RegisterHandler(MSA.Foundation.Messaging.MessageType.ServiceRegistration, HandleServiceRegistration);
-            RegisterHandler(MSA.Foundation.Messaging.MessageType.ServiceDiscoveryRequest, HandleServiceDiscoveryRequest);
-            RegisterHandler(MSA.Foundation.Messaging.MessageType.ServiceDiscoveryResponse, HandleServiceDiscoveryResponse);
+            RegisterHandler(MSAMessageType.ServiceRegistration, HandleServiceRegistration);
+            RegisterHandler(MSAMessageType.ServiceDiscovery, HandleServiceDiscoveryRequest);
+            RegisterHandler(MSAMessageType.Response, HandleServiceDiscoveryResponse);
             
-            // Game-specific message types
-            RegisterHandler(MSA.Foundation.Messaging.MessageType.GameAction, HandleGameAction);
-            RegisterHandler(MSA.Foundation.Messaging.MessageType.GameState, HandleGameState);
-            RegisterHandler(MSA.Foundation.Messaging.MessageType.DeckShuffled, HandleDeckShuffled);
-            RegisterHandler(MSA.Foundation.Messaging.MessageType.HoleCards, HandleHoleCards);
-            RegisterHandler(MSA.Foundation.Messaging.MessageType.CommunityCards, HandleCommunityCards);
-            RegisterHandler(MSA.Foundation.Messaging.MessageType.PlayerAction, HandlePlayerAction);
-            RegisterHandler(MSA.Foundation.Messaging.MessageType.PlayerJoined, HandlePlayerJoined);
-            RegisterHandler(MSA.Foundation.Messaging.MessageType.PlayerLeft, HandlePlayerLeft);
-            RegisterHandler(MSA.Foundation.Messaging.MessageType.HandResult, HandleHandResult);
+            // Game-specific message types - using the Request type for game-specific messages
+            RegisterHandler(MSAMessageType.Request, HandleGameAction);
+            RegisterHandler(MSAMessageType.Request, HandleGameState);
+            RegisterHandler(MSAMessageType.Request, HandleDeckShuffled);
+            RegisterHandler(MSAMessageType.Request, HandleHoleCards);
+            RegisterHandler(MSAMessageType.Request, HandleCommunityCards);
+            RegisterHandler(MSAMessageType.Request, HandlePlayerAction);
+            RegisterHandler(MSAMessageType.Request, HandlePlayerJoined);
+            RegisterHandler(MSAMessageType.Request, HandlePlayerLeft);
+            RegisterHandler(MSAMessageType.Request, HandleHandResult);
         }
 
         /// <summary>
@@ -222,20 +228,20 @@ namespace PokerGame.Core.Microservices
         {
             try
             {
-                var playerAction = message.GetPayload<PlayerAction>();
-                Console.WriteLine($"Player action from engine: Player {playerAction.PlayerId} action {playerAction.Action} amount {playerAction.Amount}");
+                var playerAction = message.GetPayload<PlayerActionPayload>();
+                Console.WriteLine($"Player action from engine: Player {playerAction.PlayerId} action {playerAction.ActionType} amount {playerAction.BetAmount}");
                 
                 // Update the game state based on player action
                 if (_players.ContainsKey(playerAction.PlayerId))
                 {
-                    switch (playerAction.Action)
+                    switch (playerAction.ActionType)
                     {
                         case "bet":
                         case "raise":
-                            _pot += playerAction.Amount;
-                            _currentBet = playerAction.Amount;
-                            _players[playerAction.PlayerId].Chips -= playerAction.Amount;
-                            _players[playerAction.PlayerId].CurrentBet = playerAction.Amount;
+                            _pot += playerAction.BetAmount;
+                            _currentBet = playerAction.BetAmount;
+                            _players[playerAction.PlayerId].Chips -= playerAction.BetAmount;
+                            _players[playerAction.PlayerId].CurrentBet = playerAction.BetAmount;
                             break;
                         case "call":
                             int callAmount = _currentBet - _players[playerAction.PlayerId].CurrentBet;
@@ -351,7 +357,7 @@ namespace PokerGame.Core.Microservices
         {
             try
             {
-                var gameState = message.GetPayload<GameState>();
+                var gameState = message.GetPayload<Models.GameState>();
                 Console.WriteLine($"Game state received: {gameState.CurrentState}");
                 
                 // Update our local state with the new game state
@@ -480,19 +486,24 @@ namespace PokerGame.Core.Microservices
                 Console.WriteLine("Service discovery request received, sending response");
                 
                 // Create and send service registration for this UI service
-                var responseMessage = Message.CreateResponse(message, MSA.Foundation.Messaging.MessageType.ServiceRegistration, 
-                    new ServiceInfo
+                var responseMessage = new MSAMessage
+                {
+                    MessageId = Guid.NewGuid().ToString(),
+                    MessageType = MSAMessageType.ServiceRegistration,
+                    Payload = JsonSerializer.Serialize(new 
                     {
                         ServiceId = _serviceId,
-                        ServiceType = "ConsoleUIService",
-                        Version = "1.0",
-                        Status = "Running",
-                        Capabilities = new List<string> { "UI", "PlayerInput" }
-                    });
+                        ServiceType = "ConsoleUIService"
+                    }),
+                    Headers = new Dictionary<string, string>
+                    {
+                        { "InResponseTo", message.MessageId }
+                    }
+                };
                 
                 Console.WriteLine($"Sending service registration as response to discovery request");
                 
-                MessageBroker?.Publish(responseMessage);
+                base.MessageBroker?.Publish(responseMessage);
             }
             catch (Exception ex)
             {
@@ -607,7 +618,7 @@ namespace PokerGame.Core.Microservices
                 var holeCardsRequestMsg = new NetworkMessage
                 {
                     MessageId = Guid.NewGuid().ToString(),
-                    Type = Messaging.MessageType.RequestHoleCards,
+                    Type = Messaging.MessageType.Generic, // Use Generic for non-standard message types
                     SenderId = _serviceId,
                     ReceiverId = _gameEngineServiceId,
                     Timestamp = DateTime.UtcNow,
@@ -620,7 +631,7 @@ namespace PokerGame.Core.Microservices
                 };
                 
                 Console.WriteLine($"Requesting hole cards for player {playerId}");
-                BrokerManager.Instance.CentralBroker?.Publish(holeCardsRequestMsg);
+                base.MessageBroker?.Publish(holeCardsRequestMsg);
                 
                 // In a real implementation, we would wait for a response
                 // For now, just add a delay for demonstration
@@ -643,7 +654,7 @@ namespace PokerGame.Core.Microservices
                 var gameStateRequestMsg = new NetworkMessage
                 {
                     MessageId = Guid.NewGuid().ToString(),
-                    Type = Messaging.MessageType.GameStateRequest,
+                    Type = Messaging.MessageType.Generic, // Use Generic for non-standard message types
                     SenderId = _serviceId,
                     ReceiverId = _gameEngineServiceId,
                     Timestamp = DateTime.UtcNow,
@@ -654,7 +665,7 @@ namespace PokerGame.Core.Microservices
                 };
                 
                 Console.WriteLine("Requesting current game state");
-                BrokerManager.Instance.CentralBroker?.Publish(gameStateRequestMsg);
+                base.MessageBroker?.Publish(gameStateRequestMsg);
                 
                 // In a real implementation, we would wait for a response
                 // For now, just add a delay for demonstration
@@ -784,18 +795,23 @@ namespace PokerGame.Core.Microservices
                 Console.WriteLine("Starting service discovery...");
                 
                 // Create a service discovery request
-                var discoveryRequest = Message.Create(MSA.Foundation.Messaging.MessageType.ServiceDiscoveryRequest,
-                    new MSA.Foundation.Messaging.ServiceDiscoveryRequest
+                var discoveryRequest = new MSAMessage
+                {
+                    MessageId = Guid.NewGuid().ToString(),
+                    MessageType = MSAMessageType.ServiceDiscovery,
+                    Payload = JsonSerializer.Serialize(new 
                     {
                         RequestingServiceId = ServiceId,
                         RequestingServiceName = ServiceName,
                         RequestingServiceType = ServiceType,
-                        ServiceTypesRequested = new List<string> { "CardDeckService", "GameEngineService" }
-                    });
+                        ServiceTypesRequested = "CardDeckService,GameEngineService"
+                    })
+                };
                 
                 // Send the discovery request
                 Console.WriteLine("Sending service discovery request");
-                MSA.Foundation.Messaging.MessageBroker.Instance?.PublishMessage(discoveryRequest);
+                // Use BrokerManager.Instance.CentralBroker to publish messages
+                BrokerManager.Instance.CentralBroker?.Publish(discoveryRequest);
                 
                 // Wait for the discovery response with a timeout
                 int retries = 0;
@@ -811,7 +827,7 @@ namespace PokerGame.Core.Microservices
                         Console.WriteLine("No discovery response received yet, retrying...");
                         
                         // Retry sending the discovery request
-                        MSA.Foundation.Messaging.MessageBroker.Instance?.PublishMessage(discoveryRequest);
+                        BrokerManager.Instance.CentralBroker?.Publish(discoveryRequest);
                     }
                 }
                 
@@ -920,10 +936,10 @@ namespace PokerGame.Core.Microservices
                 string command = parts[0];
                 
                 // Create a player action message based on the command
-                var playerAction = new PlayerAction
+                var playerAction = new PlayerActionPayload
                 {
                     PlayerId = "player1", // Assume we're always player 1 for now
-                    Action = command
+                    ActionType = command
                 };
                 
                 // Add amount for bet or raise
@@ -931,7 +947,7 @@ namespace PokerGame.Core.Microservices
                 {
                     if (int.TryParse(parts[1], out int amount))
                     {
-                        playerAction.Amount = amount;
+                        playerAction.BetAmount = amount;
                     }
                     else
                     {
@@ -941,7 +957,7 @@ namespace PokerGame.Core.Microservices
                 }
                 
                 // Send the player action message
-                Console.WriteLine($"Sending player action: {playerAction.Action} {playerAction.Amount}");
+                Console.WriteLine($"Sending player action: {playerAction.ActionType} {playerAction.BetAmount}");
                 
                 var playerActionMessage = new NetworkMessage
                 {
