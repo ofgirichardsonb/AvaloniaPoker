@@ -384,6 +384,7 @@ namespace PokerGame.Core.Messaging
                                     {
                                         try
                                         {
+                                            _logger.Log($"Delivering message of type {message.Type} to subscriber {parts[1]}");
                                             subscriber.Value(message);
                                         }
                                         catch (Exception ex)

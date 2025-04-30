@@ -36,6 +36,42 @@ namespace PokerGame.Core.Microservices
             Console.WriteLine("********** CONSOLE UI SERVICE LOADED - NEW VERSION WITH STARTHAND LOGGING **********");
         }
         
+        /// <summary>
+        /// Handles service registration messages directly from the broker
+        /// </summary>
+        /// <param name="message">The registration message</param>
+        private void HandleServiceRegistration(NetworkMessage message)
+        {
+            try
+            {
+                Console.WriteLine($"Received direct service registration from: {message.SenderId}");
+                
+                if (message.Type == Messaging.MessageType.ServiceRegistration)
+                {
+                    try
+                    {
+                        var payload = System.Text.Json.JsonSerializer.Deserialize<ServiceRegistrationPayload>(
+                            message.Payload ?? "{}");
+                        
+                        if (payload != null && payload.ServiceType == ServiceConstants.ServiceTypes.GameEngine 
+                            && string.IsNullOrEmpty(_gameEngineServiceId))
+                        {
+                            _gameEngineServiceId = message.SenderId;
+                            Console.WriteLine($"Updated game engine service ID to: {_gameEngineServiceId}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error deserializing payload: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling service registration: {ex.Message}");
+            }
+        }
+        
         private bool _useEnhancedUI = false;
         private object? _enhancedUiInstance = null;
         private Task? _inputProcessingTask = null;
@@ -578,6 +614,13 @@ namespace PokerGame.Core.Microservices
             int delayMs = 500;
             
             Console.WriteLine($"Starting game engine discovery (max attempts: {maxAttempts}, delay: {delayMs}ms)");
+            
+            // Explicitly subscribe to ServiceRegistration messages
+            string subscriptionId = BrokerManager.Instance.CentralBroker?.Subscribe(
+                Messaging.MessageType.ServiceRegistration, 
+                HandleServiceRegistration) ?? "";
+                
+            Console.WriteLine($"Subscribed to ServiceRegistration messages with ID: {subscriptionId}");
             
             for (int attempt = 0; attempt < maxAttempts; attempt++)
             {
