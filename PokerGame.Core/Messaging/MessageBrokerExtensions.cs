@@ -99,7 +99,7 @@ namespace PokerGame.Core.Messaging
         }
         
         /// <summary>
-        /// Sends a message with acknowledgment using the MicroserviceMessageBroker
+        /// Sends a message with acknowledgment using the CentralMessageBroker to avoid NetMQ context termination issues
         /// </summary>
         /// <param name="service">The microservice</param>
         /// <param name="message">Message to send</param>
@@ -132,115 +132,204 @@ namespace PokerGame.Core.Messaging
             // Log what we're doing initially
             Console.WriteLine($"[{service.ServiceId}] Sending message {message.Type} to {receiverId} with acknowledgment (timeout: {timeoutMs}ms, max retries: {maxRetries})");
             
-            // Try until we succeed or run out of retries
-            while (!success && retryCount <= maxRetries)
+            // Get the central broker from BrokerManager
+            var centralBroker = BrokerManager.Instance.CentralBroker;
+            if (centralBroker == null)
             {
-                // Log retry information if this isn't the first attempt
-                if (retryCount > 0)
-                {
-                    Console.WriteLine($"[{service.ServiceId}] Retry attempt {retryCount}/{maxRetries} for message {message.Type} to {receiverId}");
-                }
-                
-                try
-                {
-                    // Create a message envelope from the message
-                    var envelope = new MessageEnvelope
-                    {
-                        MessageId = message.MessageId,
-                        Type = message.Type.ToString(),
-                        SenderServiceId = message.SenderId,
-                        TargetServiceId = receiverId,
-                        Timestamp = DateTime.UtcNow,
-                        Payload = message.Payload
-                    };
-                    
-                    // Add required metadata
-                    envelope.Metadata["SenderId"] = message.SenderId;
-                    envelope.Metadata["MessageId"] = message.MessageId;
-                    envelope.Metadata["TimeStamp"] = DateTime.UtcNow.ToString("o");
-                    envelope.Metadata["TargetId"] = receiverId;
-                    envelope.Metadata["InResponseTo"] = message.InResponseTo ?? string.Empty;
-                    envelope.Metadata["RetryCount"] = retryCount.ToString();
-                    
-                    // Use the MessageBroker directly to get delivery confirmation
-                    // Use ports that are unlikely to conflict with a bit more randomness on retries
-                    int randomPortBase = new Random().Next(2000 + (retryCount * 500), 5000 + (retryCount * 500));
-                    using (var broker = new MessageBroker(
-                        service.ServiceId, 
-                        randomPortBase, // publish port
-                        randomPortBase + 1)) // subscribe port
-                    {
-                        // Start the broker explicitly
-                        broker.Start();
-                        
-                        // Send the message and wait for acknowledgment
-                        success = await broker.SendWithAcknowledgmentAsync(envelope, timeoutMs);
-                        
-                        // Make sure to stop the broker
-                        broker.Stop();
-                        
-                        if (success)
-                        {
-                            // Log success
-                            Console.WriteLine($"[{service.ServiceId}] Message {message.Type} to {receiverId} acknowledged successfully" + 
-                                             (retryCount > 0 ? $" after {retryCount} retries" : ""));
-                            return true;
-                        }
-                    }
-                    
-                    // If we're here, the message wasn't acknowledged
-                    retryCount++;
-                    
-                    // Exit if we've exceeded max retries
-                    if (retryCount > maxRetries)
-                    {
-                        break;
-                    }
-                    
-                    // Calculate delay before next retry
-                    int delayMs;
-                    if (useExponentialBackoff)
-                    {
-                        // Exponential backoff with jitter (max 10 seconds)
-                        delayMs = Math.Min(1000 * (int)Math.Pow(2, retryCount - 1), 10000);
-                        delayMs += new Random().Next(-delayMs / 4, delayMs / 4); // Add jitter
-                    }
-                    else
-                    {
-                        // Linear backoff (500ms per retry)
-                        delayMs = 500 * retryCount;
-                    }
-                    
-                    Console.WriteLine($"[{service.ServiceId}] Message {message.Type} not acknowledged, waiting {delayMs}ms before retry");
-                    await Task.Delay(delayMs);
-                }
-                catch (Exception ex)
-                {
-                    // Log detailed exception info
-                    Console.WriteLine($"[{service.ServiceId}] Error sending message with acknowledgment: {ex.Message}");
-                    if (ex.InnerException != null)
-                    {
-                        Console.WriteLine($"[{service.ServiceId}] Inner exception: {ex.InnerException.Message}");
-                    }
-                    
-                    // Increment retry counter
-                    retryCount++;
-                    
-                    // Exit if we've exceeded max retries
-                    if (retryCount > maxRetries)
-                    {
-                        break;
-                    }
-                    
-                    // Simple backoff for exceptions (shorter than the normal backoff)
-                    int delayMs = 250 * retryCount;
-                    await Task.Delay(delayMs);
-                }
+                Console.WriteLine($"[{service.ServiceId}] Error: Central broker is not available");
+                return false;
             }
             
-            // If we get here, we failed after all retries
-            Console.WriteLine($"[{service.ServiceId}] Failed to get acknowledgment for message {message.Type} to {receiverId} after {maxRetries} retries");
-            return false;
+            // Register a one-time acknowledgment handler with the central broker
+            var tcs = new TaskCompletionSource<bool>();
+            string ackedMessageId = message.MessageId;
+            string? subscriptionId = null;
+            
+            try
+            {
+                // Set up a handler to detect acknowledgments specifically for this message
+                // Convert MessageType enum to the correct type for CentralMessageBroker.Subscribe
+                var ackMessageType = Messaging.MessageType.Acknowledgment;
+                
+                // Create a handler that accepts a single NetworkMessage parameter
+                Action<NetworkMessage> ackHandler = (ackMessage) => {
+                    try
+                    {
+                        if (ackMessage != null && 
+                            ackMessage.Headers != null &&
+                            ackMessage.Headers.TryGetValue("InResponseTo", out string? inResponseTo) && 
+                            inResponseTo == ackedMessageId)
+                        {
+                            Console.WriteLine($"[{service.ServiceId}] Received acknowledgment for message ID: {ackedMessageId}");
+                            // Signal the waiting task
+                            tcs.TrySetResult(true);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[{service.ServiceId}] Error processing acknowledgment: {ex.Message}");
+                    }
+                };
+                
+                // Subscribe to acknowledgment messages
+                subscriptionId = centralBroker.Subscribe(ackMessageType, ackHandler);
+                Console.WriteLine($"[{service.ServiceId}] Subscribed to acknowledgments with ID: {subscriptionId}");
+                
+                // Try until we succeed or run out of retries
+                while (!success && retryCount <= maxRetries)
+                {
+                    // Log retry information if this isn't the first attempt
+                    if (retryCount > 0)
+                    {
+                        Console.WriteLine($"[{service.ServiceId}] Retry attempt {retryCount}/{maxRetries} for message {message.Type} to {receiverId}");
+                    }
+                    
+                    try
+                    {
+                        // Create a network message that requires acknowledgment
+                        var networkMsg = new NetworkMessage
+                        {
+                            MessageId = message.MessageId,
+                            // Map to the correct enum type
+                            Type = MapMessageType(message.Type),
+                            SenderId = message.SenderId,
+                            ReceiverId = receiverId,
+                            Timestamp = DateTime.UtcNow,
+                            Payload = message.Payload,
+                            Headers = new Dictionary<string, string>
+                            {
+                                { "RequireAcknowledgment", "true" },
+                                { "InResponseTo", message.InResponseTo ?? string.Empty },
+                                { "RetryCount", retryCount.ToString() }
+                            }
+                        };
+                        
+                        // Send through the central broker
+                        Console.WriteLine($"[{service.ServiceId}] Publishing message {message.Type} (ID: {message.MessageId}) through central broker");
+                        centralBroker.Publish(networkMsg);
+                        
+                        // Wait for acknowledgment with timeout
+                        var timeoutTask = Task.Delay(timeoutMs);
+                        var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
+                        
+                        if (completedTask == tcs.Task)
+                        {
+                            // Success - acknowledgment received
+                            success = true;
+                            Console.WriteLine($"[{service.ServiceId}] Message {message.Type} to {receiverId} acknowledged successfully" + 
+                                            (retryCount > 0 ? $" after {retryCount} retries" : ""));
+                            break;
+                        }
+                        else
+                        {
+                            // Timeout waiting for acknowledgment
+                            retryCount++;
+                            
+                            // Reset the task completion source for the next attempt
+                            tcs = new TaskCompletionSource<bool>();
+                            
+                            // Exit if we've exceeded max retries
+                            if (retryCount > maxRetries)
+                            {
+                                break;
+                            }
+                            
+                            // Calculate delay before next retry
+                            int delayMs;
+                            if (useExponentialBackoff)
+                            {
+                                // Exponential backoff with jitter (max 10 seconds)
+                                delayMs = Math.Min(1000 * (int)Math.Pow(2, retryCount - 1), 10000);
+                                delayMs += new Random().Next(-delayMs / 4, delayMs / 4); // Add jitter
+                            }
+                            else
+                            {
+                                // Linear backoff (500ms per retry)
+                                delayMs = 500 * retryCount;
+                            }
+                            
+                            Console.WriteLine($"[{service.ServiceId}] Message {message.Type} not acknowledged, waiting {delayMs}ms before retry");
+                            await Task.Delay(delayMs);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log detailed exception info
+                        Console.WriteLine($"[{service.ServiceId}] Error sending message with acknowledgment: {ex.Message}");
+                        if (ex.InnerException != null)
+                        {
+                            Console.WriteLine($"[{service.ServiceId}] Inner exception: {ex.InnerException.Message}");
+                        }
+                        
+                        // Increment retry counter
+                        retryCount++;
+                        
+                        // Reset the task completion source for the next attempt
+                        tcs = new TaskCompletionSource<bool>();
+                        
+                        // Exit if we've exceeded max retries
+                        if (retryCount > maxRetries)
+                        {
+                            break;
+                        }
+                        
+                        // Simple backoff for exceptions (shorter than the normal backoff)
+                        int delayMs = 250 * retryCount;
+                        await Task.Delay(delayMs);
+                    }
+                }
+                
+                return success;
+            }
+            finally
+            {
+                // Clean up the subscription
+                if (subscriptionId != null)
+                {
+                    try
+                    {
+                        Console.WriteLine($"[{service.ServiceId}] Unsubscribing acknowledgment handler (ID: {subscriptionId})");
+                        // The central broker's unsubscribe method requires both the ID and message type
+                        centralBroker.Unsubscribe(subscriptionId, Messaging.MessageType.Acknowledgment);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[{service.ServiceId}] Error unsubscribing: {ex.Message}");
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Maps between the Microservices.MessageType and Messaging.MessageType enums
+        /// </summary>
+        /// <param name="messageType">The source message type from Microservices namespace</param>
+        /// <returns>The corresponding message type in the Messaging namespace</returns>
+        private static Messaging.MessageType MapMessageType(Microservices.MessageType messageType)
+        {
+            // Map common message types between the two enum namespaces
+            switch (messageType)
+            {
+                case Microservices.MessageType.Acknowledgment:
+                    return Messaging.MessageType.Acknowledgment;
+                case Microservices.MessageType.ServiceDiscovery:
+                    return Messaging.MessageType.ServiceDiscovery;
+                case Microservices.MessageType.ServiceRegistration:
+                    return Messaging.MessageType.ServiceRegistration;
+                case Microservices.MessageType.StartGame:
+                    return Messaging.MessageType.Command;  // Use Command for game actions
+                case Microservices.MessageType.StartHand:
+                    return Messaging.MessageType.Command;  // Use Command for game actions
+                case Microservices.MessageType.DealCards:
+                    return Messaging.MessageType.Command;  // Use Command for game actions
+                case Microservices.MessageType.PlayerAction:
+                    return Messaging.MessageType.Request;  // Use Request for player actions
+                case Microservices.MessageType.Heartbeat:
+                    return Messaging.MessageType.Heartbeat;
+                default:
+                    // For other message types, use Data as the generic type
+                    return Messaging.MessageType.Data;
+            }
         }
     }
 }

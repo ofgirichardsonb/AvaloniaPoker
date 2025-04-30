@@ -52,6 +52,10 @@ args = "rebuild-foundation"
 task = "workflow.run"
 args = "rebuild-abstractions"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "rebuild-core"
+
 [[workflows.workflow]]
 name = "rebuild_test"
 author = "agent"
@@ -132,6 +136,14 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd /home/runner/workspace && dotnet build PokerGame.Abstractions/PokerGame.Abstractions.csproj -c Release"
+
+[[workflows.workflow]]
+name = "rebuild-core"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && dotnet build PokerGame.Core/PokerGame.Core.csproj"
 
 [deployment]
 run = ["sh", "-c", "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 200 --curses"]
