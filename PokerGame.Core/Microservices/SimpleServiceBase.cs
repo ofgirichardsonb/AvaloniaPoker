@@ -19,7 +19,7 @@ namespace PokerGame.Core.Microservices
         private readonly int _subscriberPort;
         private readonly bool _verbose;
         private readonly SocketCommunicationAdapter _socketAdapter;
-        private readonly Dictionary<string, ServiceInfo> _serviceRegistry = new Dictionary<string, ServiceInfo>();
+        private readonly Dictionary<string, LegacyServiceInfo> _serviceRegistry = new Dictionary<string, LegacyServiceInfo>();
         private readonly List<string> _acknowledgedMessageIds = new List<string>();
         private readonly object _serviceRegistryLock = new object();
         private bool _isRunning;
@@ -311,7 +311,7 @@ namespace PokerGame.Core.Microservices
             {
                 if (!_serviceRegistry.TryGetValue(payload.ServiceId, out var serviceInfo))
                 {
-                    serviceInfo = new ServiceInfo
+                    serviceInfo = new LegacyServiceInfo
                     {
                         ServiceId = payload.ServiceId,
                         ServiceName = payload.ServiceName,
@@ -380,7 +380,7 @@ namespace PokerGame.Core.Microservices
         /// Gets a list of all registered services
         /// </summary>
         /// <returns>A list of service information</returns>
-        protected IReadOnlyList<ServiceInfo> GetRegisteredServices()
+        protected IReadOnlyList<LegacyServiceInfo> GetRegisteredServices()
         {
             lock (_serviceRegistryLock)
             {
@@ -393,7 +393,7 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         /// <param name="serviceId">The ID of the service to get</param>
         /// <returns>The service information, or null if not found</returns>
-        protected ServiceInfo? GetServiceById(string serviceId)
+        protected LegacyServiceInfo? GetServiceById(string serviceId)
         {
             lock (_serviceRegistryLock)
             {
@@ -409,7 +409,7 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         /// <param name="serviceType">The type of the service to get</param>
         /// <returns>The first service of the specified type, or null if not found</returns>
-        protected ServiceInfo? GetServiceByType(string serviceType)
+        protected LegacyServiceInfo? GetServiceByType(string serviceType)
         {
             lock (_serviceRegistryLock)
             {
@@ -428,7 +428,7 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         /// <param name="serviceType">The type of services to get</param>
         /// <returns>A list of services of the specified type</returns>
-        protected IReadOnlyList<ServiceInfo> GetServicesByType(string serviceType)
+        protected IReadOnlyList<LegacyServiceInfo> GetServicesByType(string serviceType)
         {
             lock (_serviceRegistryLock)
             {
@@ -443,7 +443,7 @@ namespace PokerGame.Core.Microservices
     /// Information about a service
     /// </summary>
     [Obsolete("This class has been replaced with ServiceInfo in MessageTypes.cs and will be removed in a future release.")]
-    public class ServiceInfo
+    public class LegacyServiceInfo
     {
         /// <summary>
         /// Gets or sets the unique identifier of the service
