@@ -675,20 +675,20 @@ namespace PokerGame.Core.Microservices
         {
             string rank = card.Rank switch
             {
-                CardRank.Ace => "A",
-                CardRank.King => "K",
-                CardRank.Queen => "Q",
-                CardRank.Jack => "J",
-                CardRank.Ten => "10",
+                Rank.Ace => "A",
+                Rank.King => "K",
+                Rank.Queen => "Q",
+                Rank.Jack => "J",
+                Rank.Ten => "10",
                 _ => ((int)card.Rank).ToString()
             };
             
             string suit = card.Suit switch
             {
-                CardSuit.Hearts => "♥",
-                CardSuit.Diamonds => "♦",
-                CardSuit.Clubs => "♣",
-                CardSuit.Spades => "♠",
+                Suit.Hearts => "♥",
+                Suit.Diamonds => "♦",
+                Suit.Clubs => "♣",
+                Suit.Spades => "♠",
                 _ => "?"
             };
             
@@ -978,11 +978,10 @@ namespace PokerGame.Core.Microservices
                 // Setup the UI
                 SetupConsoleUI();
                 
-                // Register this service with the broker
-                RegisterWithBroker();
+                // Console UI is already registered through the base class initialization
+                // No separate registration needed
                 
-                // Subscribe to required message types
-                SubscribeToMessages();
+                // All required message subscriptions are set up in RegisterMessageHandlers
                 
                 Console.WriteLine("ConsoleUIService started");
                 
