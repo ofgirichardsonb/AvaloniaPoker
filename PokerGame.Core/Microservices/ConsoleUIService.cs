@@ -1,69 +1,533 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using PokerGame.Core.Game;
-using PokerGame.Core.Models;
-using PokerGame.Core.ServiceManagement;
-using PokerGame.Core.Messaging;
 using MSA.Foundation.Messaging;
+using MSAEC = MSA.Foundation.ServiceManagement.ExecutionContext;
+using PokerGame.Core.Messaging;
+using PokerGame.Core.Models;
+using PokerGame.Core.Game;
 
 namespace PokerGame.Core.Microservices
 {
     /// <summary>
-    /// A mock implementation of IPokerGameUI that does nothing - used for state display only
-    /// </summary>
-    public class MockPokerGameUI : Interfaces.IPokerGameUI
-    {
-        public void SetGameEngine(Game.PokerGameEngine gameEngine) { }
-        public void StartGame() { }
-        public void ShowMessage(string message) { }
-        public int GetAnteAmount() => 10;
-        public void GetPlayerAction(Models.Player player, Game.PokerGameEngine gameEngine) { }
-        public void UpdateGameState(Game.PokerGameEngine gameEngine) { }
-        public void ShowWinner(List<Models.Player> winners, Game.PokerGameEngine gameEngine) { }
-    }
-
-    /// <summary>
-    /// Microservice that handles the console user interface
+    /// A service that provides a console-based UI for the poker game
     /// </summary>
     public class ConsoleUIService : MicroserviceBase
     {
-        // Test logging for build verification
-        static ConsoleUIService() {
-            Console.WriteLine("********** CONSOLE UI SERVICE LOADED - NEW VERSION WITH STARTHAND LOGGING **********");
-        }
-        
+        private bool _isEnhancedUI;
+        private string _gameEngineServiceId = "";
+        private string _cardDeckServiceId = "";
+        private readonly Dictionary<string, Player> _players = new();
+        private readonly List<Card> _communityCards = new();
+        private string _currentGameState = "Waiting";
+        private int _currentBet = 0;
+        private int _pot = 0;
+        private bool _gameInProgress = false;
+        private bool _serviceDiscoveryCompleted = false;
+        private bool _cursesUI = false;
+        private bool _uiRunning = false;
+        private readonly ManualResetEventSlim _shutdownEvent = new(false);
+        private bool _isShuttingDown = false;
+
         /// <summary>
-        /// Handles service registration messages directly from the broker
+        /// Gets a value indicating whether this services is using enhanced UI mode
         /// </summary>
-        /// <param name="message">The registration message</param>
-        private void HandleServiceRegistration(NetworkMessage message)
+        public bool IsEnhancedUI => _isEnhancedUI;
+
+        /// <summary>
+        /// Gets a value indicating whether the service is in curses UI mode
+        /// </summary>
+        public bool IsCursesUI => _cursesUI;
+
+        /// <summary>
+        /// Gets the player currently associated with this UI service
+        /// </summary>
+        public Player? CurrentPlayer { get; private set; }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ConsoleUIService"/> class
+        /// </summary>
+        /// <param name="context">The execution context</param>
+        /// <param name="enhancedUI">Whether to use enhanced UI mode</param>
+        /// <param name="cursesUI">Whether to use curses UI mode</param>
+        public ConsoleUIService(MSAEC context, bool enhancedUI = false, bool cursesUI = false) 
+            : base(context)
+        {
+            _isEnhancedUI = enhancedUI;
+            _cursesUI = cursesUI;
+            
+            // Display mode info for debugging
+            Console.WriteLine($"POKER GAME UI INITIALIZATION: Curses UI flag = {_cursesUI}, Curses UI instance exists = {_cursesUI}");
+            
+            // Register message handlers
+            RegisterMessageHandlers();
+        }
+
+        /// <summary>
+        /// Registers handlers for different message types
+        /// </summary>
+        private void RegisterMessageHandlers()
+        {
+            // Core message types
+            RegisterHandler(MSA.Foundation.Messaging.MessageType.ServiceRegistration, HandleServiceRegistration);
+            RegisterHandler(MSA.Foundation.Messaging.MessageType.ServiceDiscoveryRequest, HandleServiceDiscoveryRequest);
+            RegisterHandler(MSA.Foundation.Messaging.MessageType.ServiceDiscoveryResponse, HandleServiceDiscoveryResponse);
+            
+            // Game-specific message types
+            RegisterHandler(MSA.Foundation.Messaging.MessageType.GameAction, HandleGameAction);
+            RegisterHandler(MSA.Foundation.Messaging.MessageType.GameState, HandleGameState);
+            RegisterHandler(MSA.Foundation.Messaging.MessageType.DeckShuffled, HandleDeckShuffled);
+            RegisterHandler(MSA.Foundation.Messaging.MessageType.HoleCards, HandleHoleCards);
+            RegisterHandler(MSA.Foundation.Messaging.MessageType.CommunityCards, HandleCommunityCards);
+            RegisterHandler(MSA.Foundation.Messaging.MessageType.PlayerAction, HandlePlayerAction);
+            RegisterHandler(MSA.Foundation.Messaging.MessageType.PlayerJoined, HandlePlayerJoined);
+            RegisterHandler(MSA.Foundation.Messaging.MessageType.PlayerLeft, HandlePlayerLeft);
+            RegisterHandler(MSA.Foundation.Messaging.MessageType.HandResult, HandleHandResult);
+        }
+
+        /// <summary>
+        /// Sets up the console UI
+        /// </summary>
+        private void SetupConsoleUI()
+        {
+            Console.WriteLine("Setting up console UI...");
+            Console.WriteLine($"Enhanced UI: {_isEnhancedUI}");
+            Console.WriteLine($"Curses UI: {_cursesUI}");
+            
+            // If using enhanced UI mode, set up the console for it
+            if (_isEnhancedUI || _cursesUI)
+            {
+                Console.WriteLine("Setting up enhanced console UI...");
+                Console.Clear();
+                Console.CursorVisible = false;
+            }
+            
+            _uiRunning = true;
+        }
+
+        /// <summary>
+        /// Handles shutdown of the UI
+        /// </summary>
+        private void ShutdownUI()
+        {
+            // Only perform shutdown if we're actually running
+            if (!_uiRunning) return;
+            
+            Console.WriteLine("Shutting down console UI...");
+            
+            // If using enhanced UI mode, restore the console
+            if (_isEnhancedUI || _cursesUI)
+            {
+                Console.WriteLine("Restoring console from enhanced UI mode...");
+                Console.CursorVisible = true;
+            }
+            
+            _uiRunning = false;
+        }
+
+        /// <summary>
+        /// Handles a player joining the game
+        /// </summary>
+        /// <param name="message">The player joined message</param>
+        private void HandlePlayerJoined(Message message)
         {
             try
             {
-                Console.WriteLine($"Received direct service registration from: {message.SenderId}");
+                var player = message.GetPayload<Player>();
+                Console.WriteLine($"Player joined: {player.Name}");
                 
-                if (message.Type == Messaging.MessageType.ServiceRegistration)
+                // Add player to our local collection
+                _players[player.Id] = player;
+                
+                // Update the UI
+                DisplayGameStateAsync().Wait();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling player joined message: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handles a player leaving the game
+        /// </summary>
+        /// <param name="message">The player left message</param>
+        private void HandlePlayerLeft(Message message)
+        {
+            try
+            {
+                var playerId = message.GetPayload<string>();
+                
+                // Remove the player from our local collection
+                if (_players.ContainsKey(playerId))
                 {
-                    try
+                    string playerName = _players[playerId].Name;
+                    _players.Remove(playerId);
+                    Console.WriteLine($"Player left: {playerName}");
+                }
+                
+                // Update the UI
+                DisplayGameStateAsync().Wait();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling player left message: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handles the result of a poker hand
+        /// </summary>
+        /// <param name="message">The hand result message</param>
+        private void HandleHandResult(Message message)
+        {
+            try
+            {
+                var handResult = message.GetPayload<HandResult>();
+                Console.WriteLine($"Hand result received: {handResult.Winner.Name} wins {handResult.Pot} chips with {handResult.WinningHand}");
+                
+                // Update our local state
+                _currentGameState = "Hand Complete";
+                _pot = 0;
+                _currentBet = 0;
+                
+                // Clear the community cards
+                _communityCards.Clear();
+                
+                // Update players' chip counts
+                foreach (var player in handResult.Players)
+                {
+                    if (_players.ContainsKey(player.Id))
                     {
-                        var payload = System.Text.Json.JsonSerializer.Deserialize<ServiceRegistrationPayload>(
-                            message.Payload ?? "{}");
-                        
-                        if (payload != null && payload.ServiceType == ServiceConstants.ServiceTypes.GameEngine 
-                            && string.IsNullOrEmpty(_gameEngineServiceId))
+                        _players[player.Id].Chips = player.Chips;
+                    }
+                }
+                
+                // Update the UI
+                DisplayGameStateAsync().Wait();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling hand result message: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handles player action messages from the game engine
+        /// </summary>
+        /// <param name="message">The player action message</param>
+        private void HandlePlayerAction(Message message)
+        {
+            try
+            {
+                var playerAction = message.GetPayload<PlayerAction>();
+                Console.WriteLine($"Player action from engine: Player {playerAction.PlayerId} action {playerAction.Action} amount {playerAction.Amount}");
+                
+                // Update the game state based on player action
+                if (_players.ContainsKey(playerAction.PlayerId))
+                {
+                    switch (playerAction.Action)
+                    {
+                        case "bet":
+                        case "raise":
+                            _pot += playerAction.Amount;
+                            _currentBet = playerAction.Amount;
+                            _players[playerAction.PlayerId].Chips -= playerAction.Amount;
+                            _players[playerAction.PlayerId].CurrentBet = playerAction.Amount;
+                            break;
+                        case "call":
+                            int callAmount = _currentBet - _players[playerAction.PlayerId].CurrentBet;
+                            _pot += callAmount;
+                            _players[playerAction.PlayerId].Chips -= callAmount;
+                            _players[playerAction.PlayerId].CurrentBet = _currentBet;
+                            break;
+                        case "fold":
+                            _players[playerAction.PlayerId].HasFolded = true;
+                            break;
+                        case "all-in":
+                            int allInAmount = _players[playerAction.PlayerId].Chips;
+                            _pot += allInAmount;
+                            _players[playerAction.PlayerId].Chips = 0;
+                            _players[playerAction.PlayerId].CurrentBet += allInAmount;
+                            _players[playerAction.PlayerId].IsAllIn = true;
+                            break;
+                    }
+                }
+                
+                // Update the UI
+                DisplayGameStateAsync().Wait();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling player action message: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handles hole cards messages
+        /// </summary>
+        /// <param name="message">The hole cards message</param>
+        private void HandleHoleCards(Message message)
+        {
+            try 
+            {
+                var holeCardsMessage = message.GetPayload<PlayerCards>();
+                Console.WriteLine($"Received hole cards for player {holeCardsMessage.PlayerId}");
+                
+                // Update the player's hole cards
+                if (_players.ContainsKey(holeCardsMessage.PlayerId))
+                {
+                    _players[holeCardsMessage.PlayerId].HoleCards.Clear();
+                    _players[holeCardsMessage.PlayerId].HoleCards.AddRange(holeCardsMessage.Cards);
+                    
+                    Console.WriteLine($"Player {holeCardsMessage.PlayerId} cards: {string.Join(", ", holeCardsMessage.Cards.Select(c => $"{c.Rank}{c.Suit}"))}");
+                }
+                
+                // Update the UI
+                DisplayGameStateAsync().Wait();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling hole cards message: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handles community cards messages
+        /// </summary>
+        /// <param name="message">The community cards message</param>
+        private void HandleCommunityCards(Message message)
+        {
+            try
+            {
+                var cards = message.GetPayload<List<Card>>();
+                Console.WriteLine($"Received community cards: {string.Join(", ", cards.Select(c => $"{c.Rank}{c.Suit}"))}");
+                
+                // Update the community cards
+                _communityCards.Clear();
+                _communityCards.AddRange(cards);
+                
+                // Update the UI
+                DisplayGameStateAsync().Wait();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling community cards message: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handles a deck shuffled message
+        /// </summary>
+        /// <param name="message">The deck shuffled message</param>
+        private void HandleDeckShuffled(Message message)
+        {
+            try
+            {
+                Console.WriteLine("Deck shuffled");
+                
+                // Process this with a separate method to avoid blocking the message handler
+                ProcessDeckShuffledMessageAsync(message).ContinueWith(task => 
+                {
+                    if (task.Exception != null)
+                    {
+                        Console.WriteLine($"Error in processing deck shuffled: {task.Exception.InnerException?.Message ?? task.Exception.Message}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling deck shuffled message: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handles game state messages
+        /// </summary>
+        /// <param name="message">The game state message</param>
+        private void HandleGameState(Message message)
+        {
+            try
+            {
+                var gameState = message.GetPayload<GameState>();
+                Console.WriteLine($"Game state received: {gameState.CurrentState}");
+                
+                // Update our local state with the new game state
+                _currentGameState = gameState.CurrentState;
+                _pot = gameState.Pot;
+                _currentBet = gameState.CurrentBet;
+                
+                // Update the community cards if present
+                if (gameState.CommunityCards != null && gameState.CommunityCards.Count > 0)
+                {
+                    _communityCards.Clear();
+                    _communityCards.AddRange(gameState.CommunityCards);
+                }
+                
+                // Update the players if present
+                if (gameState.Players != null)
+                {
+                    foreach (var player in gameState.Players)
+                    {
+                        if (_players.ContainsKey(player.Id))
                         {
-                            _gameEngineServiceId = message.SenderId;
-                            Console.WriteLine($"Updated game engine service ID to: {_gameEngineServiceId}");
+                            _players[player.Id] = player;
+                        }
+                        else
+                        {
+                            _players.Add(player.Id, player);
                         }
                     }
-                    catch (Exception ex)
+                }
+                
+                // Update the UI
+                DisplayGameStateAsync().Wait();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling game state message: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handles game action messages
+        /// </summary>
+        /// <param name="message">The game action message</param>
+        private void HandleGameAction(Message message)
+        {
+            try
+            {
+                var gameAction = message.GetPayload<GameAction>();
+                Console.WriteLine($"Game action received: {gameAction.Action}");
+                
+                // Process the game action
+                switch (gameAction.Action)
+                {
+                    case "start":
+                        _gameInProgress = true;
+                        _currentGameState = "Starting";
+                        break;
+                    case "stop":
+                        _gameInProgress = false;
+                        _currentGameState = "Game Over";
+                        break;
+                    case "deal":
+                        _currentGameState = "Dealing Cards";
+                        break;
+                    case "betting_round":
+                        _currentGameState = $"Betting Round {gameAction.Data}";
+                        break;
+                    case "showdown":
+                        _currentGameState = "Showdown";
+                        break;
+                }
+                
+                // Update the UI
+                DisplayGameStateAsync().Wait();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling game action message: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handles a service discovery response message
+        /// </summary>
+        /// <param name="message">The service discovery response message</param>
+        private void HandleServiceDiscoveryResponse(Message message)
+        {
+            try
+            {
+                var serviceInfo = message.GetPayload<ServiceInfo>();
+                Console.WriteLine($"Service discovery response received for {serviceInfo.ServiceId} of type {serviceInfo.ServiceType}");
+                
+                // Store the service ID based on service type
+                if (serviceInfo.ServiceType == "CardDeckService")
+                {
+                    _cardDeckServiceId = serviceInfo.ServiceId;
+                    Console.WriteLine($"CardDeckService found: {_cardDeckServiceId}");
+                }
+                else if (serviceInfo.ServiceType == "GameEngineService")
+                {
+                    _gameEngineServiceId = serviceInfo.ServiceId;
+                    Console.WriteLine($"GameEngineService found: {_gameEngineServiceId}");
+                }
+                
+                // If we have both services, mark discovery as completed
+                if (!string.IsNullOrEmpty(_cardDeckServiceId) && !string.IsNullOrEmpty(_gameEngineServiceId))
+                {
+                    _serviceDiscoveryCompleted = true;
+                    Console.WriteLine("Service discovery completed successfully");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling service discovery response: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handles a service discovery request message
+        /// </summary>
+        /// <param name="message">The service discovery request message</param>
+        private void HandleServiceDiscoveryRequest(Message message)
+        {
+            try
+            {
+                Console.WriteLine("Service discovery request received, sending response");
+                
+                // Create and send service registration for this UI service
+                var responseMessage = Message.CreateResponse(message, MSA.Foundation.Messaging.MessageType.ServiceRegistration, 
+                    new ServiceInfo
                     {
-                        Console.WriteLine($"Error deserializing payload: {ex.Message}");
-                    }
+                        ServiceId = _serviceId,
+                        ServiceType = "ConsoleUIService",
+                        Version = "1.0",
+                        Status = "Running",
+                        Capabilities = new List<string> { "UI", "PlayerInput" }
+                    });
+                
+                Console.WriteLine($"Sending service registration as response to discovery request");
+                
+                MessageBroker?.Publish(responseMessage);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling service discovery request: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handles a service registration message
+        /// </summary>
+        /// <param name="message">The service registration message</param>
+        private void HandleServiceRegistration(Message message)
+        {
+            try
+            {
+                var serviceInfo = message.GetPayload<ServiceInfo>();
+                Console.WriteLine($"Service registration received for {serviceInfo.ServiceId} of type {serviceInfo.ServiceType}");
+                
+                // Store the service ID based on service type
+                if (serviceInfo.ServiceType == "CardDeckService")
+                {
+                    _cardDeckServiceId = serviceInfo.ServiceId;
+                    Console.WriteLine($"CardDeckService registered: {_cardDeckServiceId}");
+                }
+                else if (serviceInfo.ServiceType == "GameEngineService")
+                {
+                    _gameEngineServiceId = serviceInfo.ServiceId;
+                    Console.WriteLine($"GameEngineService registered: {_gameEngineServiceId}");
+                }
+                
+                // If we have both services, mark discovery as completed
+                if (!string.IsNullOrEmpty(_cardDeckServiceId) && !string.IsNullOrEmpty(_gameEngineServiceId))
+                {
+                    _serviceDiscoveryCompleted = true;
+                    Console.WriteLine("Service discovery completed through registration messages");
                 }
             }
             catch (Exception ex)
@@ -71,469 +535,137 @@ namespace PokerGame.Core.Microservices
                 Console.WriteLine($"Error handling service registration: {ex.Message}");
             }
         }
-        
-        private bool _useEnhancedUI = false;
-        private object? _enhancedUiInstance = null;
-        private Task? _inputProcessingTask = null;
-        private string? _gameEngineServiceId = null;
-        private bool _waitingForPlayerAction = false;
-        private string? _activePlayerId = null;
-        private Dictionary<string, Models.Player> _players = new Dictionary<string, Models.Player>();
-        private Models.GameState _currentGameState = Models.GameState.NotStarted;
-        private List<Card> _communityCards = new List<Card>();
-        private int _pot = 0;
-        private int _currentBet = 0;
-        private new int _publisherPort;
-        private new int _subscriberPort;
-        
+
         /// <summary>
-        /// Creates a new instance of the ConsoleUIService
+        /// Processes a DeckShuffled message and advances the game
         /// </summary>
-        /// <param name="publisherPort">Publisher port</param>
-        /// <param name="subscriberPort">Subscriber port</param>
-        /// <param name="enhancedUI">Whether to use enhanced UI mode (box drawing, etc)</param>
-        public ConsoleUIService(int publisherPort, int subscriberPort, bool enhancedUI = false) 
-            : base(ServiceConstants.ServiceTypes.ConsoleUI, "ConsoleUIService", publisherPort, subscriberPort)
+        /// <param name="message">The DeckShuffled message received</param>
+        private async Task ProcessDeckShuffledMessageAsync(Message message)
         {
-            _useEnhancedUI = enhancedUI;
-            _publisherPort = publisherPort;
-            _subscriberPort = subscriberPort;
-            
-            // Try to load the CursesUI if enhanced mode is requested
-            if (_useEnhancedUI)
+            try
             {
-                try
+                Console.WriteLine("Processing DeckShuffled message and advancing game...");
+                
+                // In response to a DeckShuffled message, we should now deal cards to players
+                // and prepare for the first round of betting
+                
+                // First, make sure we have players in the game
+                if (_players.Count == 0)
                 {
-                    // Look for the CursesUI type in all loaded assemblies
-                    var cursesUIType = AppDomain.CurrentDomain.GetAssemblies()
-                        .SelectMany(a => a.GetTypes())
-                        .FirstOrDefault(t => t.Name == "CursesUI");
+                    Console.WriteLine("No players in the game yet, adding default players");
                     
-                    if (cursesUIType != null)
-                    {
-                        _enhancedUiInstance = Activator.CreateInstance(cursesUIType);
-                        Console.WriteLine("CursesUI loaded successfully");
-                    }
-                    else
-                    {
-                        Console.WriteLine("   ERROR: Curses UI requested but CursesUI class not found");
-                    }
+                    // Add some default players
+                    var player1 = new Player { Id = "player1", Name = "Player 1", Chips = 1000 };
+                    var player2 = new Player { Id = "player2", Name = "Player 2", Chips = 1000 };
+                    
+                    _players.Add(player1.Id, player1);
+                    _players.Add(player2.Id, player2);
                 }
-                catch (Exception ex)
+                
+                // Set up the game state
+                _currentGameState = "Betting Round 1";
+                _currentBet = 0;
+                _pot = 0;
+                
+                // Request hole cards for each player
+                Console.WriteLine("Requesting hole cards for each player...");
+                
+                foreach (var player in _players.Values)
                 {
-                    Console.WriteLine($"Error loading CursesUI: {ex.Message}");
+                    // Reset player state for new hand
+                    player.HoleCards.Clear();
+                    player.HasFolded = false;
+                    player.IsAllIn = false;
+                    player.CurrentBet = 0;
+                    
+                    // Request hole cards from game engine
+                    await RequestHoleCardsAsync(player.Id);
                 }
+                
+                // Update the UI
+                await DisplayGameStateAsync();
+                
+                // Send a GameState request to get current game state from engine
+                await RequestGameStateAsync();
+                
+                Console.WriteLine("DeckShuffled message processed successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error processing DeckShuffled message: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Creates a new instance of the ConsoleUIService with MSA Foundation execution context
+        /// Requests hole cards for a player
         /// </summary>
-        /// <param name="executionContext">The microservice execution context</param>
-        /// <param name="enhancedUI">Whether to use enhanced UI mode</param>
-        public ConsoleUIService(MSA.Foundation.ServiceManagement.ExecutionContext executionContext, bool enhancedUI = false)
-            : base(ServiceConstants.ServiceTypes.ConsoleUI, "ConsoleUIService", 
-                  new Messaging.ExecutionContext())
+        private async Task RequestHoleCardsAsync(string playerId)
         {
-            _useEnhancedUI = enhancedUI;
-            
-            // Try to load the CursesUI if enhanced mode is requested
-            if (_useEnhancedUI)
-            {
-                try
-                {
-                    // Look for the CursesUI type in all loaded assemblies
-                    var cursesUIType = AppDomain.CurrentDomain.GetAssemblies()
-                        .SelectMany(a => a.GetTypes())
-                        .FirstOrDefault(t => t.Name == "CursesUI");
-                    
-                    if (cursesUIType != null)
-                    {
-                        _enhancedUiInstance = Activator.CreateInstance(cursesUIType);
-                        Console.WriteLine("CursesUI loaded successfully");
-                    }
-                    else
-                    {
-                        Console.WriteLine("ERROR: Curses UI requested but CursesUI class not found");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error loading CursesUI: {ex.Message}");
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Gets information about whether the enhanced UI (curses) is being used
-        /// </summary>
-        public bool IsUsingEnhancedUI => _useEnhancedUI && _enhancedUiInstance != null;
-        
-        /// <summary>
-        /// Starts the service
-        /// </summary>
-        public override void Start()
-        {
-            base.Start();
-            
-            Console.WriteLine("ConsoleUIService starting!");
-            
-            if (_useEnhancedUI)
-            {
-                Console.WriteLine($"POKER GAME UI INITIALIZATION: Curses UI flag: {_useEnhancedUI}, Curses UI instance exists: {_enhancedUiInstance != null}");
-                
-                // If we have an enhanced UI instance, try to initialize it
-                if (_enhancedUiInstance != null)
-                {
-                    try
-                    {
-                        // Get the Initialize method
-                        var initMethod = _enhancedUiInstance.GetType().GetMethod("Initialize");
-                        if (initMethod != null)
-                        {
-                            // Call the Initialize method
-                            initMethod.Invoke(_enhancedUiInstance, null);
-                            Console.WriteLine("CursesUI initialized successfully");
-                        }
-                        else
-                        {
-                            Console.WriteLine("ERROR: CursesUI does not have an Initialize method");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error initializing CursesUI: {ex.Message}");
-                    }
-                }
-            }
-            
-            // Start the background input processing task
-            _inputProcessingTask = Task.Run(ProcessUserInputAsync);
-            
-            // Register our service
-            PublishServiceRegistration();
-            
-            // Start discovery to find the game engine
-            _ = Task.Run(DiscoverGameEngineAsync);
-        }
-        
-        /// <summary>
-        /// Stops the service
-        /// </summary>
-        public override void Stop()
-        {
-            // Cancel any running tasks
-            _cancellationTokenSource?.Cancel();
-            
-            if (_useEnhancedUI && _enhancedUiInstance != null)
-            {
-                try
-                {
-                    // Get the Cleanup method
-                    var cleanupMethod = _enhancedUiInstance.GetType().GetMethod("Cleanup");
-                    if (cleanupMethod != null)
-                    {
-                        // Call the Cleanup method
-                        cleanupMethod.Invoke(_enhancedUiInstance, null);
-                        Console.WriteLine("CursesUI cleaned up successfully");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error cleaning up CursesUI: {ex.Message}");
-                }
-            }
-            
-            base.Stop();
-        }
-        
-        /// <summary>
-        /// Publishes service registration information
-        /// </summary>
-        private new void PublishServiceRegistration()
-        {
-            // Socket management is handled by the base class and SocketCommunicationAdapter
-            var message = Message.Create(MessageType.ServiceRegistration);
-            message.MessageId = Guid.NewGuid().ToString();
-            message.SenderId = _serviceId;
-            
-            // Create ServiceRegistrationPayload
-            var payload = new ServiceRegistrationPayload
-            {
-                ServiceId = _serviceId,
-                ServiceName = "ConsoleUI",
-                ServiceType = "ConsoleUI"
-            };
-            
-            // Set payload using serialization
-            message.SetPayload(payload);
-            
-            // Broadcast the registration
-            Broadcast(message);
-            
-            Console.WriteLine($"Published service registration: ConsoleUI with ID {_serviceId}");
-        }
-        
-        /// <summary>
-        /// Handles an incoming message
-        /// </summary>
-        /// <param name="message">The message to handle</param>
-        public override async Task HandleMessageAsync(Message message)
-        {
-            if (message == null)
-            {
-                Console.WriteLine("Warning: Received null message in ConsoleUIService");
-                return;
-            }
-            
             try
             {
-                // Check message type
-                switch (message.Type)
+                // Create a request for hole cards
+                var holeCardsRequestMsg = new NetworkMessage
                 {
-                    case MessageType.ServiceRegistration:
-                        // Get ServiceRegistrationPayload from message
-                        var regPayload = message.GetPayload<ServiceRegistrationPayload>();
-                        if (regPayload != null && regPayload.ServiceType == "GameEngine")
-                        {
-                            string serviceId = message.SenderId;
-                            if (string.IsNullOrEmpty(_gameEngineServiceId))
-                            {
-                                _gameEngineServiceId = serviceId;
-                                Console.WriteLine($"Connected to game engine service: {_gameEngineServiceId}");
-                            }
-                        }
-                        break;
-                        
-                    case MessageType.ServiceDiscovery:
-                        // Similar to ServiceRegistration
-                        var discoveryPayload = message.GetPayload<ServiceRegistrationPayload>();
-                        if (discoveryPayload != null && discoveryPayload.ServiceType == "GameEngine")
-                        {
-                            string serviceId = message.SenderId;
-                            if (string.IsNullOrEmpty(_gameEngineServiceId))
-                            {
-                                _gameEngineServiceId = serviceId;
-                                Console.WriteLine($"Connected to game engine service: {_gameEngineServiceId}");
-                            }
-                        }
-                        break;
-                        
-                    case MessageType.GameState:
-                        // Process a game update
-                        if (_gameEngineServiceId == message.SenderId)
-                        {
-                            var gameStatePayload = message.GetPayload<GameStatePayload>();
-                            if (gameStatePayload != null)
-                            {
-                                // Need to convert Game.GameState to Models.GameState
-                                _currentGameState = (Models.GameState)(int)gameStatePayload.CurrentState;
-                                _communityCards = gameStatePayload.CommunityCards;
-                                _pot = gameStatePayload.Pot;
-                                _currentBet = gameStatePayload.CurrentBet;
-                                
-                                // Convert PlayerInfo to Player
-                                _players.Clear();
-                                foreach (var playerInfo in gameStatePayload.Players)
-                                {
-                                    var player = new Player
-                                    {
-                                        Id = playerInfo.PlayerId,
-                                        Name = playerInfo.Name,
-                                        Chips = playerInfo.Chips,
-                                        CurrentBet = playerInfo.CurrentBet,
-                                        HasFolded = playerInfo.HasFolded,
-                                        IsAllIn = playerInfo.IsAllIn,
-                                        HoleCards = playerInfo.HoleCards
-                                    };
-                                    _players[player.Id] = player;
-                                }
-                                
-                                await DisplayGameStateAsync();
-                            }
-                        }
-                        break;
-                        
-                    case MessageType.PlayerAction:
-                        // Handle a request for player action
-                        if (_gameEngineServiceId == message.SenderId)
-                        {
-                            var actionPayload = message.GetPayload<PlayerActionPayload>();
-                            if (actionPayload != null)
-                            {
-                                _activePlayerId = actionPayload.PlayerId;
-                                _waitingForPlayerAction = true;
-                                
-                                Console.WriteLine($"Your turn! Player: {_activePlayerId}");
-                                Console.WriteLine("Enter F (fold), C (check/call), or R (raise):");
-                            }
-                        }
-                        break;
-                        
-                    case MessageType.HandComplete:
-                        // Handle game results
-                        if (_gameEngineServiceId == message.SenderId)
-                        {
-                            var resultPayload = message.GetPayload<GameStatePayload>();
-                            if (resultPayload != null && resultPayload.WinnerIds.Count > 0)
-                            {
-                                Console.WriteLine("==== GAME RESULTS ====");
-                                foreach (var winnerId in resultPayload.WinnerIds)
-                                {
-                                    // Find the player in the updated player list
-                                    var winnerInfo = resultPayload.Players.FirstOrDefault(p => p.PlayerId == winnerId);
-                                    if (winnerInfo != null)
-                                    {
-                                        Console.WriteLine($"Winner: {winnerInfo.Name} with {winnerInfo.Chips} chips");
-                                    }
-                                    else if (_players.ContainsKey(winnerId))
-                                    {
-                                        var winner = _players[winnerId];
-                                        Console.WriteLine($"Winner: {winner.Name} with {winner.Chips} chips");
-                                    }
-                                    else
-                                    {
-                                        Console.WriteLine($"Winner ID: {winnerId} (Player info not available)");
-                                    }
-                                }
-                                Console.WriteLine("=====================");
-                            }
-                        }
-                        break;
-                        
-                    case MessageType.Debug:
-                        // Log debug messages
-                        Console.WriteLine($"Debug message from {message.SenderId}: {message.Payload}");
-                        break;
-                        
-                    case MessageType.StartHand:
-                        Console.WriteLine("RECEIVED STARTHAND MESSAGE RESPONSE");
-                        break;
-                        
-                    default:
-                        Console.WriteLine($"Unhandled message type: {message.Type} from {message.SenderId}");
-                        break;
-                }
-                
-                // Custom acknowledgment handling
-                try
-                {
-                    // Check if we need to send an acknowledgment back
-                    if (!string.IsNullOrEmpty(message.MessageId))
+                    MessageId = Guid.NewGuid().ToString(),
+                    Type = Messaging.MessageType.RequestHoleCards,
+                    SenderId = _serviceId,
+                    ReceiverId = _gameEngineServiceId,
+                    Timestamp = DateTime.UtcNow,
+                    Payload = System.Text.Json.JsonSerializer.Serialize(playerId),
+                    Headers = new Dictionary<string, string>
                     {
-                        // Create a Core message acknowledgment
-                        var ackMessage = Message.Create(MessageType.Acknowledgment);
-                        ackMessage.SenderId = _serviceId;
-                        ackMessage.ReceiverId = message.SenderId;
-                        ackMessage.InResponseTo = message.MessageId;
-                        
-                        // Send the acknowledgment through central broker instead of direct broadcast
-                        Console.WriteLine($"Sending acknowledgment for message {message.MessageId} through central broker");
-                        BrokerManager.Instance.CentralBroker?.Publish(ackMessage.ToNetworkMessage());
+                        { "MessageSubType", "RequestHoleCards" },
+                        { "PlayerId", playerId }
                     }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error handling acknowledgment: {ex.Message}");
-                }
+                };
+                
+                Console.WriteLine($"Requesting hole cards for player {playerId}");
+                BrokerManager.Instance.CentralBroker?.Publish(holeCardsRequestMsg);
+                
+                // In a real implementation, we would wait for a response
+                // For now, just add a delay for demonstration
+                await Task.Delay(200);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error handling message: {ex.Message}");
+                Console.WriteLine($"Error requesting hole cards: {ex.Message}");
             }
         }
-        
+
         /// <summary>
-        /// Displays the current game state
+        /// Requests the current game state from the game engine
         /// </summary>
-        private async Task DisplayGameStateAsync()
+        private async Task RequestGameStateAsync()
         {
-            if (_useEnhancedUI && _enhancedUiInstance != null)
+            try
             {
-                try
+                // Create a request for game state
+                var gameStateRequestMsg = new NetworkMessage
                 {
-                    // Use reflection to call the enhanced UI methods for display
-                    var updateMethod = _enhancedUiInstance.GetType().GetMethod("UpdateDisplay");
-                    if (updateMethod != null)
+                    MessageId = Guid.NewGuid().ToString(),
+                    Type = Messaging.MessageType.GameStateRequest,
+                    SenderId = _serviceId,
+                    ReceiverId = _gameEngineServiceId,
+                    Timestamp = DateTime.UtcNow,
+                    Headers = new Dictionary<string, string>
                     {
-                        // Get the parameters for the update method
-                        var parameters = updateMethod.GetParameters();
-                        if (parameters.Length == 3)
-                        {
-                            // Parameters for the method are: List<Card>, Dictionary<string, Player>, int
-                            updateMethod.Invoke(_enhancedUiInstance, new object[] { _communityCards, _players, _pot });
-                        }
-                        else
-                        {
-                            Console.WriteLine("ERROR: UpdateDisplay method has incorrect parameter count");
-                        }
+                        { "MessageSubType", "GameStateRequest" }
                     }
-                    else
-                    {
-                        Console.WriteLine("ERROR: UpdateDisplay method not found on CursesUI");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error updating CursesUI display: {ex.Message}");
-                }
+                };
+                
+                Console.WriteLine("Requesting current game state");
+                BrokerManager.Instance.CentralBroker?.Publish(gameStateRequestMsg);
+                
+                // In a real implementation, we would wait for a response
+                // For now, just add a delay for demonstration
+                await Task.Delay(200);
             }
-            else
+            catch (Exception ex)
             {
-                // Basic console display
-                Console.Clear();
-                Console.WriteLine("═══════════════════════════════════════════════");
-                Console.WriteLine("               POKER GAME STATE                ");
-                Console.WriteLine("═══════════════════════════════════════════════");
-                Console.WriteLine($"Game State: {_currentGameState}");
-                Console.WriteLine($"Current Pot: {_pot} chips");
-                Console.WriteLine($"Current Bet: {_currentBet} chips");
-                
-                // Display community cards
-                Console.WriteLine("\nCommunity Cards:");
-                if (_communityCards.Count == 0)
-                {
-                    Console.WriteLine("  (No community cards yet)");
-                }
-                else
-                {
-                    foreach (var card in _communityCards)
-                    {
-                        Console.Write($" {FormatCard(card)}");
-                    }
-                    Console.WriteLine();
-                }
-                
-                // Display players
-                Console.WriteLine("\nPlayers:");
-                foreach (var player in _players.Values)
-                {
-                    string status = "";
-                    if (player.HasFolded)
-                        status = "[FOLDED]";
-                    else if (player.IsAllIn)
-                        status = "[ALL IN]";
-                    
-                    Console.WriteLine($"  {player.Name}: {player.Chips} chips, Bet: {player.CurrentBet} {status}");
-                    
-                    // Show this player's hole cards
-                    if (player.Id == _activePlayerId && !player.HasFolded)
-                    {
-                        Console.Write("    Cards: ");
-                        foreach (var card in player.HoleCards)
-                        {
-                            Console.Write($" {FormatCard(card)}");
-                        }
-                        Console.WriteLine();
-                    }
-                }
-                
-                Console.WriteLine("═══════════════════════════════════════════════");
+                Console.WriteLine($"Error requesting game state: {ex.Message}");
             }
-            
-            await Task.CompletedTask; // for async signature
         }
-        
+
         /// <summary>
         /// Formats a card for display
         /// </summary>
@@ -541,147 +673,178 @@ namespace PokerGame.Core.Microservices
         /// <returns>A string representation of the card</returns>
         private string FormatCard(Card card)
         {
-            string symbol = "";
-            switch (card.Suit)
+            string rank = card.Rank switch
             {
-                case Suit.Hearts:
-                    symbol = "♥";
-                    break;
-                case Suit.Diamonds:
-                    symbol = "♦";
-                    break;
-                case Suit.Clubs:
-                    symbol = "♣";
-                    break;
-                case Suit.Spades:
-                    symbol = "♠";
-                    break;
-            }
+                CardRank.Ace => "A",
+                CardRank.King => "K",
+                CardRank.Queen => "Q",
+                CardRank.Jack => "J",
+                CardRank.Ten => "10",
+                _ => ((int)card.Rank).ToString()
+            };
             
-            string value = "";
-            switch (card.Rank)
+            string suit = card.Suit switch
             {
-                case Rank.Two:
-                    value = "2";
-                    break;
-                case Rank.Three:
-                    value = "3";
-                    break;
-                case Rank.Four:
-                    value = "4";
-                    break;
-                case Rank.Five:
-                    value = "5";
-                    break;
-                case Rank.Six:
-                    value = "6";
-                    break;
-                case Rank.Seven:
-                    value = "7";
-                    break;
-                case Rank.Eight:
-                    value = "8";
-                    break;
-                case Rank.Nine:
-                    value = "9";
-                    break;
-                case Rank.Ten:
-                    value = "10";
-                    break;
-                case Rank.Jack:
-                    value = "J";
-                    break;
-                case Rank.Queen:
-                    value = "Q";
-                    break;
-                case Rank.King:
-                    value = "K";
-                    break;
-                case Rank.Ace:
-                    value = "A";
-                    break;
-            }
+                CardSuit.Hearts => "♥",
+                CardSuit.Diamonds => "♦",
+                CardSuit.Clubs => "♣",
+                CardSuit.Spades => "♠",
+                _ => "?"
+            };
             
-            return $"{value}{symbol}";
+            return $"{rank}{suit}";
         }
 
         /// <summary>
-        /// Discovers the game engine service
+        /// Displays the current game state in the console
         /// </summary>
-        private async Task DiscoverGameEngineAsync()
+        private async Task DisplayGameStateAsync()
         {
-            int maxAttempts = 10;
-            int delayMs = 500;
+            if (!_uiRunning) return;
             
-            Console.WriteLine($"Starting game engine discovery (max attempts: {maxAttempts}, delay: {delayMs}ms)");
-            
-            // Explicitly subscribe to ServiceRegistration messages
-            string subscriptionId = BrokerManager.Instance.CentralBroker?.Subscribe(
-                Messaging.MessageType.ServiceRegistration, 
-                HandleServiceRegistration) ?? "";
-                
-            Console.WriteLine($"Subscribed to ServiceRegistration messages with ID: {subscriptionId}");
-            
-            for (int attempt = 0; attempt < maxAttempts; attempt++)
+            try
             {
-                if (!string.IsNullOrEmpty(_gameEngineServiceId))
+                if (_isEnhancedUI || _cursesUI)
                 {
-                    Console.WriteLine($"Game engine already discovered: {_gameEngineServiceId}");
-                    break;
+                    // Clear screen for enhanced UI mode
+                    Console.Clear();
                 }
                 
-                Console.WriteLine($"Discovery attempt {attempt + 1}/{maxAttempts}...");
+                Console.WriteLine("\n");
+                Console.WriteLine("==============================================");
+                Console.WriteLine("           TEXAS HOLD'EM POKER GAME          ");
+                Console.WriteLine("==============================================");
+                Console.WriteLine($"Game State: {_currentGameState}");
+                Console.WriteLine($"Pot: {_pot}");
+                Console.WriteLine($"Current Bet: {_currentBet}");
+                Console.WriteLine("----------------------------------------------");
                 
-                // Send a service discovery message through central broker using direct NetworkMessage creation
-                var discoveryNetworkMsg = new NetworkMessage
+                if (_communityCards.Count > 0)
                 {
-                    MessageId = Guid.NewGuid().ToString(),
-                    Type = Messaging.MessageType.ServiceDiscovery,  // Use Messaging.MessageType directly
-                    SenderId = _serviceId,
-                    Timestamp = DateTime.UtcNow
-                };
+                    Console.WriteLine("Community Cards:");
+                    Console.WriteLine(string.Join(" ", _communityCards.Select(FormatCard)));
+                    Console.WriteLine("----------------------------------------------");
+                }
                 
-                Console.WriteLine($"====> [PlayerUI {_serviceId}] Broadcasting message {discoveryNetworkMsg.Type} (ID: {discoveryNetworkMsg.MessageId}) through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(discoveryNetworkMsg);
+                Console.WriteLine("Players:");
+                foreach (var player in _players.Values)
+                {
+                    Console.Write($"{player.Name} - Chips: {player.Chips}");
+                    
+                    if (player.IsAllIn)
+                    {
+                        Console.Write(" (ALL IN)");
+                    }
+                    else if (player.HasFolded)
+                    {
+                        Console.Write(" (FOLDED)");
+                    }
+                    
+                    if (player.CurrentBet > 0)
+                    {
+                        Console.Write($" - Bet: {player.CurrentBet}");
+                    }
+                    
+                    Console.WriteLine();
+                    
+                    if (player.HoleCards.Count > 0)
+                    {
+                        Console.WriteLine($"  Cards: {string.Join(" ", player.HoleCards.Select(FormatCard))}");
+                    }
+                }
                 
-                // Wait a bit
-                await Task.Delay(delayMs);
+                Console.WriteLine("==============================================");
+                Console.WriteLine("Commands:");
+                Console.WriteLine("start - Start a new game");
+                Console.WriteLine("fold - Fold your hand");
+                Console.WriteLine("check - Check (if no bets)");
+                Console.WriteLine("call - Call the current bet");
+                Console.WriteLine("bet [amount] - Place a bet");
+                Console.WriteLine("raise [amount] - Raise the current bet");
+                Console.WriteLine("quit - Exit the game");
+                Console.WriteLine("==============================================");
+                
+                // This is where we'd render a more sophisticated UI if using enhanced mode
+                
+                await Task.CompletedTask; // Just to make this method async consistent
             }
-            
-            // Final check
-            if (string.IsNullOrEmpty(_gameEngineServiceId))
+            catch (Exception ex)
             {
-                Console.WriteLine("WARNING: Could not discover game engine service after multiple attempts");
-                
-                // Fall back to static ID for testing 
-                // This needs to match the static ID set in GameEngineService
-                _gameEngineServiceId = "static_game_engine_service";
-                
-                Console.WriteLine($"Using fallback static game engine ID: {_gameEngineServiceId}");
-                
-                // Send a debug message through the broker using direct NetworkMessage creation
-                var debugNetworkMsg = new NetworkMessage
-                {
-                    MessageId = Guid.NewGuid().ToString(),
-                    Type = Messaging.MessageType.Debug,  // Use Messaging.MessageType directly
-                    SenderId = _serviceId,
-                    ReceiverId = _gameEngineServiceId,
-                    Timestamp = DateTime.UtcNow,
-                    Payload = $"Connection attempt from ConsoleUI ({_serviceId}) to GameEngine via central broker"
-                };
-                
-                // Important: Use CentralBroker to publish the message
-                Console.WriteLine($"DIRECT: Sending message type {debugNetworkMsg.Type} to {_gameEngineServiceId} through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(debugNetworkMsg);
-                
-                // For logging
-                Console.WriteLine($"Starting game with engine: {_gameEngineServiceId}");
+                Console.WriteLine($"Error displaying game state: {ex.Message}");
             }
-            
-            // Start the game automatically for testing
-            await StartGameAsync();
         }
-        
+
+        /// <summary>
+        /// Discovers required services
+        /// </summary>
+        private async Task DiscoverServicesAsync()
+        {
+            try
+            {
+                Console.WriteLine("Starting service discovery...");
+                
+                // Create a service discovery request
+                var discoveryRequest = Message.Create(MSA.Foundation.Messaging.MessageType.ServiceDiscoveryRequest,
+                    new MSA.Foundation.Messaging.ServiceDiscoveryRequest
+                    {
+                        RequestingServiceId = ServiceId,
+                        RequestingServiceName = ServiceName,
+                        RequestingServiceType = ServiceType,
+                        ServiceTypesRequested = new List<string> { "CardDeckService", "GameEngineService" }
+                    });
+                
+                // Send the discovery request
+                Console.WriteLine("Sending service discovery request");
+                MSA.Foundation.Messaging.MessageBroker.Instance?.PublishMessage(discoveryRequest);
+                
+                // Wait for the discovery response with a timeout
+                int retries = 0;
+                while (!_serviceDiscoveryCompleted && retries < 10)
+                {
+                    Console.WriteLine($"Discovery attempt {retries + 1}/10: PlayerUI ({ServiceId}) console ui service. Broadcasting message ServiceDiscoveryRequest.");
+                    
+                    await Task.Delay(1000);
+                    retries++;
+                    
+                    if (!_serviceDiscoveryCompleted)
+                    {
+                        Console.WriteLine("No discovery response received yet, retrying...");
+                        
+                        // Retry sending the discovery request
+                        MSA.Foundation.Messaging.MessageBroker.Instance?.PublishMessage(discoveryRequest);
+                    }
+                }
+                
+                if (!_serviceDiscoveryCompleted)
+                {
+                    Console.WriteLine("Service discovery failed after max retries, using fallback service IDs");
+                    
+                    // Use fallback service IDs
+                    if (string.IsNullOrEmpty(_cardDeckServiceId))
+                    {
+                        _cardDeckServiceId = "CardDeckService-1";
+                        Console.WriteLine($"Using fallback CardDeckService ID: {_cardDeckServiceId}");
+                    }
+                    
+                    if (string.IsNullOrEmpty(_gameEngineServiceId))
+                    {
+                        _gameEngineServiceId = "GameEngineService-1";
+                        Console.WriteLine($"Using fallback GameEngineService ID: {_gameEngineServiceId}");
+                    }
+                    
+                    // For logging
+                    Console.WriteLine($"Starting game with engine: {_gameEngineServiceId}");
+                }
+                
+                // Start the game automatically for testing
+                await StartGameAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during service discovery: {ex.Message}");
+            }
+        }
+
         /// <summary>
         /// Starts a new game
         /// </summary>
@@ -689,256 +852,187 @@ namespace PokerGame.Core.Microservices
         {
             if (string.IsNullOrEmpty(_gameEngineServiceId))
             {
-                Console.WriteLine("ERROR: Cannot start game - game engine service not discovered");
+                Console.WriteLine("Cannot start game - no game engine service discovered yet");
                 return;
             }
             
-            Console.WriteLine($"Starting game with engine: {_gameEngineServiceId}");
-            
             try
             {
-                // Create a few players for testing
-                var players = new List<PlayerInfo>
-                {
-                    new PlayerInfo { PlayerId = "Player1", Name = "Alice", Chips = 1000 },
-                    new PlayerInfo { PlayerId = "Player2", Name = "Bob", Chips = 1000 },
-                    new PlayerInfo { PlayerId = "Player3", Name = "Charlie", Chips = 1000 },
-                    new PlayerInfo { PlayerId = "Player4", Name = "Dave", Chips = 1000 }
-                };
+                Console.WriteLine($"Starting new game with engine {_gameEngineServiceId}");
                 
-                // First, send a service discovery message through central broker using direct NetworkMessage creation
-                var discoveryNetworkMsg = new NetworkMessage
+                // Create a start game message
+                var startGameMessage = new NetworkMessage
                 {
                     MessageId = Guid.NewGuid().ToString(),
-                    Type = Messaging.MessageType.ServiceDiscovery,  // Use Messaging.MessageType directly
-                    SenderId = _serviceId,
-                    Timestamp = DateTime.UtcNow
-                };
-                
-                Console.WriteLine($"====> [PlayerUI {_serviceId}] Broadcasting message {discoveryNetworkMsg.Type} (ID: {discoveryNetworkMsg.MessageId}) through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(discoveryNetworkMsg);
-                
-                await Task.Delay(500);
-                
-                // Send a setup message to configure the game using direct NetworkMessage creation
-                // Create game config payload
-                var gameConfig = new
-                {
-                    AnteAmount = 10,
-                    StartingChips = 1000,
-                    SmallBlind = 5,
-                    BigBlind = 10,
-                    Players = players
-                };
-                
-                // Create the setup message directly as a NetworkMessage
-                var setupNetworkMsg = new NetworkMessage
-                {
-                    MessageId = Guid.NewGuid().ToString(),
-                    Type = Messaging.MessageType.StartGame,  // Use Messaging.MessageType directly
-                    SenderId = _serviceId,
-                    ReceiverId = _gameEngineServiceId,
-                    Timestamp = DateTime.UtcNow,
-                    Payload = System.Text.Json.JsonSerializer.Serialize(gameConfig)
-                };
-                
-                Console.WriteLine("Sending game setup message...");
-                Console.WriteLine($"DIRECT: Sending message type {setupNetworkMsg.Type} to {_gameEngineServiceId} through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(setupNetworkMsg);
-                
-                await Task.Delay(500);
-                
-                // Send a message to start the game using direct NetworkMessage creation
-                var startNetworkMsg = new NetworkMessage
-                {
-                    MessageId = Guid.NewGuid().ToString(),
-                    Type = Messaging.MessageType.StartGame,  // Use Messaging.MessageType directly
-                    SenderId = _serviceId,
-                    ReceiverId = _gameEngineServiceId,
-                    Timestamp = DateTime.UtcNow
-                };
-                
-                Console.WriteLine("Sending start game message...");
-                Console.WriteLine($"DIRECT: Sending message type {startNetworkMsg.Type} to {_gameEngineServiceId} through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(startNetworkMsg);
-                
-                await Task.Delay(500);
-                
-                // Send a message to start the first hand
-                // Create a NetworkMessage directly for StartHand to avoid conversion issues 
-                var networkMessage = new NetworkMessage
-                {
-                    MessageId = Guid.NewGuid().ToString(),
-                    Type = PokerGame.Core.Messaging.MessageType.StartHand,  // Use fully qualified name
+                    Type = Messaging.MessageType.StartGame,
                     SenderId = _serviceId,
                     ReceiverId = _gameEngineServiceId,
                     Timestamp = DateTime.UtcNow,
                     Headers = new Dictionary<string, string>
                     {
-                        { "MessageSubType", "StartHand" }  // Add explicit subtype for better routing
+                        { "MessageSubType", "StartGame" }
                     }
                 };
                 
-                Console.WriteLine("Sending start hand message...");
-                Console.WriteLine($"DIRECT: Sending message type {networkMessage.Type} to {_gameEngineServiceId} through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(networkMessage);
+                Console.WriteLine("Publishing StartGame message:");
+                BrokerManager.Instance.CentralBroker?.Publish(startGameMessage);
+                
+                _gameInProgress = true;
+                
+                // For now, just add default players if we don't have any
+                if (_players.Count == 0)
+                {
+                    // Add some default players
+                    var player1 = new Player { Id = "player1", Name = "Player 1", Chips = 1000 };
+                    var player2 = new Player { Id = "player2", Name = "Player 2", Chips = 1000 };
+                    
+                    _players.Add(player1.Id, player1);
+                    _players.Add(player2.Id, player2);
+                    
+                    Console.WriteLine("Added default players");
+                }
+                
+                // Update the UI
+                await DisplayGameStateAsync();
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error starting game: {ex.Message}");
             }
         }
-        
+
         /// <summary>
-        /// Sends a player action to the game engine
+        /// Processes a player action command from the console
         /// </summary>
-        /// <param name="actionType">The type of action (fold, check, call, raise)</param>
-        /// <param name="betAmount">The bet amount for raise actions</param>
-        private void SendPlayerAction(string actionType, int betAmount = 0)
+        /// <param name="input">The input string from the console</param>
+        private async Task ProcessPlayerActionAsync(string input)
         {
-            if (string.IsNullOrEmpty(_gameEngineServiceId) || string.IsNullOrEmpty(_activePlayerId))
+            if (!_gameInProgress)
             {
-                Console.WriteLine("Cannot send player action - game engine or active player not set");
+                Console.WriteLine("No game in progress - use 'start' to begin a game");
                 return;
             }
             
             try
             {
-                // Create player action payload
-                var actionPayload = new PlayerActionPayload
+                // Parse the command
+                string[] parts = input.Trim().ToLower().Split(' ');
+                string command = parts[0];
+                
+                // Create a player action message based on the command
+                var playerAction = new PlayerAction
                 {
-                    PlayerId = _activePlayerId,
-                    ActionType = actionType,
-                    BetAmount = betAmount
+                    PlayerId = "player1", // Assume we're always player 1 for now
+                    Action = command
                 };
                 
-                // Create the player action message directly as a NetworkMessage
-                var actionNetworkMsg = new NetworkMessage
+                // Add amount for bet or raise
+                if ((command == "bet" || command == "raise") && parts.Length > 1)
+                {
+                    if (int.TryParse(parts[1], out int amount))
+                    {
+                        playerAction.Amount = amount;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Invalid amount for {command}");
+                        return;
+                    }
+                }
+                
+                // Send the player action message
+                Console.WriteLine($"Sending player action: {playerAction.Action} {playerAction.Amount}");
+                
+                var playerActionMessage = new NetworkMessage
                 {
                     MessageId = Guid.NewGuid().ToString(),
-                    Type = PokerGame.Core.Messaging.MessageType.PlayerAction,  // Use fully qualified name
+                    Type = Messaging.MessageType.PlayerAction,
                     SenderId = _serviceId,
                     ReceiverId = _gameEngineServiceId,
                     Timestamp = DateTime.UtcNow,
-                    Payload = System.Text.Json.JsonSerializer.Serialize(actionPayload),
+                    Payload = System.Text.Json.JsonSerializer.Serialize(playerAction),
                     Headers = new Dictionary<string, string>
                     {
-                        { "MessageSubType", "PlayerAction" }  // Add explicit subtype for better routing
+                        { "MessageSubType", "PlayerAction" },
+                        { "PlayerId", playerAction.PlayerId }
                     }
                 };
                 
-                Console.WriteLine($"Sending player action: {actionType} {(betAmount > 0 ? $"with bet {betAmount}" : "")}");
-                Console.WriteLine($"DIRECT: Sending message type {actionNetworkMsg.Type} to {_gameEngineServiceId} through central broker");
-                BrokerManager.Instance.CentralBroker?.Publish(actionNetworkMsg);
+                BrokerManager.Instance.CentralBroker?.Publish(playerActionMessage);
                 
-                _waitingForPlayerAction = false;
+                // Update the UI (in a real implementation we'd wait for a response)
+                await Task.Delay(200);
+                await DisplayGameStateAsync();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error sending player action: {ex.Message}");
+                Console.WriteLine($"Error processing player action: {ex.Message}");
             }
         }
-        
+
+        /// <inheritdoc />
+        public override async Task StartAsync()
+        {
+            try
+            {
+                // Setup the UI
+                SetupConsoleUI();
+                
+                // Register this service with the broker
+                RegisterWithBroker();
+                
+                // Subscribe to required message types
+                SubscribeToMessages();
+                
+                Console.WriteLine("ConsoleUIService started");
+                
+                // Discover services
+                await DiscoverServicesAsync();
+                
+                // Start the input processing loop
+                await ProcessUserInputAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error starting ConsoleUIService: {ex.Message}");
+            }
+        }
+
         /// <summary>
-        /// Processes user input for player actions
+        /// Processes user input from the console
         /// </summary>
         private async Task ProcessUserInputAsync()
         {
             try
             {
-                while (!_cancellationTokenSource.Token.IsCancellationRequested)
+                while (!_isShuttingDown)
                 {
-                    if (_waitingForPlayerAction)
+                    if (Console.KeyAvailable)
                     {
-                        // Check if console input is available
-                        if (Console.KeyAvailable)
+                        string? input = Console.ReadLine();
+                        
+                        if (!string.IsNullOrEmpty(input))
                         {
-                            var key = Console.ReadKey(true);
+                            input = input.Trim().ToLower();
                             
-                            switch (char.ToUpper(key.KeyChar))
+                            if (input == "quit" || input == "exit")
                             {
-                                case 'F':
-                                    // Fold
-                                    SendPlayerAction("fold");
-                                    break;
-                                    
-                                case 'C':
-                                    // Check/Call
-                                    SendPlayerAction("call");
-                                    break;
-                                    
-                                case 'R':
-                                    // Raise
-                                    Console.WriteLine("Enter raise amount:");
-                                    string input = Console.ReadLine();
-                                    if (int.TryParse(input, out int raiseAmount) && raiseAmount > 0)
-                                    {
-                                        SendPlayerAction("raise", raiseAmount);
-                                    }
-                                    else
-                                    {
-                                        Console.WriteLine("Invalid raise amount, please try again");
-                                    }
-                                    break;
-                                    
-                                default:
-                                    Console.WriteLine("Invalid action, please enter F (fold), C (check/call), or R (raise)");
-                                    break;
+                                Console.WriteLine("Exiting poker game...");
+                                _isShuttingDown = true;
+                                _shutdownEvent.Set();
+                                break;
+                            }
+                            else if (input == "start")
+                            {
+                                await StartGameAsync();
+                            }
+                            else
+                            {
+                                await ProcessPlayerActionAsync(input);
                             }
                         }
                     }
                     
-                    // Check for command input even when not waiting for player action
-                    if (Console.KeyAvailable)
-                    {
-                        var key = Console.ReadKey(true);
-                        
-                        // Global commands
-                        switch (char.ToUpper(key.KeyChar))
-                        {
-                            case 'Q':
-                                // Quit
-                                Console.WriteLine("Quitting...");
-                                _cancellationTokenSource.Cancel();
-                                break;
-                                
-                            case 'S':
-                                // Start game
-                                await StartGameAsync();
-                                break;
-                                
-                            case 'N':
-                                // New hand
-                                if (!string.IsNullOrEmpty(_gameEngineServiceId))
-                                {
-                                    // Create a NetworkMessage directly to avoid message type conversion issues
-                                    var networkMessage = new NetworkMessage
-                                    {
-                                        MessageId = Guid.NewGuid().ToString(),
-                                        Type = PokerGame.Core.Messaging.MessageType.StartHand,  // Use fully qualified name
-                                        SenderId = _serviceId,
-                                        ReceiverId = _gameEngineServiceId,
-                                        Timestamp = DateTime.UtcNow,
-                                        Headers = new Dictionary<string, string>
-                                        {
-                                            { "MessageSubType", "StartHand" }  // Add explicit subtype for better routing
-                                        }
-                                    };
-                                    
-                                    Console.WriteLine("Sending start hand message...");
-                                    Console.WriteLine($"DIRECT: Sending message type {networkMessage.Type} to {_gameEngineServiceId} through central broker");
-                                    BrokerManager.Instance.CentralBroker?.Publish(networkMessage);
-                                }
-                                break;
-                                
-                            case 'D':
-                                // Refresh display
-                                await DisplayGameStateAsync();
-                                break;
-                        }
-                    }
-                    
-                    // Sleep to avoid excessive CPU usage
                     await Task.Delay(100);
                 }
             }
