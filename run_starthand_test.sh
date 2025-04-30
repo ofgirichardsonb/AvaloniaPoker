@@ -1,30 +1,9 @@
 #!/bin/bash
-# Run improved StartHand message test
 
-# Create a dedicated directory for our test
-mkdir -p /home/runner/workspace/StartHandTest
-cd /home/runner/workspace/StartHandTest
+echo "Building StartHandTest project..."
+cd /home/runner/workspace
+dotnet build StartHandTest/StartHandTest.csproj
 
-# Create a project file
-cat > StartHandTest.csproj << 'EOF'
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="../PokerGame.Core/PokerGame.Core.csproj" />
-  </ItemGroup>
-</Project>
-EOF
-
-# Copy the test program
-cp /home/runner/workspace/improved_starthand_test.cs Program.cs
-
-# Build and run the test
-echo "Building improved StartHand message test..."
-dotnet build -c Release
-
-echo "Running improved StartHand message test..."
-dotnet run -c Release | tee starthand_test.log
+echo "Running StartHandTest..."
+cd /home/runner/workspace
+dotnet run --project StartHandTest/StartHandTest.csproj

@@ -9,7 +9,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../MSA.Foundation/MSA.Foundation.csproj" />
-    <ProjectReference Include="../PokerGame.Abstractions/PokerGame.Abstractions.csproj" />
     <ProjectReference Include="../PokerGame.Core/PokerGame.Core.csproj" />
   </ItemGroup>
 

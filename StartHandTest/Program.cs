@@ -1,158 +1,139 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using MSA.Foundation.Messaging;
+using MSA.Foundation.ServiceManagement;
 using PokerGame.Core.Messaging;
 using PokerGame.Core.Microservices;
-using System.Collections.Generic;
-using System.Text.Json;
+using PokerGame.Abstractions;
+using PokerGame.Core.Game;
+using PokerGame.Core.Models;
 
-class Program
+namespace StartHandTest
 {
-    static async Task Main(string[] args)
+    class Program
     {
-        Console.WriteLine("===== Improved StartHand Message Test =====");
-
-        try
+        static async Task Main(string[] args)
         {
-            // Create test objects with proper JSON serialization
-            Console.WriteLine("Testing JSON serialization...");
-            
-            // Test basic string serialization
-            string testString = $"Test message sent at {DateTime.UtcNow}";
-            string serializedString = JsonSerializer.Serialize(testString);
-            Console.WriteLine($"Original string: {testString}");
-            Console.WriteLine($"Serialized string: {serializedString}");
+            Console.WriteLine("=== StartHand Message Flow Test ===");
             
             try
             {
-                string deserializedString = JsonSerializer.Deserialize<string>(serializedString);
-                Console.WriteLine($"Deserialized string: {deserializedString}");
-                Console.WriteLine("Basic string serialization: SUCCESS");
+                await RunStartHandTest();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Basic string deserialization FAILED: {ex.Message}");
+                Console.WriteLine($"ERROR: {ex.Message}");
+                Console.WriteLine(ex.StackTrace);
             }
-            
-            Console.WriteLine();
-            
-            // Test network message payload
-            Console.WriteLine("Testing NetworkMessage payload handling...");
-            
-            var message = new NetworkMessage
-            {
-                MessageId = Guid.NewGuid().ToString(),
-                Type = MessageType.StartHand,
-                SenderId = "test_console",
-                ReceiverId = "test_game_engine",
-                Timestamp = DateTime.UtcNow,
-                Payload = serializedString,
-                Headers = new Dictionary<string, string>
-                {
-                    { "MessageSubType", "StartHand" }
-                }
-            };
-            
-            Console.WriteLine($"Message created with payload: {message.Payload}");
-            
-            try
-            {
-                var payload = message.GetPayload<string>();
-                Console.WriteLine($"GetPayload<string>() result: {payload}");
-                Console.WriteLine("NetworkMessage payload retrieval: " + 
-                    (payload == testString ? "SUCCESS" : "FAILED - strings don't match"));
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"NetworkMessage payload retrieval FAILED: {ex.Message}");
-                Console.WriteLine($"Full exception: {ex}");
-            }
-            
-            // Create a broker and test actual message passing
-            Console.WriteLine("\nTesting actual message passing through broker...");
-            
-            var executionContext = new PokerGame.Core.Messaging.ExecutionContext();
-            var broker = new CentralMessageBroker(executionContext);
+        }
+
+        static async Task RunStartHandTest()
+        {
+            Console.WriteLine("Starting CentralMessageBroker...");
+            // Initialize broker with an explicit ID for testing
+            var broker = CentralMessageBroker.GetInstance();
             broker.Start();
             
-            bool messageReceived = false;
-            string receivedPayload = null;
+            Console.WriteLine("Setting up test message handlers...");
             
-            // Subscribe to message
-            Console.WriteLine("Setting up subscription...");
-            string subscriptionId = broker.Subscribe(MessageType.StartHand, msg => {
-                Console.WriteLine($"Received message: {msg.Type} from {msg.SenderId}");
-                
-                try
+            // Create a basic execution context for services
+            var executionContext = new MSA.Foundation.ServiceManagement.ExecutionContext();
+            
+            // Create a simple handler for StartHand message responses
+            bool responseReceived = false;
+            
+            void HandleStartHandResponse(NetworkMessage msg)
+            {
+                if (msg.Headers.TryGetValue("InResponseTo", out var responseId))
                 {
-                    receivedPayload = msg.GetPayload<string>();
-                    Console.WriteLine($"Received payload: {receivedPayload}");
-                    messageReceived = true;
+                    Console.WriteLine($"Received response to message {responseId}");
+                    Console.WriteLine($"Response message type: {msg.MessageType}");
+                    Console.WriteLine($"Response payload: {msg.Payload}");
+                    responseReceived = true;
                 }
-                catch (Exception ex)
+            }
+            
+            Console.WriteLine("Initializing game engine service...");
+            // Initialize the GameEngineService (target for our StartHand message)
+            var gameEngine = new PokerGameEngine();
+            var gameEngineService = new GameEngineService(executionContext, gameEngine);
+            gameEngineService.Start();
+            Thread.Sleep(1000); // Wait for service to initialize
+            
+            Console.WriteLine("GameEngineService started with ID: " + gameEngineService.ServiceId);
+            
+            Console.WriteLine("Initializing card deck service...");
+            // Initialize CardDeckService (required by GameEngineService)
+            var cardDeckService = new CardDeckService(executionContext);
+            cardDeckService.Start();
+            Thread.Sleep(1000); // Wait for service to initialize
+            
+            Console.WriteLine("CardDeckService started with ID: " + cardDeckService.ServiceId);
+            
+            // Register with broker to receive StartHand responses
+            broker.Subscribe((msg) => 
+            {
+                if (msg.MessageType == MessageType.Generic)
                 {
-                    Console.WriteLine($"Error retrieving payload: {ex.Message}");
-                    // Try direct access
-                    Console.WriteLine($"Raw payload: {msg.Payload}");
-                    
                     try
                     {
-                        if (msg.Payload is string rawPayload)
-                        {
-                            receivedPayload = JsonSerializer.Deserialize<string>(rawPayload);
-                            Console.WriteLine($"Manual deserialization: {receivedPayload}");
-                            messageReceived = true;
-                        }
+                        HandleStartHandResponse(msg);
                     }
-                    catch (Exception innerEx)
+                    catch (Exception ex)
                     {
-                        Console.WriteLine($"Manual deserialization failed: {innerEx.Message}");
+                        Console.WriteLine($"Error handling message: {ex.Message}");
                     }
+                    return;
                 }
+                
+                Console.WriteLine($"Received message of type: {msg.MessageType}");
             });
+
+            Console.WriteLine("Sending StartHand message...");
             
-            // Allow subscription to settle
-            await Task.Delay(100);
-            
-            // Publish message
-            Console.WriteLine("Publishing message...");
-            broker.Publish(message);
-            
-            // Wait for processing
-            await Task.Delay(1000);
-            
-            // Check results
-            if (messageReceived)
+            // Create a StartHand message directly (similar to ConsoleUIService)
+            var startHandMessage = new NetworkMessage
             {
-                Console.WriteLine("\n✓ SUCCESS: Message was received!");
-                if (receivedPayload == testString)
-                {
-                    Console.WriteLine("✓ PAYLOAD MATCH: The payload was correctly passed through the broker!");
-                }
-                else
-                {
-                    Console.WriteLine("✗ PAYLOAD MISMATCH: The payload was modified during transmission.");
-                    Console.WriteLine($"  Original: {testString}");
-                    Console.WriteLine($"  Received: {receivedPayload}");
-                }
+                MessageId = Guid.NewGuid().ToString(),
+                MessageType = MessageType.Generic,
+                SenderId = "test_client",
+                ReceiverId = gameEngineService.ServiceId,
+                Timestamp = DateTime.UtcNow,
+                Payload = "{}"
+            };
+            
+            // Add headers to help with routing
+            startHandMessage.Headers["MessageSubType"] = "StartHand";
+            
+            Console.WriteLine($"Sending StartHand message (ID: {startHandMessage.MessageId}) to {gameEngineService.ServiceId}");
+            
+            // Send the message through the broker
+            broker.Publish(startHandMessage);
+            
+            // Wait for response with timeout
+            int maxWaitTime = 5; // seconds
+            for (int i = 0; i < maxWaitTime && !responseReceived; i++)
+            {
+                Console.WriteLine($"Waiting for response... ({i+1}/{maxWaitTime})");
+                await Task.Delay(1000);
+            }
+            
+            if (responseReceived)
+            {
+                Console.WriteLine("SUCCESS: Received response to StartHand message!");
             }
             else
             {
-                Console.WriteLine("\n✗ FAILED: Message was not received!");
+                Console.WriteLine("ERROR: No response received within timeout period.");
             }
             
-            // Clean up
-            broker.Unsubscribe(subscriptionId, MessageType.StartHand);
+            // Cleanup
+            Console.WriteLine("Stopping services...");
+            gameEngineService.Stop();
+            cardDeckService.Stop();
             broker.Stop();
-            
-            // Report overall success
-            Console.WriteLine("\nTest " + (messageReceived ? "PASSED" : "FAILED"));
+            Console.WriteLine("Test completed.");
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"TEST ERROR: {ex.Message}");
-            Console.WriteLine(ex.StackTrace);
-        }
-        
-        Console.WriteLine("\n===== Test Complete =====");
     }
 }
