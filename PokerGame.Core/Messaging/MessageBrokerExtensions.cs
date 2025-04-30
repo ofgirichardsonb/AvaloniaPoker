@@ -149,7 +149,8 @@ namespace PokerGame.Core.Messaging
             {
                 // Set up a handler to detect acknowledgments specifically for this message
                 // Convert MessageType enum to the correct type for CentralMessageBroker.Subscribe
-                var ackMessageType = Messaging.MessageType.Acknowledgment;
+                // NOTE: We must convert from MSA.Foundation.Messaging.MessageType to PokerGame.Core.Messaging.MessageType
+                var ackMessageType = PokerGame.Core.Messaging.MessageType.Acknowledgment;
                 
                 // Create a handler that accepts a single NetworkMessage parameter
                 Action<NetworkMessage> ackHandler = (ackMessage) => {
@@ -290,7 +291,7 @@ namespace PokerGame.Core.Messaging
                     {
                         Console.WriteLine($"[{service.ServiceId}] Unsubscribing acknowledgment handler (ID: {subscriptionId})");
                         // The central broker's unsubscribe method requires both the ID and message type
-                        centralBroker.Unsubscribe(subscriptionId, Messaging.MessageType.Acknowledgment);
+                        centralBroker.Unsubscribe(subscriptionId, PokerGame.Core.Messaging.MessageType.Acknowledgment);
                     }
                     catch (Exception ex)
                     {
@@ -301,34 +302,34 @@ namespace PokerGame.Core.Messaging
         }
         
         /// <summary>
-        /// Maps between the Microservices.MessageType and Messaging.MessageType enums
+        /// Maps between the Microservices.MessageType and PokerGame.Core.Messaging.MessageType enums
         /// </summary>
         /// <param name="messageType">The source message type from Microservices namespace</param>
-        /// <returns>The corresponding message type in the Messaging namespace</returns>
-        private static Messaging.MessageType MapMessageType(Microservices.MessageType messageType)
+        /// <returns>The corresponding message type in the PokerGame.Core.Messaging namespace</returns>
+        private static PokerGame.Core.Messaging.MessageType MapMessageType(Microservices.MessageType messageType)
         {
             // Map common message types between the two enum namespaces
             switch (messageType)
             {
                 case Microservices.MessageType.Acknowledgment:
-                    return Messaging.MessageType.Acknowledgment;
+                    return PokerGame.Core.Messaging.MessageType.Acknowledgment;
                 case Microservices.MessageType.ServiceDiscovery:
-                    return Messaging.MessageType.ServiceDiscovery;
+                    return PokerGame.Core.Messaging.MessageType.ServiceDiscovery;
                 case Microservices.MessageType.ServiceRegistration:
-                    return Messaging.MessageType.ServiceRegistration;
+                    return PokerGame.Core.Messaging.MessageType.ServiceRegistration;
                 case Microservices.MessageType.StartGame:
-                    return Messaging.MessageType.Command;  // Use Command for game actions
+                    return PokerGame.Core.Messaging.MessageType.StartGame;
                 case Microservices.MessageType.StartHand:
-                    return Messaging.MessageType.Command;  // Use Command for game actions
+                    return PokerGame.Core.Messaging.MessageType.StartHand;
                 case Microservices.MessageType.DealCards:
-                    return Messaging.MessageType.Command;  // Use Command for game actions
+                    return PokerGame.Core.Messaging.MessageType.DeckDeal;
                 case Microservices.MessageType.PlayerAction:
-                    return Messaging.MessageType.Request;  // Use Request for player actions
+                    return PokerGame.Core.Messaging.MessageType.PlayerAction;
                 case Microservices.MessageType.Heartbeat:
-                    return Messaging.MessageType.Heartbeat;
+                    return PokerGame.Core.Messaging.MessageType.Heartbeat;
                 default:
-                    // For other message types, use Data as the generic type
-                    return Messaging.MessageType.Data;
+                    // For other message types, use generic GameState type
+                    return PokerGame.Core.Messaging.MessageType.GameState;
             }
         }
     }
