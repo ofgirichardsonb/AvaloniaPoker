@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poker Game Web Preview</title>
+    <style>
+        :root {
+            --poker-table-color: #277714;
+            --poker-felt-color: #217914;
+            --poker-border-color: #8b4513;
+            --card-bg-color: #ffffff;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #e1e1e1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .container {
+            background-color: var(--poker-table-color);
+            border: 15px solid var(--poker-border-color);
+            border-radius: 50px;
+            padding: 30px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+        
+        h1 {
+            color: #ffffff;
+            margin-bottom: 30px;
+        }
+        
+        .card-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        
+        .card {
+            width: 70px;
+            height: 100px;
+            background-color: var(--card-bg-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 5px;
+            position: relative;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        
+        .card.red {
+            color: #d40000;
+        }
+        
+        .card.black {
+            color: #000000;
+        }
+        
+        .card .value {
+            font-size: 20px;
+            font-weight: bold;
+            text-align: left;
+        }
+        
+        .card .suit {
+            font-size: 24px;
+            text-align: center;
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .card .value-bottom {
+            font-size: 20px;
+            font-weight: bold;
+            text-align: right;
+            transform: rotate(180deg);
+        }
+        
+        .community-cards {
+            background-color: var(--poker-felt-color);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .player-area {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 30px;
+        }
+        
+        .player {
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 10px;
+            min-width: 150px;
+        }
+        
+        .actions {
+            margin-top: 30px;
+        }
+        
+        button {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            margin: 0 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover {
+            background-color: #0069b3;
+        }
+        
+        .status {
+            margin-top: 20px;
+            font-style: italic;
+        }
+
+        .info {
+            background-color: #333;
+            color: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 20px;
+            max-width: 600px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Poker Game</h1>
+        
+        <div class="community-cards">
+            <h3>Community Cards</h3>
+            <div class="card-container">
+                <div class="card red">
+                    <div class="value">A</div>
+                    <div class="suit">♥</div>
+                    <div class="value-bottom">A</div>
+                </div>
+                <div class="card black">
+                    <div class="value">K</div>
+                    <div class="suit">♠</div>
+                    <div class="value-bottom">K</div>
+                </div>
+                <div class="card red">
+                    <div class="value">Q</div>
+                    <div class="suit">♦</div>
+                    <div class="value-bottom">Q</div>
+                </div>
+                <div class="card black">
+                    <div class="value">J</div>
+                    <div class="suit">♣</div>
+                    <div class="value-bottom">J</div>
+                </div>
+                <div class="card red">
+                    <div class="value">10</div>
+                    <div class="suit">♥</div>
+                    <div class="value-bottom">10</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="player-area">
+            <div class="player">
+                <h3>Your Hand</h3>
+                <div class="card-container">
+                    <div class="card black">
+                        <div class="value">A</div>
+                        <div class="suit">♠</div>
+                        <div class="value-bottom">A</div>
+                    </div>
+                    <div class="card black">
+                        <div class="value">A</div>
+                        <div class="suit">♣</div>
+                        <div class="value-bottom">A</div>
+                    </div>
+                </div>
+                <p>Chips: 1250</p>
+            </div>
+        </div>
+        
+        <div class="actions">
+            <button>Fold</button>
+            <button>Check</button>
+            <button>Call</button>
+            <button>Raise</button>
+        </div>
+        
+        <div class="status">
+            It's your turn. Current pot: 500
+        </div>
+    </div>
+
+    <div class="info">
+        <p><strong>Web UI Demonstration</strong></p>
+        <p>This is a placeholder UI for the Avalonia-based Texas Hold'em Poker Game. In the future implementation, this will be replaced by a fully functional WebAssembly version of the Avalonia UI.</p>
+        <p>The full project architecture includes:</p>
+        <ul>
+            <li>Cross-platform compatibility (Windows, macOS, Linux)</li>
+            <li>Microservices architecture with NetMQ messaging</li>
+            <li>Shared core business logic across platforms</li>
+            <li>REST API gateway for web clients</li>
+        </ul>
+    </div>
+</body>
+</html>

@@ -10,12 +10,17 @@
     <AssemblyName>PokerGame.Avalonia</AssemblyName>
     <!-- Enable browser support -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <WasmMainJSPath>wwwroot/main.js</WasmMainJSPath>
+  </PropertyGroup>
+
+  <!-- Desktop specific configuration -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
+    <StartupObject>PokerGame.Avalonia.Program</StartupObject>
   </PropertyGroup>
 
   <!-- Browser specific configuration -->
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <WasmMainJSPath>wwwroot/main.js</WasmMainJSPath>
+    <StartupObject>PokerGame.Avalonia.BrowserProgram</StartupObject>
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>copyused</TrimMode>
     <WasmBuildNative>true</WasmBuildNative>

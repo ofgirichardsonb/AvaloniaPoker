@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>MessageMonitor</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="message-monitor.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="MSA.Foundation/MSA.Foundation.csproj" />
+    <ProjectReference Include="PokerGame.Abstractions/PokerGame.Abstractions.csproj" />
+    <ProjectReference Include="PokerGame.Core/PokerGame.Core.csproj" />
+  </ItemGroup>
+
+</Project>

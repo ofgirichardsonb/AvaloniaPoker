@@ -2,7 +2,7 @@ modules = ["dotnet"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["dotnet-sdk_8", "vim"]
+packages = ["dotnet-sdk_8", "vim", "python3"]
 
 [workflows]
 runButton = "Project"
@@ -59,6 +59,14 @@ args = "rebuild-core"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "avalonia-ui"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "avalonia-ui-web"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "message-monitor"
 
 [[workflows.workflow]]
 name = "rebuild_test"
@@ -158,8 +166,29 @@ task = "shell.exec"
 args = "cd /home/runner/workspace && ./run-avalonia-ui.sh"
 waitForPort = 5000
 
+[[workflows.workflow]]
+name = "avalonia-ui-web"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && ./launch-avalonia-web.sh"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "message-monitor"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && ./run-message-monitor.sh"
+
 [deployment]
 run = ["sh", "-c", "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 200 --curses"]
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
 
 [[ports]]
 localPort = 5570
