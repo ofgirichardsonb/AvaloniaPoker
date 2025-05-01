@@ -56,6 +56,10 @@ args = "rebuild-abstractions"
 task = "workflow.run"
 args = "rebuild-core"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "avalonia-ui"
+
 [[workflows.workflow]]
 name = "rebuild_test"
 author = "agent"
@@ -144,6 +148,15 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd /home/runner/workspace && dotnet build PokerGame.Core/PokerGame.Core.csproj"
+
+[[workflows.workflow]]
+name = "avalonia-ui"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && ./run-avalonia-ui.sh"
+waitForPort = 5000
 
 [deployment]
 run = ["sh", "-c", "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 200 --curses"]
