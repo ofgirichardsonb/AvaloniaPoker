@@ -2,7 +2,7 @@ modules = ["dotnet"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["dotnet-sdk_8", "vim", "python3"]
+packages = ["dotnet-sdk_8", "vim", "python3", "fontconfig", "libglvnd"]
 
 [workflows]
 runButton = "Project"

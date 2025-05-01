@@ -29,6 +29,9 @@ namespace PokerGame.Avalonia.ViewModels
                 "Texas Hold'em - High Stakes"
             };
             
+            // Initialize selected game to avoid null warning
+            _selectedGame = _availableGames.FirstOrDefault() ?? string.Empty;
+            
             _joinGameCommand = ReactiveCommand.Create(JoinGame);
             _createGameCommand = ReactiveCommand.Create(CreateGame);
         }

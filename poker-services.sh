@@ -76,10 +76,10 @@ run_launcher() {
     
     # Process and map arguments
     for arg in "$@"; do
-        # Map deprecated --enhanced-ui to --curses
-        if [ "$arg" == "--enhanced-ui" ]; then
-            echo "Note: --enhanced-ui is deprecated, using --curses instead"
-            args+=("--curses")
+        # Skip UI-related options
+        if [ "$arg" == "--enhanced-ui" ] || [ "$arg" == "--curses" ]; then
+            echo "Note: UI options are being phased out, focusing on service layer only"
+            # Skip the argument, don't add to args
         else
             args+=("$arg")
         fi
