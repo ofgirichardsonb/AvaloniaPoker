@@ -99,7 +99,27 @@ namespace PokerGame.Avalonia.ViewModels
         public PlayerViewModel? CurrentPlayer
         {
             get => _currentPlayer;
-            set => this.RaiseAndSetIfChanged(ref _currentPlayer, value);
+            set 
+            {
+                // Clear any previous player's current status
+                if (_currentPlayer != null)
+                {
+                    _currentPlayer.IsCurrent = false;
+                }
+                
+                // Set the new current player
+                var oldPlayer = _currentPlayer;
+                _currentPlayer = value;
+                
+                // Set new player's current status
+                if (_currentPlayer != null)
+                {
+                    _currentPlayer.IsCurrent = true;
+                }
+                
+                // Notify property changed
+                this.RaisePropertyChanged(nameof(CurrentPlayer));
+            }
         }
         
         /// <summary>
@@ -263,14 +283,24 @@ namespace PokerGame.Avalonia.ViewModels
             string playerName = $"Player {playerNumber}";
             
             // Add the player to our collection
-            var playerViewModel = new PlayerViewModel(new Player(Guid.NewGuid().ToString(), playerName, 1000));
+            bool isCurrentUser = (_players.Count == 0); // First player added is the current user
+            var player = new Player(Guid.NewGuid().ToString(), playerName, 1000);
+            var playerViewModel = new PlayerViewModel(player, isCurrentUser);
             _players.Add(playerViewModel);
             
             // Show a message that the player was added
-            string message = $"Added {playerName} to the game.";
-            if (_players.Count == 1)
+            string message;
+            if (isCurrentUser)
             {
-                message += " Add at least one more player to start the game.";
+                message = $"Added you to the game as {playerName}.";
+                if (_players.Count == 1)
+                {
+                    message += " Add at least one more player to start the game.";
+                }
+            }
+            else
+            {
+                message = $"Added {playerName} to the game.";
             }
             ShowMessage(message);
             
@@ -325,7 +355,15 @@ namespace PokerGame.Avalonia.ViewModels
                 // Disable start hand button during gameplay
                 CanStartHand = false;
                 
-                GameStatus = $"{player.Name}'s turn";
+                // Update game status based on whether this is the current user or another player
+                if (playerViewModel.IsCurrentUser)
+                {
+                    GameStatus = "Your turn - make your move";
+                }
+                else
+                {
+                    GameStatus = $"Waiting for {player.Name} to make a move";
+                }
             }
         }
         
@@ -344,16 +382,32 @@ namespace PokerGame.Avalonia.ViewModels
             
             // Update players
             _players.Clear();
+            
+            // Set the first player as the current user for demonstration purposes
+            // In a real multiplayer game, this would be determined by a player ID
+            string currentUserId = gameEngine.Players.Count > 0 ? gameEngine.Players[0].Id : string.Empty;
+            bool gameOver = gameEngine.State == GameState.HandComplete;
+            
             foreach (var player in gameEngine.Players)
             {
-                _players.Add(new PlayerViewModel(player));
+                // Check if this player is the current user
+                bool isCurrentUser = player.Id == currentUserId;
+                
+                // Create player view model with appropriate flag
+                var playerViewModel = new PlayerViewModel(player, isCurrentUser);
+                
+                // Update card visibility based on game state
+                playerViewModel.UpdateCardVisibility(gameOver);
+                
+                _players.Add(playerViewModel);
             }
             
             // Update community cards
             _communityCards.Clear();
             foreach (var card in gameEngine.CommunityCards)
             {
-                _communityCards.Add(new CardViewModel(card));
+                // Community cards are always visible
+                _communityCards.Add(new CardViewModel(card, true));
             }
             
             // If the hand is complete, enable the start hand button
@@ -365,6 +419,15 @@ namespace PokerGame.Avalonia.ViewModels
                 CanRaise = false;
                 CanFold = false;
                 CurrentPlayer = null;
+                
+                // If the hand is complete, make all cards visible
+                if (gameEngine.State == GameState.HandComplete)
+                {
+                    foreach (var player in _players)
+                    {
+                        player.UpdateCardVisibility(true);
+                    }
+                }
             }
         }
         
@@ -378,16 +441,21 @@ namespace PokerGame.Avalonia.ViewModels
     {
         private readonly Player _player;
         private ObservableCollection<CardViewModel> _holeCards = new ObservableCollection<CardViewModel>();
+        private bool _isCurrentUser;
         
-        public PlayerViewModel(Player player)
+        public PlayerViewModel(Player player, bool isCurrentUser = false)
         {
             _player = player;
+            _isCurrentUser = isCurrentUser;
             
             // Create view models for hole cards
             foreach (var card in player.HoleCards)
             {
-                _holeCards.Add(new CardViewModel(card));
+                _holeCards.Add(new CardViewModel(card, true)); // Cards are visible by default
             }
+            
+            // If this isn't the current user, hide the cards (show backs) unless the game is over
+            UpdateCardVisibility();
         }
         
         /// <summary>
@@ -416,6 +484,25 @@ namespace PokerGame.Avalonia.ViewModels
         public bool IsAllIn => _player.IsAllIn;
         
         /// <summary>
+        /// Gets or sets whether this player is the current user
+        /// </summary>
+        public bool IsCurrentUser
+        {
+            get => _isCurrentUser;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _isCurrentUser, value);
+                UpdateCardVisibility();
+            }
+        }
+        
+        /// <summary>
+        /// Gets whether this player is the player whose turn it is
+        /// Used for UI highlighting
+        /// </summary>
+        public bool IsCurrent { get; set; }
+        
+        /// <summary>
         /// Gets the player's status text
         /// </summary>
         public string Status
@@ -426,7 +513,7 @@ namespace PokerGame.Avalonia.ViewModels
                     return "Folded";
                 if (_player.IsAllIn)
                     return "All-In";
-                return "Active";
+                return IsCurrentUser ? "You" : "Active";
             }
         }
         
@@ -434,6 +521,21 @@ namespace PokerGame.Avalonia.ViewModels
         /// Gets the player's hole cards
         /// </summary>
         public ObservableCollection<CardViewModel> HoleCards => _holeCards;
+        
+        /// <summary>
+        /// Updates the visibility of the player's hole cards
+        /// </summary>
+        /// <param name="gameOver">Whether the game is over (showing all cards)</param>
+        public void UpdateCardVisibility(bool gameOver = false)
+        {
+            // Cards are visible if this is the current user or the game is over
+            bool showCards = IsCurrentUser || gameOver;
+            
+            foreach (var card in _holeCards)
+            {
+                card.IsVisible = showCards;
+            }
+        }
     }
     
     /// <summary>
@@ -442,10 +544,21 @@ namespace PokerGame.Avalonia.ViewModels
     public class CardViewModel : ViewModelBase
     {
         private readonly Card _card;
+        private bool _isVisible;
         
-        public CardViewModel(Card card)
+        public CardViewModel(Card card, bool isVisible = true)
         {
             _card = card;
+            _isVisible = isVisible;
+        }
+        
+        /// <summary>
+        /// Gets or sets whether the card is visible (face up)
+        /// </summary>
+        public bool IsVisible
+        {
+            get => _isVisible;
+            set => this.RaiseAndSetIfChanged(ref _isVisible, value);
         }
         
         /// <summary>
@@ -504,6 +617,6 @@ namespace PokerGame.Avalonia.ViewModels
         /// <summary>
         /// Gets the display text for the card
         /// </summary>
-        public string Display => $"{Rank}{Suit}";
+        public string Display => IsVisible ? $"{Rank}{Suit}" : "🂠";
     }
 }
