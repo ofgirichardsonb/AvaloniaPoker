@@ -88,19 +88,9 @@ namespace PokerGame.Core.Microservices
                 Thread.Sleep(500);
                 
                 // Create execution contexts for each service
-                var cardDeckContext = new MSA.Foundation.ServiceManagement.ExecutionContext
-                {
-                    ServiceId = ServiceConstants.StaticServiceIds.CardDeck,
-                    ServiceName = "Card Deck Service",
-                    ServiceType = ServiceConstants.ServiceTypes.CardDeck
-                };
+                var cardDeckContext = PokerGame.Core.Messaging.ExecutionContext.WithCancellation();
                 
-                var consoleUIContext = new MSA.Foundation.ServiceManagement.ExecutionContext
-                {
-                    ServiceId = ServiceConstants.StaticServiceIds.ConsoleUI,
-                    ServiceName = "Console UI Service",
-                    ServiceType = ServiceConstants.ServiceTypes.ConsoleUI
-                };
+                var consoleUIContext = PokerGame.Core.Messaging.ExecutionContext.WithCancellation();
                 
                 Console.WriteLine("Starting Card Deck Service...");
                 // Create the card deck service with execution context
@@ -245,12 +235,7 @@ namespace PokerGame.Core.Microservices
             {
                 Console.WriteLine("Starting Game Engine Service in standalone mode...");
                 // Create execution context for game engine service
-                var gameEngineContext = new MSA.Foundation.ServiceManagement.ExecutionContext
-                {
-                    ServiceId = ServiceConstants.StaticServiceIds.GameEngine,
-                    ServiceName = "Game Engine Service",
-                    ServiceType = ServiceConstants.ServiceTypes.GameEngine
-                };
+                var gameEngineContext = PokerGame.Core.Messaging.ExecutionContext.WithCancellation();
                 
                 // Create the game engine service
                 var gameEngineService = new GameEngineService(gameEngineContext);
@@ -284,12 +269,7 @@ namespace PokerGame.Core.Microservices
                 Console.WriteLine($"Starting Card Deck Service in standalone mode{(useEmergencyDeck ? " with emergency deck" : "")}...");
                 
                 // Create execution context for card deck service
-                var cardDeckContext = new MSA.Foundation.ServiceManagement.ExecutionContext
-                {
-                    ServiceId = ServiceConstants.StaticServiceIds.CardDeck,
-                    ServiceName = "Card Deck Service",
-                    ServiceType = ServiceConstants.ServiceTypes.CardDeck
-                };
+                var cardDeckContext = PokerGame.Core.Messaging.ExecutionContext.WithCancellation();
                 
                 // Create the card deck service with execution context and emergency flag if specified
                 var cardDeckService = new CardDeckService(cardDeckContext, useEmergencyDeck);
@@ -343,12 +323,7 @@ namespace PokerGame.Core.Microservices
                 Console.WriteLine($"Starting Console UI Service in standalone mode{(useEnhancedUi ? " with curses UI" : "")}...");
                 
                 // Create execution context for console UI service
-                var consoleUIContext = new MSA.Foundation.ServiceManagement.ExecutionContext
-                {
-                    ServiceId = ServiceConstants.StaticServiceIds.ConsoleUI,
-                    ServiceName = "Console UI Service",
-                    ServiceType = ServiceConstants.ServiceTypes.ConsoleUI
-                };
+                var consoleUIContext = PokerGame.Core.Messaging.ExecutionContext.WithCancellation();
                 
                 // Create the console UI service with execution context and curses UI preference
                 var consoleUIService = new ConsoleUIService(consoleUIContext, useEnhancedUi);
