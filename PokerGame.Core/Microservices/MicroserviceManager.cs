@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using PokerGame.Core.ServiceManagement;
+using PokerGame.Core.Messaging;
+using MSA.Foundation.ServiceManagement;
 
 namespace PokerGame.Core.Microservices
 {
@@ -40,12 +42,12 @@ namespace PokerGame.Core.Microservices
             }
             
             // Use the ServiceConstants to calculate consistent port numbers
-            GameEnginePublisherPort = ServiceConstants.Ports.GetGameEnginePublisherPort(_portOffset);
-            GameEngineSubscriberPort = ServiceConstants.Ports.GetGameEngineSubscriberPort(_portOffset);
-            ConsoleUIPublisherPort = ServiceConstants.Ports.GetConsoleUIPublisherPort(_portOffset);
-            ConsoleUISubscriberPort = ServiceConstants.Ports.GetConsoleUISubscriberPort(_portOffset);
-            CardDeckPublisherPort = ServiceConstants.Ports.GetCardDeckPublisherPort(_portOffset);
-            CardDeckSubscriberPort = ServiceConstants.Ports.GetCardDeckSubscriberPort(_portOffset);
+            GameEnginePublisherPort = PokerGame.Core.ServiceManagement.ServiceConstants.Ports.GetGameEnginePublisherPort(_portOffset);
+            GameEngineSubscriberPort = PokerGame.Core.ServiceManagement.ServiceConstants.Ports.GetGameEngineSubscriberPort(_portOffset);
+            ConsoleUIPublisherPort = PokerGame.Core.ServiceManagement.ServiceConstants.Ports.GetConsoleUIPublisherPort(_portOffset);
+            ConsoleUISubscriberPort = PokerGame.Core.ServiceManagement.ServiceConstants.Ports.GetConsoleUISubscriberPort(_portOffset);
+            CardDeckPublisherPort = PokerGame.Core.ServiceManagement.ServiceConstants.Ports.GetCardDeckPublisherPort(_portOffset);
+            CardDeckSubscriberPort = PokerGame.Core.ServiceManagement.ServiceConstants.Ports.GetCardDeckSubscriberPort(_portOffset);
             
             // Debug port configuration
             Console.WriteLine($"====> PORT CONFIG: GameEngine Publisher: {GameEnginePublisherPort}, Subscriber: {GameEngineSubscriberPort}");
@@ -88,13 +90,14 @@ namespace PokerGame.Core.Microservices
                 Thread.Sleep(500);
                 
                 // Create execution contexts for each service
-                var cardDeckContext = PokerGame.Core.Messaging.ExecutionContext.WithCancellation();
+                var cardDeckContext = MSA.Foundation.ServiceManagement.ExecutionContext.WithCancellation();
                 
-                var consoleUIContext = PokerGame.Core.Messaging.ExecutionContext.WithCancellation();
+                var consoleUIContext = MSA.Foundation.ServiceManagement.ExecutionContext.WithCancellation();
                 
                 Console.WriteLine("Starting Card Deck Service...");
                 // Create the card deck service with execution context
-                var cardDeckService = new CardDeckService(cardDeckContext);
+                // Create the card deck service with proper port configuration instead of execution context
+                var cardDeckService = new CardDeckService(CardDeckPublisherPort, CardDeckSubscriberPort);
                 _services.Add(cardDeckService);
                 
                 // Small delay for initialization
@@ -235,7 +238,7 @@ namespace PokerGame.Core.Microservices
             {
                 Console.WriteLine("Starting Game Engine Service in standalone mode...");
                 // Create execution context for game engine service
-                var gameEngineContext = PokerGame.Core.Messaging.ExecutionContext.WithCancellation();
+                var gameEngineContext = MSA.Foundation.ServiceManagement.ExecutionContext.WithCancellation();
                 
                 // Create the game engine service
                 var gameEngineService = new GameEngineService(gameEngineContext);
@@ -269,10 +272,13 @@ namespace PokerGame.Core.Microservices
                 Console.WriteLine($"Starting Card Deck Service in standalone mode{(useEmergencyDeck ? " with emergency deck" : "")}...");
                 
                 // Create execution context for card deck service
-                var cardDeckContext = PokerGame.Core.Messaging.ExecutionContext.WithCancellation();
+                var cardDeckContext = MSA.Foundation.ServiceManagement.ExecutionContext.WithCancellation();
                 
-                // Create the card deck service with execution context and emergency flag if specified
-                var cardDeckService = new CardDeckService(cardDeckContext, useEmergencyDeck);
+                // Create the card deck service with port settings and emergency flag
+                var cardDeckService = new CardDeckService(
+                    CardDeckPublisherPort, 
+                    CardDeckSubscriberPort, 
+                    useEmergencyDeck);
                 _services.Add(cardDeckService);
                 
                 // Start the service
@@ -323,7 +329,7 @@ namespace PokerGame.Core.Microservices
                 Console.WriteLine($"Starting Console UI Service in standalone mode{(useEnhancedUi ? " with curses UI" : "")}...");
                 
                 // Create execution context for console UI service
-                var consoleUIContext = PokerGame.Core.Messaging.ExecutionContext.WithCancellation();
+                var consoleUIContext = MSA.Foundation.ServiceManagement.ExecutionContext.WithCancellation();
                 
                 // Create the console UI service with execution context and curses UI preference
                 var consoleUIService = new ConsoleUIService(consoleUIContext, useEnhancedUi);

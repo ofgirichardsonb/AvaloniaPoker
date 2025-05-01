@@ -117,7 +117,7 @@ namespace PokerGame.Core.Microservices
         /// <param name="enhancedUI">Whether to use enhanced UI mode</param>
         /// <param name="cursesUI">Whether to use curses UI mode</param>
         public ConsoleUIService(MSAEC context, bool enhancedUI = false, bool cursesUI = false) 
-            : base(context)
+            : base(PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.ConsoleUI, "Console UI Service", context)
         {
             _isEnhancedUI = enhancedUI;
             _cursesUI = cursesUI;
@@ -142,39 +142,70 @@ namespace PokerGame.Core.Microservices
             }
             
             // Core message types
-            BrokerManager.Instance.CentralBroker.Subscribe(MSAMessageType.ServiceRegistration, msg => HandleMessageWrapper(msg, HandleServiceRegistration));
-            BrokerManager.Instance.CentralBroker.Subscribe(MSAMessageType.ServiceDiscovery, msg => HandleMessageWrapper(msg, HandleServiceDiscoveryRequest));
-            BrokerManager.Instance.CentralBroker.Subscribe(MSAMessageType.Response, msg => HandleMessageWrapper(msg, HandleServiceDiscoveryResponse));
+            BrokerManager.Instance.CentralBroker.Subscribe(
+                Messaging.MessageType.ServiceRegistration, 
+                msg => HandleMessageWrapper(msg, HandleServiceRegistration));
             
-            // Game-specific message types - using the Request type for game-specific messages
-            BrokerManager.Instance.CentralBroker.Subscribe(MSAMessageType.Request, msg => HandleMessageWrapper(msg, HandleGameAction));
-            BrokerManager.Instance.CentralBroker.Subscribe(MSAMessageType.Request, msg => HandleMessageWrapper(msg, HandleGameState));
-            BrokerManager.Instance.CentralBroker.Subscribe(MSAMessageType.Request, msg => HandleMessageWrapper(msg, HandleDeckShuffled));
-            BrokerManager.Instance.CentralBroker.Subscribe(MSAMessageType.Request, msg => HandleMessageWrapper(msg, HandleHoleCards));
-            BrokerManager.Instance.CentralBroker.Subscribe(MSAMessageType.Request, msg => HandleMessageWrapper(msg, HandleCommunityCards));
-            BrokerManager.Instance.CentralBroker.Subscribe(MSAMessageType.Request, msg => HandleMessageWrapper(msg, HandlePlayerAction));
-            BrokerManager.Instance.CentralBroker.Subscribe(MSAMessageType.Request, msg => HandleMessageWrapper(msg, HandlePlayerJoined));
-            BrokerManager.Instance.CentralBroker.Subscribe(MSAMessageType.Request, msg => HandleMessageWrapper(msg, HandlePlayerLeft));
-            BrokerManager.Instance.CentralBroker.Subscribe(MSAMessageType.Request, msg => HandleMessageWrapper(msg, HandleHandResult));
+            BrokerManager.Instance.CentralBroker.Subscribe(
+                Messaging.MessageType.ServiceDiscovery, 
+                msg => HandleMessageWrapper(msg, HandleServiceDiscoveryRequest));
+            
+            BrokerManager.Instance.CentralBroker.Subscribe(
+                Messaging.MessageType.DisplayUpdate, 
+                msg => HandleMessageWrapper(msg, HandleServiceDiscoveryResponse));
+            
+            // Game-specific message types
+            BrokerManager.Instance.CentralBroker.Subscribe(
+                Messaging.MessageType.PlayerAction, 
+                msg => HandleMessageWrapper(msg, HandleGameAction));
+            
+            BrokerManager.Instance.CentralBroker.Subscribe(
+                Messaging.MessageType.GameState, 
+                msg => HandleMessageWrapper(msg, HandleGameState));
+            
+            BrokerManager.Instance.CentralBroker.Subscribe(
+                Messaging.MessageType.DeckShuffled, 
+                msg => HandleMessageWrapper(msg, HandleDeckShuffled));
+            
+            BrokerManager.Instance.CentralBroker.Subscribe(
+                Messaging.MessageType.CardDeal, 
+                msg => HandleMessageWrapper(msg, HandleHoleCards));
+            
+            BrokerManager.Instance.CentralBroker.Subscribe(
+                Messaging.MessageType.CardDeal, 
+                msg => HandleMessageWrapper(msg, HandleCommunityCards));
+            
+            BrokerManager.Instance.CentralBroker.Subscribe(
+                Messaging.MessageType.PlayerAction, 
+                msg => HandleMessageWrapper(msg, HandlePlayerAction));
+            
+            BrokerManager.Instance.CentralBroker.Subscribe(
+                Messaging.MessageType.PlayerJoin, 
+                msg => HandleMessageWrapper(msg, HandlePlayerJoined));
+            
+            BrokerManager.Instance.CentralBroker.Subscribe(
+                Messaging.MessageType.PlayerLeave, 
+                msg => HandleMessageWrapper(msg, HandlePlayerLeft));
+            
+            BrokerManager.Instance.CentralBroker.Subscribe(
+                Messaging.MessageType.HandComplete, 
+                msg => HandleMessageWrapper(msg, HandleHandResult));
         }
         
         /// <summary>
-        /// Wrapper to convert MSA.Foundation.Messaging.Message to NetworkMessage before handling
+        /// Wrapper to convert NetworkMessage to NetworkMessage before handling
         /// </summary>
-        private void HandleMessageWrapper(MSA.Foundation.Messaging.Message msaMessage, Action<NetworkMessage> handler)
+        private void HandleMessageWrapper(NetworkMessage message, Action<NetworkMessage> handler)
         {
             try
             {
-                // Convert MSA.Foundation.Messaging.Message to NetworkMessage using the extension method
-                var networkMessage = msaMessage.ToNetworkMessage();
-                
-                // Call the handler with the converted message
-                handler(networkMessage);
+                // Just pass the network message directly
+                handler(message);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error in HandleMessageWrapper: {ex.Message}");
-                Console.WriteLine($"  Message type: {msaMessage.MessageType}");
+                Console.WriteLine($"  Message type: {message.Type}");
                 Console.WriteLine($"  Stack trace: {ex.StackTrace}");
             }
         }

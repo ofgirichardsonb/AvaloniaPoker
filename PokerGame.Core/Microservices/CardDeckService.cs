@@ -29,13 +29,13 @@ namespace PokerGame.Core.Microservices
         /// <param name="executionContext">The execution context to use</param>
         /// <param name="useEmergencyDeckMode">Whether to always use emergency decks instead of network communication</param>
         public CardDeckService(
-            Messaging.ExecutionContext executionContext,
+            MSA.Foundation.ServiceManagement.ExecutionContext executionContext,
             bool useEmergencyDeckMode = false)
-            : base(ServiceConstants.ServiceTypes.CardDeck, "Card Deck Service", executionContext)
+            : base(PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.CardDeck, "Card Deck Service", executionContext)
         {
             _useEmergencyDeckMode = useEmergencyDeckMode;
             
-            Console.WriteLine($"CardDeckService created with execution context using service type: {ServiceConstants.ServiceTypes.CardDeck}");
+            Console.WriteLine($"CardDeckService created with execution context using service type: {PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.CardDeck}");
             
             if (_useEmergencyDeckMode)
             {
@@ -53,7 +53,7 @@ namespace PokerGame.Core.Microservices
             int publisherPort = DefaultPublisherPort,
             int subscriberPort = DefaultSubscriberPort,
             bool useEmergencyDeckMode = false)
-            : base(ServiceConstants.ServiceTypes.CardDeck, "Card Deck Service", publisherPort, subscriberPort)
+            : base(PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.CardDeck, "Card Deck Service", publisherPort, subscriberPort)
         {
             _useEmergencyDeckMode = useEmergencyDeckMode;
         }
@@ -160,7 +160,7 @@ namespace PokerGame.Core.Microservices
                 { 
                     ServiceId = _serviceId,
                     ServiceName = "Card Deck Service",
-                    ServiceType = ServiceConstants.ServiceTypes.CardDeck,
+                    ServiceType = PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.CardDeck,
                     Capabilities = new List<string> { "DeckCreate", "DeckShuffle", "DeckDeal", "DeckStatus" }
                 });
             

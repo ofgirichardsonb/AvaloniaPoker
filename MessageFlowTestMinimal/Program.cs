@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Collections.Generic;
 using PokerGame.Core.Messaging;
+using MSA.Foundation.ServiceManagement;
+using MSA.Foundation.Messaging;
 
 class Program
 {
@@ -12,7 +14,7 @@ class Program
         
         // Create execution context
         var cts = new CancellationTokenSource();
-        var executionContext = new PokerGame.Core.Messaging.ExecutionContext(cts);
+        var executionContext = new MSA.Foundation.ServiceManagement.ExecutionContext(cts);
         
         // Create broker
         var broker = new CentralMessageBroker(executionContext);

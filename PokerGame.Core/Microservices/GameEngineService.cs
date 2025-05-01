@@ -10,6 +10,7 @@ using PokerGame.Core.ServiceManagement;
 using PokerGame.Abstractions;
 using System.Threading;
 using MSA.Foundation.Messaging;
+using MSA.Foundation.ServiceManagement;
 
 namespace PokerGame.Core.Microservices
 {
@@ -154,14 +155,14 @@ namespace PokerGame.Core.Microservices
         /// Creates a new game engine service with an execution context
         /// </summary>
         /// <param name="executionContext">The execution context to use</param>
-        public GameEngineService(Messaging.ExecutionContext executionContext) 
-            : base(ServiceConstants.ServiceTypes.GameEngine, "Poker Game Engine", executionContext)
+        public GameEngineService(MSA.Foundation.ServiceManagement.ExecutionContext executionContext) 
+            : base(PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.GameEngine, "Poker Game Engine", executionContext)
         {
             // Initialize with null-check protection
             _microserviceUI = new MicroserviceUI(this);
             _gameEngine = new PokerGameEngine(_microserviceUI);
             _microserviceUI.SetGameEngine(_gameEngine);
-            Console.WriteLine($"GameEngineService created with execution context using service type: {ServiceConstants.ServiceTypes.GameEngine}");
+            Console.WriteLine($"GameEngineService created with execution context using service type: {PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.GameEngine}");
         }
         
         /// <summary>
@@ -169,14 +170,14 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         /// <param name="executionContext">The execution context to use</param>
         /// <param name="verbose">Whether to enable verbose logging</param>
-        public GameEngineService(Messaging.ExecutionContext executionContext, bool verbose) 
-            : base(ServiceConstants.ServiceTypes.GameEngine, "Poker Game Engine", executionContext)
+        public GameEngineService(MSA.Foundation.ServiceManagement.ExecutionContext executionContext, bool verbose) 
+            : base(PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.GameEngine, "Poker Game Engine", executionContext)
         {
             // Initialize with null-check protection
             _microserviceUI = new MicroserviceUI(this);
             _gameEngine = new PokerGameEngine(_microserviceUI);
             _microserviceUI.SetGameEngine(_gameEngine);
-            Console.WriteLine($"GameEngineService created with execution context (verbose={verbose}) using service type: {ServiceConstants.ServiceTypes.GameEngine}");
+            Console.WriteLine($"GameEngineService created with execution context (verbose={verbose}) using service type: {PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.GameEngine}");
             
             if (verbose)
             {
@@ -190,7 +191,7 @@ namespace PokerGame.Core.Microservices
         /// <param name="publisherPort">The port to use for publishing messages</param>
         /// <param name="subscriberPort">The port to use for subscribing to messages</param>
         public GameEngineService(int publisherPort, int subscriberPort) 
-            : base(ServiceConstants.ServiceTypes.GameEngine, "Poker Game Engine", publisherPort, subscriberPort)
+            : base(PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.GameEngine, "Poker Game Engine", publisherPort, subscriberPort)
         {
             // Initialize with null-check protection
             _microserviceUI = new MicroserviceUI(this);
@@ -228,7 +229,7 @@ namespace PokerGame.Core.Microservices
             Console.WriteLine($"GameEngine registered service: {registrationInfo.ServiceName} (ID: {registrationInfo.ServiceId}, Type: {registrationInfo.ServiceType})");
             
             // Track the card deck service when it comes online
-            if (registrationInfo.ServiceType == ServiceConstants.ServiceTypes.CardDeck)
+            if (registrationInfo.ServiceType == PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.CardDeck)
             {
                 _cardDeckServiceId = registrationInfo.ServiceId;
                 Console.WriteLine($"Connected to card deck service: {registrationInfo.ServiceName}");
@@ -274,7 +275,7 @@ namespace PokerGame.Core.Microservices
                 });
             }
             // Track console UI services and respond by broadcasting again
-            else if (registrationInfo.ServiceType == ServiceConstants.ServiceTypes.ConsoleUI || 
+            else if (registrationInfo.ServiceType == PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.ConsoleUI || 
                     registrationInfo.ServiceType == "PlayerUI") // Support both naming conventions for UI
             {
                 Console.WriteLine($"ConsoleUI service registered with ID: {registrationInfo.ServiceId}");
@@ -318,7 +319,7 @@ namespace PokerGame.Core.Microservices
                 {
                     ServiceId = _serviceId,
                     ServiceName = _serviceName,
-                    ServiceType = ServiceConstants.ServiceTypes.GameEngine,
+                    ServiceType = PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.GameEngine,
                     Endpoint = $"tcp://127.0.0.1:{_publisherPort}",
                     Capabilities = GetServiceCapabilities()
                 };
@@ -1869,7 +1870,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                         }
                         
                         // Check for any already registered Console UI services
-                        var consoleServices = GetServicesOfType(ServiceConstants.ServiceTypes.ConsoleUI);
+                        var consoleServices = GetServicesOfType(PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.ConsoleUI);
                         if (consoleServices.Count > 0)
                         {
                             Console.WriteLine($"Found {consoleServices.Count} Console UI services, sending direct registrations");

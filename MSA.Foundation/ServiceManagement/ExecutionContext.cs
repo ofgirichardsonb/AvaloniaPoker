@@ -254,5 +254,14 @@ namespace MSA.Foundation.ServiceManagement
             Stop();
             _cts.Dispose();
         }
+        
+        /// <summary>
+        /// Creates a cancellation-only execution context
+        /// </summary>
+        /// <returns>A new execution context with just a cancellation token source</returns>
+        public static ExecutionContext WithCancellation()
+        {
+            return new ExecutionContext(Guid.NewGuid().ToString());
+        }
     }
 }

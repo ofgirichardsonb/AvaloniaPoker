@@ -5,8 +5,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using NetMQ;
 using NetMQ.Sockets;
-using PokerGame.Core.ServiceManagement;
+using CoreServiceConstants = PokerGame.Core.ServiceManagement.ServiceConstants;
 using PokerGame.Core.Messaging;
+using MSA.Foundation.ServiceManagement;
 
 namespace PokerGame.Core.Microservices
 {
@@ -67,21 +68,21 @@ namespace PokerGame.Core.Microservices
         protected MicroserviceBase(
             string serviceType, 
             string serviceName, 
-            Messaging.ExecutionContext executionContext,
+            MSA.Foundation.ServiceManagement.ExecutionContext executionContext,
             int heartbeatIntervalMs = 5000)
         {
             // Assign static IDs based on service type for more reliable direct connections
-            if (serviceType == ServiceConstants.ServiceTypes.GameEngine)
+            if (serviceType == CoreServiceConstants.ServiceTypes.GameEngine)
             {
-                _serviceId = ServiceConstants.StaticServiceIds.GameEngine;
+                _serviceId = CoreServiceConstants.StaticServiceIds.GameEngine;
             }
-            else if (serviceType == ServiceConstants.ServiceTypes.CardDeck)
+            else if (serviceType == CoreServiceConstants.ServiceTypes.CardDeck)
             {
-                _serviceId = ServiceConstants.StaticServiceIds.CardDeck;
+                _serviceId = CoreServiceConstants.StaticServiceIds.CardDeck;
             }
-            else if (serviceType == ServiceConstants.ServiceTypes.ConsoleUI)
+            else if (serviceType == CoreServiceConstants.ServiceTypes.ConsoleUI)
             {
-                _serviceId = ServiceConstants.StaticServiceIds.ConsoleUI;
+                _serviceId = CoreServiceConstants.StaticServiceIds.ConsoleUI;
             }
             else
             {
@@ -130,17 +131,17 @@ namespace PokerGame.Core.Microservices
             int heartbeatIntervalMs = 5000)
         {
             // Assign static IDs based on service type for more reliable direct connections
-            if (serviceType == ServiceConstants.ServiceTypes.GameEngine)
+            if (serviceType == CoreServiceConstants.ServiceTypes.GameEngine)
             {
-                _serviceId = ServiceConstants.StaticServiceIds.GameEngine;
+                _serviceId = CoreServiceConstants.StaticServiceIds.GameEngine;
             }
-            else if (serviceType == ServiceConstants.ServiceTypes.CardDeck)
+            else if (serviceType == CoreServiceConstants.ServiceTypes.CardDeck)
             {
-                _serviceId = ServiceConstants.StaticServiceIds.CardDeck;
+                _serviceId = CoreServiceConstants.StaticServiceIds.CardDeck;
             }
-            else if (serviceType == ServiceConstants.ServiceTypes.ConsoleUI)
+            else if (serviceType == CoreServiceConstants.ServiceTypes.ConsoleUI)
             {
-                _serviceId = ServiceConstants.StaticServiceIds.ConsoleUI;
+                _serviceId = CoreServiceConstants.StaticServiceIds.ConsoleUI;
             }
             else
             {
@@ -1172,7 +1173,7 @@ namespace PokerGame.Core.Microservices
             Console.WriteLine($"Starting ENHANCED service discovery for {serviceType} with {maxAttempts} max attempts");
             
             // Try all standard port offsets to find services
-            int[] portOffsets = ServiceConstants.Discovery.StandardPortOffsets;
+            int[] portOffsets = CoreServiceConstants.Discovery.StandardPortOffsets;
             
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
@@ -1207,9 +1208,9 @@ namespace PokerGame.Core.Microservices
                         try
                         {
                             // For GameEngine service type, try different port combinations
-                            if (serviceType == ServiceConstants.ServiceTypes.GameEngine)
+                            if (serviceType == CoreServiceConstants.ServiceTypes.GameEngine)
                             {
-                                int potentialPort = ServiceConstants.Ports.GetGameEnginePublisherPort(offset);
+                                int potentialPort = CoreServiceConstants.Ports.GetGameEnginePublisherPort(offset);
                                 Console.WriteLine($"Trying to contact {serviceType} on port {potentialPort} (offset {offset})");
                                 
                                 // Create a targeted message for this offset with Debug type for visibility
