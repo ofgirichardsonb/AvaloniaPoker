@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json;
+using MSA.Foundation.ServiceManagement;
 using PokerGame.Core.Telemetry;
 
 // Suppress obsolete warnings for transition period
@@ -16,7 +17,7 @@ namespace PokerGame.Core.Messaging
     /// </summary>
     public class CentralMessageBroker : IDisposable
     {
-        private readonly ExecutionContext _executionContext;
+        private readonly MSA.Foundation.ServiceManagement.ExecutionContext _executionContext;
         private readonly CancellationTokenSource _cancellationTokenSource;
         private readonly ConcurrentDictionary<string, Action<NetworkMessage>> _subscribers = new ConcurrentDictionary<string, Action<NetworkMessage>>();
         private readonly ConcurrentDictionary<string, ServiceInfo> _services = new ConcurrentDictionary<string, ServiceInfo>();
@@ -52,7 +53,7 @@ namespace PokerGame.Core.Messaging
         /// Creates a new central message broker
         /// </summary>
         /// <param name="executionContext">The execution context to use</param>
-        public CentralMessageBroker(ExecutionContext executionContext)
+        public CentralMessageBroker(MSA.Foundation.ServiceManagement.ExecutionContext executionContext)
             : this(executionContext, 25555, false)
         {
         }
@@ -63,10 +64,10 @@ namespace PokerGame.Core.Messaging
         /// <param name="executionContext">The execution context to use</param>
         /// <param name="port">The port number to use for communication</param>
         /// <param name="verbose">Whether to enable verbose logging</param>
-        public CentralMessageBroker(ExecutionContext executionContext, int port, bool verbose = false)
+        public CentralMessageBroker(MSA.Foundation.ServiceManagement.ExecutionContext executionContext, int port, bool verbose = false)
         {
-            _executionContext = executionContext ?? new ExecutionContext();
-            _cancellationTokenSource = _executionContext.CancellationTokenSource ?? new CancellationTokenSource();
+            _executionContext = executionContext ?? new MSA.Foundation.ServiceManagement.ExecutionContext();
+            _cancellationTokenSource = _executionContext.CancellationTokenSource;
             _port = port;
             _verbose = verbose;
             _logger = new Logger("CentralMessageBroker", _verbose);
@@ -86,19 +87,8 @@ namespace PokerGame.Core.Messaging
                 
                 _logger.Log("Starting central message broker");
                 
-                // Start the message processing task using the execution context if available
-                if (_executionContext.TaskScheduler != null)
-                {
-                    _processingTask = Task.Factory.StartNew(
-                        () => ProcessMessages(_cancellationTokenSource.Token),
-                        _cancellationTokenSource.Token,
-                        TaskCreationOptions.LongRunning,
-                        _executionContext.TaskScheduler);
-                }
-                else
-                {
-                    _processingTask = Task.Run(() => ProcessMessages(_cancellationTokenSource.Token));
-                }
+                // Start the message processing task using the execution context
+                _processingTask = Task.Run(() => ProcessMessages(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
                 
                 _isStarted = true;
                 _logger.Log("Central message broker started");

@@ -13,12 +13,10 @@ class Program
     {
         Console.WriteLine("===== Minimal StartHand Message Flow Test =====");
         
-        // Create execution context
-        var cts = new CancellationTokenSource();
-        // We need to use PokerGame.Core.Messaging.ExecutionContext, not MSA.Foundation.ServiceManagement.ExecutionContext
-        var executionContext = new PokerGame.Core.Messaging.ExecutionContext(cts);
+        // Create execution context using MSA.Foundation.ServiceManagement.ExecutionContext
+        var executionContext = new MSA.Foundation.ServiceManagement.ExecutionContext("message_flow_test");
         // Set a timeout of 5 minutes
-        cts.CancelAfter(TimeSpan.FromMinutes(5));
+        executionContext.CancellationTokenSource.CancelAfter(TimeSpan.FromMinutes(5));
         
         // Create broker
         var broker = new CentralMessageBroker(executionContext);
@@ -96,6 +94,6 @@ class Program
         broker.Unsubscribe(startHandSubId, CoreMessageType.StartHand);
         broker.Unsubscribe(handStartedSubId, CoreMessageType.HandStarted);
         broker.Stop();
-        cts.Cancel();
+        executionContext.CancellationTokenSource.Cancel();
     }
 }

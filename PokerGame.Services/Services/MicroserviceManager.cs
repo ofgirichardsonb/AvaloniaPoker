@@ -33,7 +33,7 @@ namespace PokerGame.Services
         /// </summary>
         /// <param name="brokerPort">The port for the message broker</param>
         /// <param name="executionContext">The execution context to use</param>
-        public MicroserviceManager(int brokerPort = 5555, PokerGame.Core.Messaging.ExecutionContext? executionContext = null)
+        public MicroserviceManager(int brokerPort = 5555, MSA.Foundation.ServiceManagement.ExecutionContext? executionContext = null)
         {
             // Initialize the broker manager
             _brokerManager = BrokerManager.Instance;

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using PokerGame.Core.Telemetry;
+using MSA.Foundation.ServiceManagement;
 
 namespace PokerGame.Core.Messaging
 {
@@ -16,7 +17,7 @@ namespace PokerGame.Core.Messaging
         private PokerGame.Core.Telemetry.TelemetryService _telemetryService;
         private bool _isStarted = false;
         private object _startLock = new object();
-        private ExecutionContext? _executionContext;
+        private MSA.Foundation.ServiceManagement.ExecutionContext? _executionContext;
         private CentralMessageBroker? _centralBroker;
         
         /// <summary>
@@ -32,7 +33,7 @@ namespace PokerGame.Core.Messaging
         /// <summary>
         /// Gets the execution context
         /// </summary>
-        public ExecutionContext? ExecutionContext => _executionContext;
+        public MSA.Foundation.ServiceManagement.ExecutionContext? ExecutionContext => _executionContext;
         
         /// <summary>
         /// Creates a new instance of the BrokerManager
@@ -58,7 +59,7 @@ namespace PokerGame.Core.Messaging
         /// Starts the broker manager with the specified execution context
         /// </summary>
         /// <param name="executionContext">The execution context to use</param>
-        public void Start(ExecutionContext? executionContext)
+        public void Start(MSA.Foundation.ServiceManagement.ExecutionContext? executionContext)
         {
             lock (_startLock)
             {
@@ -69,7 +70,7 @@ namespace PokerGame.Core.Messaging
                 _telemetryService.TrackEvent("BrokerManagerStarting");
                 
                 // Store the execution context
-                _executionContext = executionContext ?? new ExecutionContext();
+                _executionContext = executionContext ?? new MSA.Foundation.ServiceManagement.ExecutionContext();
                 
                 // Automatically create a central broker with in-process communication
                 // This ensures that services can find the broker without explicit initialization
@@ -112,7 +113,7 @@ namespace PokerGame.Core.Messaging
         /// <param name="executionContext">The execution context to use</param>
         /// <param name="verbose">Whether to enable verbose logging</param>
         /// <returns>The created and started central message broker</returns>
-        public CentralMessageBroker StartCentralBroker(int port, ExecutionContext? executionContext = null, bool verbose = false)
+        public CentralMessageBroker StartCentralBroker(int port, MSA.Foundation.ServiceManagement.ExecutionContext? executionContext = null, bool verbose = false)
         {
             lock (_startLock)
             {
@@ -127,7 +128,7 @@ namespace PokerGame.Core.Messaging
                 
                 if (context == null)
                 {
-                    context = new ExecutionContext();
+                    context = new MSA.Foundation.ServiceManagement.ExecutionContext();
                     _executionContext = context;
                 }
                 
@@ -215,19 +216,17 @@ namespace PokerGame.Core.Messaging
         /// cancellation token source but has its own task scheduler
         /// </summary>
         /// <returns>A new execution context for a service</returns>
-        public ExecutionContext CreateServiceExecutionContext()
+        public MSA.Foundation.ServiceManagement.ExecutionContext CreateServiceExecutionContext()
         {
             if (_executionContext == null)
             {
-                _executionContext = new ExecutionContext();
+                _executionContext = new MSA.Foundation.ServiceManagement.ExecutionContext();
             }
             
-            return new ExecutionContext(
-                _executionContext.CancellationTokenSource,
-                null,
-                null,
-                TaskScheduler.Default,
-                false);
+            // Create a new execution context with a linked cancellation token
+            return new MSA.Foundation.ServiceManagement.ExecutionContext(
+                $"service_{Guid.NewGuid()}",
+                _executionContext.CancellationToken);
         }
     }
 }

@@ -187,8 +187,8 @@ namespace PokerGame.Services
             try
             {
                 // Create a main execution context that will be used by all services
-                var mainExecutionContext = new PokerGame.Core.Messaging.ExecutionContext();
-                Console.WriteLine($"Created main execution context with thread ID: {mainExecutionContext.ThreadId}");
+                var mainExecutionContext = new MSA.Foundation.ServiceManagement.ExecutionContext("services_host");
+                Console.WriteLine($"Created main execution context with service ID: {mainExecutionContext.ServiceId}");
                 
                 // Initialize the broker manager with our execution context
                 _brokerManager = BrokerManager.Instance;
