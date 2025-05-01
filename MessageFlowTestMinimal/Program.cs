@@ -4,7 +4,8 @@ using System.Threading;
 using System.Collections.Generic;
 using PokerGame.Core.Messaging;
 using MSA.Foundation.ServiceManagement;
-using MSA.Foundation.Messaging;
+using MSAMessageType = MSA.Foundation.Messaging.MessageType;
+using CoreMessageType = PokerGame.Core.Messaging.MessageType;
 
 class Program
 {
@@ -14,7 +15,10 @@ class Program
         
         // Create execution context
         var cts = new CancellationTokenSource();
-        var executionContext = new MSA.Foundation.ServiceManagement.ExecutionContext(cts);
+        // We need to use PokerGame.Core.Messaging.ExecutionContext, not MSA.Foundation.ServiceManagement.ExecutionContext
+        var executionContext = new PokerGame.Core.Messaging.ExecutionContext(cts);
+        // Set a timeout of 5 minutes
+        cts.CancelAfter(TimeSpan.FromMinutes(5));
         
         // Create broker
         var broker = new CentralMessageBroker(executionContext);
@@ -26,14 +30,14 @@ class Program
         
         // Set up StartHand subscription (Game Engine side)
         Console.WriteLine("Setting up StartHand subscription (Game Engine)...");
-        var startHandSubId = broker.Subscribe(MessageType.StartHand, msg => {
+        var startHandSubId = broker.Subscribe(CoreMessageType.StartHand, msg => {
             Console.WriteLine($"GAME ENGINE received StartHand: ID={msg.MessageId}, From={msg.SenderId}");
             startHandReceived = true;
             
             // Create HandStarted response
             var response = new NetworkMessage {
                 MessageId = Guid.NewGuid().ToString(),
-                Type = MessageType.HandStarted,
+                Type = CoreMessageType.HandStarted,
                 SenderId = "game_engine",
                 ReceiverId = msg.SenderId,
                 InResponseTo = msg.MessageId,
@@ -50,7 +54,7 @@ class Program
         
         // Set up HandStarted subscription (Console UI side)
         Console.WriteLine("Setting up HandStarted subscription (Console UI)...");
-        var handStartedSubId = broker.Subscribe(MessageType.HandStarted, msg => {
+        var handStartedSubId = broker.Subscribe(CoreMessageType.HandStarted, msg => {
             Console.WriteLine($"CONSOLE UI received HandStarted: ID={msg.MessageId}, From={msg.SenderId}, InResponseTo={msg.InResponseTo}");
             handStartedReceived = true;
         });
@@ -61,7 +65,7 @@ class Program
         // Send StartHand message from Console UI to Game Engine
         var startHandMsg = new NetworkMessage {
             MessageId = Guid.NewGuid().ToString(),
-            Type = MessageType.StartHand,
+            Type = CoreMessageType.StartHand,
             SenderId = "console_ui",
             ReceiverId = "game_engine",
             Timestamp = DateTime.UtcNow,
@@ -89,8 +93,8 @@ class Program
         }
         
         // Clean up
-        broker.Unsubscribe(startHandSubId, MessageType.StartHand);
-        broker.Unsubscribe(handStartedSubId, MessageType.HandStarted);
+        broker.Unsubscribe(startHandSubId, CoreMessageType.StartHand);
+        broker.Unsubscribe(handStartedSubId, CoreMessageType.HandStarted);
         broker.Stop();
         cts.Cancel();
     }
