@@ -589,7 +589,7 @@ namespace MessageMonitor
                 MessageType.Command => ConsoleColor.Yellow,
                 MessageType.Event => ConsoleColor.Green,
                 MessageType.Error => ConsoleColor.Red,
-                MessageType.Discovery => ConsoleColor.Magenta,
+                MessageType.ServiceDiscovery => ConsoleColor.Magenta,
                 _ => ConsoleColor.White
             };
         }
