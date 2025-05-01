@@ -2,7 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using PokerGame.Core.Microservices;
+using MSA.Foundation.Messaging;
 using MicroservicesRegistration = PokerGame.Core.Microservices.ServiceRegistrationPayload;
+using MSAMessage = MSA.Foundation.Messaging.Message;
+using MSAMessageType = MSA.Foundation.Messaging.MessageType;
 
 namespace PokerGame.Core.Messaging
 {
@@ -170,6 +173,127 @@ namespace PokerGame.Core.Messaging
             }
             
             return message;
+        }
+        
+        /// <summary>
+        /// Converts an MSA.Foundation.Messaging.Message to a NetworkMessage
+        /// </summary>
+        /// <param name="msaMessage">The MSA.Foundation.Messaging.Message to convert</param>
+        /// <returns>A NetworkMessage with equivalent properties</returns>
+        public static NetworkMessage ToNetworkMessage(this MSAMessage msaMessage)
+        {
+            var networkMessage = new NetworkMessage
+            {
+                MessageId = msaMessage.MessageId,
+                SenderId = msaMessage.SenderId,
+                ReceiverId = msaMessage.ReceiverId,
+                Timestamp = msaMessage.Timestamp
+            };
+            
+            // Copy headers
+            foreach (var header in msaMessage.Headers)
+            {
+                networkMessage.Headers[header.Key] = header.Value;
+            }
+            
+            // Get InResponseTo from headers if it exists
+            if (msaMessage.Headers.TryGetValue("InResponseTo", out string? inResponseTo))
+            {
+                networkMessage.InResponseTo = inResponseTo;
+            }
+            
+            // Map the MSA message type to the NetworkMessage type
+            switch (msaMessage.MessageType)
+            {
+                case MSAMessageType.ServiceRegistration:
+                    networkMessage.Type = MessageType.ServiceRegistration;
+                    break;
+                case MSAMessageType.ServiceDiscovery:
+                    networkMessage.Type = MessageType.ServiceDiscovery;
+                    break;
+                case MSAMessageType.Acknowledgment:
+                    networkMessage.Type = MessageType.Acknowledgment;
+                    break;
+                case MSAMessageType.Heartbeat:
+                    networkMessage.Type = MessageType.Heartbeat;
+                    break;
+                case MSAMessageType.Debug:
+                    networkMessage.Type = MessageType.Debug;
+                    break;
+                case MSAMessageType.Error:
+                    networkMessage.Type = MessageType.Error;
+                    break;
+                case MSAMessageType.Event:
+                    // For Event messages, try to use the SubType header to determine the specific message type
+                    if (msaMessage.Headers.TryGetValue("MessageSubType", out string? subType))
+                    {
+                        if (Enum.TryParse<MessageType>(subType, out var specificType))
+                        {
+                            networkMessage.Type = specificType;
+                        }
+                        else
+                        {
+                            // Default to a generic notification type if no specific mapping exists
+                            networkMessage.Type = MessageType.Notification;
+                        }
+                    }
+                    else
+                    {
+                        networkMessage.Type = MessageType.Notification;
+                    }
+                    break;
+                case MSAMessageType.Request:
+                    // For Request messages, check if we have a specific game-related message subtype
+                    if (msaMessage.Headers.TryGetValue("MessageSubType", out string? requestSubType))
+                    {
+                        if (Enum.TryParse<MessageType>(requestSubType, out var specificType))
+                        {
+                            networkMessage.Type = specificType;
+                        }
+                        else
+                        {
+                            // Default to a generic user input type if no specific mapping exists
+                            networkMessage.Type = MessageType.UserInput;
+                        }
+                    }
+                    else
+                    {
+                        // Default for requests without subtypes
+                        networkMessage.Type = MessageType.UserInput;
+                    }
+                    break;
+                case MSAMessageType.Response:
+                    // For Response messages, check if we have a specific response subtype
+                    if (msaMessage.Headers.TryGetValue("MessageSubType", out string? responseSubType))
+                    {
+                        if (Enum.TryParse<MessageType>(responseSubType, out var specificType))
+                        {
+                            networkMessage.Type = specificType;
+                        }
+                        else
+                        {
+                            // Default to generic response type
+                            networkMessage.Type = MessageType.DisplayUpdate;
+                        }
+                    }
+                    else
+                    {
+                        networkMessage.Type = MessageType.DisplayUpdate;
+                    }
+                    break;
+                default:
+                    // For unknown types, use a debug message type
+                    networkMessage.Type = MessageType.Debug;
+                    break;
+            }
+            
+            // Copy the payload if present
+            if (!string.IsNullOrEmpty(msaMessage.Payload))
+            {
+                networkMessage.Payload = msaMessage.Payload;
+            }
+            
+            return networkMessage;
         }
     }
 }

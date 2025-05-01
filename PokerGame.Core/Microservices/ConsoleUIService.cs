@@ -38,20 +38,12 @@ namespace PokerGame.Core.Models
         public List<Card> Cards { get; set; } = new List<Card>();
     }
     
-    /// <summary>
-    /// Represents a player action payload
-    /// </summary>
-    public class PlayerActionPayload
-    {
-        public string PlayerId { get; set; } = "";
-        public string ActionType { get; set; } = "";
-        public int BetAmount { get; set; }
-    }
+    // Using the PlayerActionPayload class from ServiceRegistrationPayload.cs
     
     /// <summary>
-    /// Represents the current state of the game
+    /// Represents the current state of the game (using a different name to avoid conflict with GameState enum)
     /// </summary>
-    public class GameState
+    public class GameStateInfo
     {
         public string State { get; set; } = "";
         public int Pot { get; set; }
@@ -173,29 +165,17 @@ namespace PokerGame.Core.Microservices
         {
             try
             {
-                // Convert MSA.Foundation.Messaging.Message to NetworkMessage
-                var networkMessage = new NetworkMessage
-                {
-                    MessageId = msaMessage.MessageId,
-                    Type = (Messaging.MessageType)Enum.Parse(typeof(Messaging.MessageType), msaMessage.Type.ToString()),
-                    SenderId = msaMessage.SenderId,
-                    ReceiverId = msaMessage.ReceiverId,
-                    Timestamp = msaMessage.Timestamp,
-                    Payload = msaMessage.Payload,
-                    InResponseTo = msaMessage.InResponseTo
-                };
+                // Convert MSA.Foundation.Messaging.Message to NetworkMessage using the extension method
+                var networkMessage = msaMessage.ToNetworkMessage();
                 
-                // If the message has headers, copy them
-                if (msaMessage.Headers != null)
-                {
-                    networkMessage.Headers = new Dictionary<string, string>(msaMessage.Headers);
-                }
-                
+                // Call the handler with the converted message
                 handler(networkMessage);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error in HandleMessageWrapper: {ex.Message}");
+                Console.WriteLine($"  Message type: {msaMessage.MessageType}");
+                Console.WriteLine($"  Stack trace: {ex.StackTrace}");
             }
         }
 
@@ -334,7 +314,7 @@ namespace PokerGame.Core.Microservices
         {
             try
             {
-                var playerAction = message.GetPayload<PlayerActionPayload>();
+                var playerAction = message.GetPayload<Models.PlayerActionPayload>();
                 Console.WriteLine($"Player action from engine: Player {playerAction.PlayerId} action {playerAction.ActionType} amount {playerAction.BetAmount}");
                 
                 // Update the game state based on player action
@@ -463,7 +443,7 @@ namespace PokerGame.Core.Microservices
         {
             try
             {
-                var gameState = message.GetPayload<Models.GameState>();
+                var gameState = message.GetPayload<Models.GameStateInfo>();
                 Console.WriteLine($"Game state received: {gameState.State}");
                 
                 // Update our local state with the new game state
