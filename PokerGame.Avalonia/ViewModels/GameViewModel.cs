@@ -262,11 +262,27 @@ namespace PokerGame.Avalonia.ViewModels
             int playerNumber = _players.Count + 1;
             string playerName = $"Player {playerNumber}";
             
-            // Restart the game with the new player
-            List<string> playerNames = _players.Select(p => p.Name).ToList();
-            playerNames.Add(playerName);
+            // Add the player to our collection
+            var playerViewModel = new PlayerViewModel(new Player(Guid.NewGuid().ToString(), playerName, 1000));
+            _players.Add(playerViewModel);
             
-            _gameEngine.StartGame(playerNames.ToArray());
+            // Show a message that the player was added
+            string message = $"Added {playerName} to the game.";
+            if (_players.Count == 1)
+            {
+                message += " Add at least one more player to start the game.";
+            }
+            ShowMessage(message);
+            
+            // Only start the game when we have at least 2 players
+            if (_players.Count >= 2)
+            {
+                // Get all player names
+                List<string> playerNames = _players.Select(p => p.Name).ToList();
+                
+                // Start the game with all current players
+                _gameEngine.StartGame(playerNames.ToArray());
+            }
         }
         
         #endregion
