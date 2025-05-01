@@ -87,6 +87,11 @@ namespace PokerGame.Core.Models
         public bool IsActive { get; set; } = true;
         
         /// <summary>
+        /// Gets or sets whether this player is the current user (for UI purposes)
+        /// </summary>
+        public bool IsCurrentUser { get; set; }
+        
+        /// <summary>
         /// Gets or sets the player's hole cards
         /// </summary>
         public List<Card> HoleCards { get; set; } = new List<Card>();

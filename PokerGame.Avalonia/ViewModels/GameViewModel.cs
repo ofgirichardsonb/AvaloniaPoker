@@ -284,8 +284,11 @@ namespace PokerGame.Avalonia.ViewModels
             
             // Add the player to our collection
             bool isCurrentUser = (_players.Count == 0); // First player added is the current user
-            var player = new Player(Guid.NewGuid().ToString(), playerName, 1000);
-            var playerViewModel = new PlayerViewModel(player, isCurrentUser);
+            var player = new Player(Guid.NewGuid().ToString(), playerName, 1000)
+            {
+                IsCurrentUser = isCurrentUser // Set the IsCurrentUser flag in the model
+            };
+            var playerViewModel = new PlayerViewModel(player);
             _players.Add(playerViewModel);
             
             // Show a message that the player was added
@@ -383,18 +386,21 @@ namespace PokerGame.Avalonia.ViewModels
             // Update players
             _players.Clear();
             
-            // Set the first player as the current user for demonstration purposes
-            // In a real multiplayer game, this would be determined by a player ID
-            string currentUserId = gameEngine.Players.Count > 0 ? gameEngine.Players[0].Id : string.Empty;
+            // In a multiplayer game, each player might already have their IsCurrentUser flag set
+            // But for backwards compatibility, we'll default the first player as current user if none is set
+            bool anyCurrentUser = gameEngine.Players.Any(p => p.IsCurrentUser);
             bool gameOver = gameEngine.State == GameState.HandComplete;
+            
+            if (!anyCurrentUser && gameEngine.Players.Count > 0)
+            {
+                // For demonstration, set the first player as current user
+                gameEngine.Players[0].IsCurrentUser = true;
+            }
             
             foreach (var player in gameEngine.Players)
             {
-                // Check if this player is the current user
-                bool isCurrentUser = player.Id == currentUserId;
-                
-                // Create player view model with appropriate flag
-                var playerViewModel = new PlayerViewModel(player, isCurrentUser);
+                // Create player view model - it will use the Player.IsCurrentUser value
+                var playerViewModel = new PlayerViewModel(player);
                 
                 // Update card visibility based on game state
                 playerViewModel.UpdateCardVisibility(gameOver);
@@ -446,7 +452,9 @@ namespace PokerGame.Avalonia.ViewModels
         public PlayerViewModel(Player player, bool isCurrentUser = false)
         {
             _player = player;
-            _isCurrentUser = isCurrentUser;
+            
+            // Set current user flag, preferring the model's value if it's set
+            _isCurrentUser = player.IsCurrentUser || isCurrentUser;
             
             // Create view models for hole cards
             foreach (var card in player.HoleCards)
@@ -528,8 +536,11 @@ namespace PokerGame.Avalonia.ViewModels
         /// <param name="gameOver">Whether the game is over (showing all cards)</param>
         public void UpdateCardVisibility(bool gameOver = false)
         {
-            // Cards are visible if this is the current user or the game is over
-            bool showCards = IsCurrentUser || gameOver;
+            // Cards are visible if:
+            // 1. This is the current user (the player whose cards we're showing belongs to the human player)
+            // 2. The game is over (showdown)
+            // 3. The player has folded (in which case we can safely show their cards)
+            bool showCards = IsCurrentUser || gameOver || HasFolded;
             
             foreach (var card in _holeCards)
             {

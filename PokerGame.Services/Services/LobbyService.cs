@@ -8,6 +8,8 @@ using PokerGame.Abstractions.Models;
 using PokerGame.Core.Messaging;
 using PokerGame.Core.Microservices;
 using System.Linq;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 // Use an alias to clarify which Message class we're using
 using MSAMessage = MSA.Foundation.Messaging.Message;
@@ -35,14 +37,14 @@ namespace PokerGame.Services.Services
                 Status = GameSessionStatus.Waiting
             };
             
-            Logger.Info($"Lobby service initialized with game session '{_currentSession.Name}' (ID: {_currentSession.Id})");
+            Logger.LogInformation($"Lobby service initialized with game session '{_currentSession.Name}' (ID: {_currentSession.Id})");
         }
 
         private async Task HandlePlayerRegistrationAsync(MSAMessage message)
         {
-            var request = message.Payload.ToObject<PlayerRegistrationRequest>();
+            var request = JsonConvert.DeserializeObject<PlayerRegistrationRequest>(message.Payload.ToString());
             
-            Logger.Info($"Processing player registration request for '{request.PlayerName}'");
+            Logger.LogInformation($"Processing player registration request for '{request.PlayerName}'");
             
             var player = new Player
             {
@@ -59,22 +61,43 @@ namespace PokerGame.Services.Services
                 PlayerId = player.Id
             };
             
-            Logger.Info($"Player '{player.Name}' registered with ID '{player.Id}'");
+            Logger.LogInformation($"Player '{player.Name}' registered with ID '{player.Id}'");
             
             await SendResponseAsync(message, response);
+        }
+        
+        // Helper method to send a response to the requester
+        private async Task SendResponseAsync<T>(MSAMessage requestMessage, T responsePayload) where T : class
+        {
+            var responseMessage = MessageBroker.CreateResponseMessage(requestMessage, responsePayload);
+            await MessageBroker.PublishMessageAsync(responseMessage);
+        }
+        
+        // Helper method to send a message to a specific service
+        private async Task SendMessageAsync<T>(string targetServiceId, T payload) where T : class
+        {
+            var message = MessageBroker.CreateMessage(targetServiceId, payload);
+            await MessageBroker.PublishMessageAsync(message);
+        }
+        
+        // Helper method to broadcast a message to all services
+        private async Task BroadcastMessageAsync<T>(T payload) where T : class
+        {
+            var message = MessageBroker.CreateBroadcastMessage(payload);
+            await MessageBroker.PublishMessageAsync(message);
         }
 
         private async Task HandleJoinGameAsync(MSAMessage message)
         {
-            var request = message.Payload.ToObject<JoinGameRequest>();
+            var request = JsonConvert.DeserializeObject<JoinGameRequest>(message.Payload.ToString());
             
-            Logger.Info($"Processing join game request for player '{request.PlayerId}'");
+            Logger.LogInformation($"Processing join game request for player '{request.PlayerId}'");
             
             // Find the player
             var player = _registeredPlayers.Find(p => p.Id == request.PlayerId);
             if (player == null)
             {
-                Logger.Warning($"Player with ID '{request.PlayerId}' not found");
+                Logger.LogWarning($"Player with ID '{request.PlayerId}' not found");
                 await SendErrorResponseAsync(message, "Player not registered");
                 return;
             }
@@ -82,7 +105,7 @@ namespace PokerGame.Services.Services
             // Check if player is already in the game
             if (_currentSession.Players.Exists(p => p.Id == player.Id))
             {
-                Logger.Warning($"Player '{player.Name}' (ID: {player.Id}) is already in the game");
+                Logger.LogWarning($"Player '{player.Name}' (ID: {player.Id}) is already in the game");
                 await SendErrorResponseAsync(message, "Player already in game");
                 return;
             }
@@ -90,7 +113,7 @@ namespace PokerGame.Services.Services
             // Check if game is joinable
             if (_currentSession.Status != GameSessionStatus.Waiting)
             {
-                Logger.Warning($"Game is not in a joinable state (Status: {_currentSession.Status})");
+                Logger.LogWarning($"Game is not in a joinable state (Status: {_currentSession.Status})");
                 await SendErrorResponseAsync(message, "Game is not accepting players");
                 return;
             }
@@ -98,7 +121,7 @@ namespace PokerGame.Services.Services
             // Add the player to the session
             _currentSession.Players.Add(player);
             
-            Logger.Info($"Player '{player.Name}' joined the game");
+            Logger.LogInformation($"Player '{player.Name}' joined the game");
             
             // Notify all clients about the new player
             await BroadcastMessageAsync(new PlayerJoinedNotification
@@ -117,9 +140,9 @@ namespace PokerGame.Services.Services
 
         private async Task HandleLeaveGameAsync(MSAMessage message)
         {
-            var request = message.Payload.ToObject<LeaveGameRequest>();
+            var request = JsonConvert.DeserializeObject<LeaveGameRequest>(message.Payload.ToString());
             
-            Logger.Info($"Processing leave game request for player '{request.PlayerId}'");
+            Logger.LogInformation($"Processing leave game request for player '{request.PlayerId}'");
             
             // Remove player from session
             var playerIndex = _currentSession.Players.FindIndex(p => p.Id == request.PlayerId);
@@ -128,7 +151,7 @@ namespace PokerGame.Services.Services
                 var player = _currentSession.Players[playerIndex];
                 _currentSession.Players.RemoveAt(playerIndex);
                 
-                Logger.Info($"Player '{player.Name}' left the game");
+                Logger.LogInformation($"Player '{player.Name}' left the game");
                 
                 // Notify all clients
                 await BroadcastMessageAsync(new PlayerLeftNotification
@@ -141,14 +164,14 @@ namespace PokerGame.Services.Services
             }
             else
             {
-                Logger.Warning($"Player with ID '{request.PlayerId}' not found in the game");
+                Logger.LogWarning($"Player with ID '{request.PlayerId}' not found in the game");
                 await SendErrorResponseAsync(message, "Player not in game");
             }
         }
 
         private async Task HandleGetLobbyStateAsync(MSAMessage message)
         {
-            Logger.Info("Processing request for lobby state");
+            Logger.LogInformation("Processing request for lobby state");
             
             var response = new LobbyStateResponse
             {
@@ -162,21 +185,21 @@ namespace PokerGame.Services.Services
 
         private async Task HandleStartGameAsync(MSAMessage message)
         {
-            var request = message.Payload.ToObject<StartGameRequest>();
+            var request = JsonConvert.DeserializeObject<StartGameRequest>(message.Payload.ToString());
             
-            Logger.Info($"Processing start game request from '{request.RequesterId}'");
+            Logger.LogInformation($"Processing start game request from '{request.RequesterId}'");
             
             // Basic validation
             if (_currentSession.Players.Count < 2)
             {
-                Logger.Warning("Cannot start game with fewer than 2 players");
+                Logger.LogWarning("Cannot start game with fewer than 2 players");
                 await SendErrorResponseAsync(message, "Need at least 2 players to start");
                 return;
             }
             
             if (_currentSession.Status != GameSessionStatus.Waiting)
             {
-                Logger.Warning($"Cannot start game in current state (Status: {_currentSession.Status})");
+                Logger.LogWarning($"Cannot start game in current state (Status: {_currentSession.Status})");
                 await SendErrorResponseAsync(message, "Game is already in progress");
                 return;
             }
@@ -184,7 +207,7 @@ namespace PokerGame.Services.Services
             // Update status
             _currentSession.Status = GameSessionStatus.InProgress;
             
-            Logger.Info("Game started successfully");
+            Logger.LogInformation("Game started successfully");
             
             // Notify game engine to initialize a game with these players
             await SendMessageAsync("static_game_engine_service", new InitializeGameRequest

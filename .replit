@@ -68,6 +68,10 @@ args = "avalonia-ui-web"
 task = "workflow.run"
 args = "message-monitor"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "rebuild-avalonia"
+
 [[workflows.workflow]]
 name = "rebuild_test"
 author = "agent"
@@ -164,7 +168,6 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd /home/runner/workspace && ./run-avalonia-ui.sh"
-waitForPort = 5000
 
 [[workflows.workflow]]
 name = "avalonia-ui-web"
@@ -182,6 +185,14 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd /home/runner/workspace && ./run-message-monitor.sh"
+
+[[workflows.workflow]]
+name = "rebuild-avalonia"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && dotnet build PokerGame.Avalonia/PokerGame.Avalonia.csproj"
 
 [deployment]
 run = ["sh", "-c", "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 200 --curses"]
