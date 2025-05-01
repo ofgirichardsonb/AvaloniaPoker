@@ -159,7 +159,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && ./launch-avalonia-web.sh"
+args = "bash ./launch-avalonia-web.sh"
 waitForPort = 5000
 
 [[workflows.workflow]]

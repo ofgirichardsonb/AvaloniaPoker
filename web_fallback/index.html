@@ -1,11 +1,3 @@
-#!/bin/bash
-
-echo "Starting web server for Avalonia UI..."
-cd /home/runner/workspace
-
-# Create a fallback web page if WebAssembly can't be built
-mkdir -p web_fallback
-cat > web_fallback/index.html << EOF
 <!DOCTYPE html>
 <html>
 <head>
@@ -62,45 +54,3 @@ cat > web_fallback/index.html << EOF
     </div>
 </body>
 </html>
-EOF
-
-# Try to install WebAssembly workload
-echo "Attempting to install WebAssembly workload..."
-dotnet workload install wasm-tools || echo "Failed to install wasm-tools workload, continuing with fallback approach"
-
-# Try to build the Avalonia application for browser
-echo "Building Avalonia UI for browser..."
-dotnet publish PokerGame.Avalonia/PokerGame.Avalonia.csproj -c Debug -r browser-wasm --self-contained || echo "Failed to build WebAssembly version, using fallback"
-
-# Start the services in the background
-echo "Starting backend services..."
-dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --configuration Debug -- start-services --port-offset 0 --verbose &
-SERVICES_PID=$!
-
-# Give services time to start
-sleep 3
-
-# Set up the web server for Avalonia UI or fallback
-echo "Setting up web server..."
-if [ -d "/home/runner/workspace/PokerGame.Avalonia/bin/Debug/net8.0/browser-wasm/AppBundle" ]; then
-  echo "WebAssembly build found, serving that"
-  cd /home/runner/workspace/PokerGame.Avalonia/bin/Debug/net8.0/browser-wasm/AppBundle
-else
-  echo "Using fallback web page"
-  cd /home/runner/workspace/web_fallback
-fi
-
-# Start HTTP server
-python3 -m http.server 5000 &
-HTTP_SERVER_PID=$!
-
-echo "Web server running at http://localhost:5000"
-echo "Press Ctrl+C to stop all services"
-
-# Wait for Ctrl+C
-trap "echo 'Shutting down...'; kill $SERVICES_PID; kill $HTTP_SERVER_PID; exit 0" INT TERM
-
-# Keep the script running
-while true; do
-    sleep 1
-done

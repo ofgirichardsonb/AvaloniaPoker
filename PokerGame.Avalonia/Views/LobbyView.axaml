@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewModels="using:PokerGame.Avalonia.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="PokerGame.Avalonia.Views.LobbyView">
+
+  <Design.DataContext>
+    <viewModels:LobbyViewModel/>
+  </Design.DataContext>
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20">
+    <StackPanel Grid.Row="0" Margin="0,0,0,20">
+      <TextBlock Text="Poker Game Lobby" FontSize="24" HorizontalAlignment="Center" Margin="0,0,0,20"/>
+      <Grid ColumnDefinitions="Auto,*">
+        <TextBlock Text="Your Name:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+        <TextBox Grid.Column="1" Text="{Binding PlayerName}" Watermark="Enter your name"/>
+      </Grid>
+    </StackPanel>
+    
+    <Grid Grid.Row="1" RowDefinitions="Auto,*" Margin="0,10">
+      <TextBlock Grid.Row="0" Text="Available Games:" FontWeight="Bold" Margin="0,0,0,10"/>
+      <ListBox Grid.Row="1" 
+               Items="{Binding AvailableGames}" 
+               SelectedItem="{Binding SelectedGame}"
+               Background="#33000000" 
+               CornerRadius="5"
+               Padding="5">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding}" Padding="5"/>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Grid>
+    
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+      <Button Content="Join Game" Command="{Binding JoinGameCommand}" 
+              IsEnabled="{Binding SelectedGame, Converter={x:Static ObjectConverters.IsNotNull}}"
+              Width="120" Height="40"/>
+      <Button Content="Create Game" Command="{Binding CreateGameCommand}" 
+              Width="120" Height="40"/>
+    </StackPanel>
+  </Grid>
+</UserControl>
