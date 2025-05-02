@@ -34,8 +34,16 @@ namespace PokerGame.Core.Microservices
         DealCards,
         PlayerAction,
         ActionResponse,
-        RoundComplete,
-        HandComplete,
+        DealFlop,         // Request to deal the flop (3 community cards)
+        FlopDealt,        // Confirmation that flop has been dealt
+        DealTurn,         // Request to deal the turn (4th community card)
+        TurnDealt,        // Confirmation that turn has been dealt
+        DealRiver,        // Request to deal the river (5th community card)
+        RiverDealt,       // Confirmation that river has been dealt
+        StartShowdown,    // Request to begin the showdown phase
+        ShowdownStarted,  // Confirmation that showdown has begun
+        RoundComplete,    // Notification that a betting round is complete
+        HandComplete,     // Notification that the hand is complete
         
         // Player management messages
         PlayerJoin,
@@ -547,6 +555,60 @@ namespace PokerGame.Core.Microservices
     // Note: The DeckCreatePayload, DeckIdPayload, DeckDealPayload, DeckDealResponsePayload, 
     // DeckBurnPayload, DeckBurnResponsePayload, and DeckStatusPayload classes are 
     // defined in CardDeckService.cs
+    
+    /// <summary>
+    /// Payload for round complete messages
+    /// </summary>
+    public class RoundCompletePayload
+    {
+        /// <summary>
+        /// Gets or sets the type of round that was completed
+        /// </summary>
+        [JsonPropertyName("roundType")]
+        public Game.GameState RoundType { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the pot at the end of the round
+        /// </summary>
+        [JsonPropertyName("pot")]
+        public int Pot { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the community cards at the end of the round
+        /// </summary>
+        [JsonPropertyName("communityCards")]
+        public List<Card> CommunityCards { get; set; } = new List<Card>();
+    }
+    
+    /// <summary>
+    /// Payload for hand complete messages
+    /// </summary>
+    public class HandCompletePayload
+    {
+        /// <summary>
+        /// Gets or sets the pot at the end of the hand
+        /// </summary>
+        [JsonPropertyName("pot")]
+        public int Pot { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the IDs of the winning players
+        /// </summary>
+        [JsonPropertyName("winnerIds")]
+        public List<string> WinnerIds { get; set; } = new List<string>();
+        
+        /// <summary>
+        /// Gets or sets the community cards at the end of the hand
+        /// </summary>
+        [JsonPropertyName("communityCards")]
+        public List<Card> CommunityCards { get; set; } = new List<Card>();
+        
+        /// <summary>
+        /// Gets or sets information about the best hands for each player
+        /// </summary>
+        [JsonPropertyName("bestHands")]
+        public List<HandInfo> BestHands { get; set; } = new List<HandInfo>();
+    }
     
     #endregion
 }

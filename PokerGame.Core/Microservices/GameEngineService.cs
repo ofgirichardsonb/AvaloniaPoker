@@ -1127,17 +1127,102 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             if (_gameEngine.State == Game.GameState.Flop)
                             {
                                 Console.WriteLine("Dealing FLOP cards");
+                                // Announce that we're transitioning to the Flop phase
+                                var flopMessage = Message.Create(MessageType.DealFlop);
+                                flopMessage.SenderId = _serviceId;
+                                Broadcast(flopMessage);
+                                
                                 await DealCommunityCardsAsync(3); // Flop
+                                
+                                // Announce that the flop has been dealt
+                                var flopDealtMessage = Message.Create(MessageType.FlopDealt);
+                                flopDealtMessage.SenderId = _serviceId;
+                                var flopDealtPayload = new GameStatePayload
+                                {
+                                    CurrentState = _gameEngine.State,
+                                    CommunityCards = new List<Card>(_gameEngine.CommunityCards)
+                                };
+                                flopDealtMessage.SetPayload(flopDealtPayload);
+                                Broadcast(flopDealtMessage);
                             }
                             else if (_gameEngine.State == Game.GameState.Turn)
                             {
                                 Console.WriteLine("Dealing TURN card");
+                                // Announce that we're transitioning to the Turn phase
+                                var turnMessage = Message.Create(MessageType.DealTurn);
+                                turnMessage.SenderId = _serviceId;
+                                Broadcast(turnMessage);
+                                
                                 await DealCommunityCardsAsync(1); // Turn
+                                
+                                // Announce that the turn has been dealt
+                                var turnDealtMessage = Message.Create(MessageType.TurnDealt);
+                                turnDealtMessage.SenderId = _serviceId;
+                                var turnDealtPayload = new GameStatePayload
+                                {
+                                    CurrentState = _gameEngine.State,
+                                    CommunityCards = new List<Card>(_gameEngine.CommunityCards)
+                                };
+                                turnDealtMessage.SetPayload(turnDealtPayload);
+                                Broadcast(turnDealtMessage);
                             }
                             else if (_gameEngine.State == Game.GameState.River)
                             {
                                 Console.WriteLine("Dealing RIVER card");
+                                // Announce that we're transitioning to the River phase
+                                var riverMessage = Message.Create(MessageType.DealRiver);
+                                riverMessage.SenderId = _serviceId;
+                                Broadcast(riverMessage);
+                                
                                 await DealCommunityCardsAsync(1); // River
+                                
+                                // Announce that the river has been dealt
+                                var riverDealtMessage = Message.Create(MessageType.RiverDealt);
+                                riverDealtMessage.SenderId = _serviceId;
+                                var riverDealtPayload = new GameStatePayload
+                                {
+                                    CurrentState = _gameEngine.State,
+                                    CommunityCards = new List<Card>(_gameEngine.CommunityCards)
+                                };
+                                riverDealtMessage.SetPayload(riverDealtPayload);
+                                Broadcast(riverDealtMessage);
+                            }
+                            else if (_gameEngine.State == Game.GameState.Showdown)
+                            {
+                                Console.WriteLine("Starting SHOWDOWN phase");
+                                // Announce that we're transitioning to the Showdown phase
+                                var showdownMessage = Message.Create(MessageType.StartShowdown);
+                                showdownMessage.SenderId = _serviceId;
+                                Broadcast(showdownMessage);
+                                
+                                // Send a specific showdown started message with all player hands visible
+                                var showdownStartedMessage = Message.Create(MessageType.ShowdownStarted);
+                                showdownStartedMessage.SenderId = _serviceId;
+                                
+                                // Create a specialized GameStatePayload for showdown
+                                var showdownPayload = new GameStatePayload
+                                {
+                                    CurrentState = _gameEngine.State,
+                                    CommunityCards = new List<Card>(_gameEngine.CommunityCards),
+                                    Pot = _gameEngine.Pot
+                                };
+                                
+                                // Add all players with their hole cards visible
+                                foreach (var player in _gameEngine.Players)
+                                {
+                                    if (!player.HasFolded)
+                                    {
+                                        showdownPayload.Players.Add(PlayerInfo.FromPlayer(player, true));
+                                    }
+                                    else
+                                    {
+                                        // For folded players, don't show cards
+                                        showdownPayload.Players.Add(PlayerInfo.FromPlayer(player, false));
+                                    }
+                                }
+                                
+                                showdownStartedMessage.SetPayload(showdownPayload);
+                                Broadcast(showdownStartedMessage);
                             }
                             
                             // Make sure to update the game state to all clients
@@ -1211,6 +1296,177 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     else
                     {
                         Console.WriteLine("Received PlayerAction message with null payload");
+                    }
+                    break;
+                    
+                case MessageType.RoundComplete:
+                    Console.WriteLine("Received RoundComplete message");
+                    var roundCompletePayload = message.GetPayload<RoundCompletePayload>();
+                    if (roundCompletePayload != null)
+                    {
+                        Console.WriteLine($"Round complete: {roundCompletePayload.RoundType}");
+                        
+                        // Process the round completion based on the current game state
+                        switch (_gameEngine.State)
+                        {
+                            case Game.GameState.PreFlop:
+                                // Move to Flop phase
+                                Console.WriteLine("Transitioning from PreFlop to Flop");
+                                _gameEngine.MoveToNextRound();
+                                
+                                // Deal flop cards
+                                await DealCommunityCardsAsync(3);
+                                
+                                // Broadcast updated game state with flop cards
+                                var flopDealtMessage = Message.Create(MessageType.FlopDealt);
+                                flopDealtMessage.SenderId = _serviceId;
+                                var flopDealtPayload = new GameStatePayload
+                                {
+                                    CurrentState = _gameEngine.State,
+                                    CommunityCards = new List<Card>(_gameEngine.CommunityCards)
+                                };
+                                flopDealtMessage.SetPayload(flopDealtPayload);
+                                Broadcast(flopDealtMessage);
+                                break;
+                                
+                            case Game.GameState.Flop:
+                                // Move to Turn phase
+                                Console.WriteLine("Transitioning from Flop to Turn");
+                                _gameEngine.MoveToNextRound();
+                                
+                                // Deal turn card
+                                await DealCommunityCardsAsync(1);
+                                
+                                // Broadcast updated game state with turn card
+                                var turnDealtMessage = Message.Create(MessageType.TurnDealt);
+                                turnDealtMessage.SenderId = _serviceId;
+                                var turnDealtPayload = new GameStatePayload
+                                {
+                                    CurrentState = _gameEngine.State,
+                                    CommunityCards = new List<Card>(_gameEngine.CommunityCards)
+                                };
+                                turnDealtMessage.SetPayload(turnDealtPayload);
+                                Broadcast(turnDealtMessage);
+                                break;
+                                
+                            case Game.GameState.Turn:
+                                // Move to River phase
+                                Console.WriteLine("Transitioning from Turn to River");
+                                _gameEngine.MoveToNextRound();
+                                
+                                // Deal river card
+                                await DealCommunityCardsAsync(1);
+                                
+                                // Broadcast updated game state with river card
+                                var riverDealtMessage = Message.Create(MessageType.RiverDealt);
+                                riverDealtMessage.SenderId = _serviceId;
+                                var riverDealtPayload = new GameStatePayload
+                                {
+                                    CurrentState = _gameEngine.State,
+                                    CommunityCards = new List<Card>(_gameEngine.CommunityCards)
+                                };
+                                riverDealtMessage.SetPayload(riverDealtPayload);
+                                Broadcast(riverDealtMessage);
+                                break;
+                                
+                            case Game.GameState.River:
+                                // Move to Showdown phase
+                                Console.WriteLine("Transitioning from River to Showdown");
+                                _gameEngine.MoveToNextRound();
+                                
+                                // Begin showdown process
+                                var showdownMessage = Message.Create(MessageType.StartShowdown);
+                                showdownMessage.SenderId = _serviceId;
+                                Broadcast(showdownMessage);
+                                
+                                // Create showdown game state with all hole cards visible
+                                var showdownPayload = new GameStatePayload
+                                {
+                                    CurrentState = _gameEngine.State,
+                                    CommunityCards = new List<Card>(_gameEngine.CommunityCards),
+                                    Pot = _gameEngine.Pot
+                                };
+                                
+                                // Add all players with their hole cards visible for non-folded players
+                                foreach (var player in _gameEngine.Players)
+                                {
+                                    if (!player.HasFolded)
+                                    {
+                                        showdownPayload.Players.Add(PlayerInfo.FromPlayer(player, true));
+                                    }
+                                    else
+                                    {
+                                        showdownPayload.Players.Add(PlayerInfo.FromPlayer(player, false));
+                                    }
+                                }
+                                
+                                // Send showdown started message
+                                var showdownStartedMessage = Message.Create(MessageType.ShowdownStarted);
+                                showdownStartedMessage.SenderId = _serviceId;
+                                showdownStartedMessage.SetPayload(showdownPayload);
+                                Broadcast(showdownStartedMessage);
+                                break;
+                                
+                            case Game.GameState.Showdown:
+                                // Process hand completion
+                                Console.WriteLine("Completing hand after showdown");
+                                
+                                // Create and send HandComplete message
+                                var handCompleteMessage = Message.Create(MessageType.HandComplete);
+                                handCompleteMessage.SenderId = _serviceId;
+                                var showdownHandCompletePayload = new HandCompletePayload
+                                {
+                                    Pot = _gameEngine.Pot,
+                                    WinnerIds = new List<string>(),  // To be populated by the game engine
+                                    CommunityCards = new List<Card>(_gameEngine.CommunityCards)
+                                };
+                                
+                                // Determine winners (this would be implemented in the game engine)
+                                foreach (var player in _gameEngine.Players)
+                                {
+                                    if (!player.HasFolded)
+                                    {
+                                        // For now, simply add all non-folded players as winners
+                                        // In a real implementation, we would determine the best hand
+                                        showdownHandCompletePayload.WinnerIds.Add(player.Id);
+                                    }
+                                }
+                                
+                                handCompleteMessage.SetPayload(showdownHandCompletePayload);
+                                Broadcast(handCompleteMessage);
+                                break;
+                        }
+                        
+                        // Broadcast the updated game state after round transition
+                        BroadcastGameState();
+                    }
+                    break;
+                    
+                case MessageType.HandComplete:
+                    Console.WriteLine("Received HandComplete message");
+                    var handCompletePayload = message.GetPayload<HandCompletePayload>();
+                    if (handCompletePayload != null)
+                    {
+                        Console.WriteLine($"Hand complete with pot: {handCompletePayload.Pot}");
+                        
+                        // Determine winners and distribute pot
+                        foreach (var winnerId in handCompletePayload.WinnerIds)
+                        {
+                            var winner = _gameEngine.Players.FirstOrDefault(p => p.Id == winnerId);
+                            if (winner != null)
+                            {
+                                // If multiple winners, split the pot (simplistic approach)
+                                int winAmount = _gameEngine.Pot / handCompletePayload.WinnerIds.Count;
+                                winner.Chips += winAmount;
+                                Console.WriteLine($"Player {winner.Name} wins {winAmount} chips");
+                            }
+                        }
+                        
+                        // Reset the game state for the next hand
+                        _gameEngine.ResetForNextHand();
+                        
+                        // Broadcast the updated game state after hand completion
+                        BroadcastGameState();
                     }
                     break;
                     

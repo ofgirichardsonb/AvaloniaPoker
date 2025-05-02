@@ -66,6 +66,65 @@ namespace PokerGame.Core.Game
         }
         
         /// <summary>
+        /// Moves the game to the next round in the Texas Hold'em sequence (PreFlop -> Flop -> Turn -> River -> Showdown)
+        /// </summary>
+        public void MoveToNextRound()
+        {
+            switch (_gameState)
+            {
+                case GameState.Setup:
+                    _gameState = GameState.PreFlop;
+                    break;
+                case GameState.PreFlop:
+                    _gameState = GameState.Flop;
+                    break;
+                case GameState.Flop:
+                    _gameState = GameState.Turn;
+                    break;
+                case GameState.Turn:
+                    _gameState = GameState.River;
+                    break;
+                case GameState.River:
+                    _gameState = GameState.Showdown;
+                    break;
+                case GameState.Showdown:
+                    _gameState = GameState.HandComplete;
+                    break;
+                case GameState.HandComplete:
+                    // Already at the end of the hand
+                    break;
+            }
+        }
+        
+        /// <summary>
+        /// Resets the game state for the next hand
+        /// </summary>
+        public void ResetForNextHand()
+        {
+            // Reset game state
+            _gameState = GameState.Setup;
+            
+            // Clear community cards
+            _communityCards.Clear();
+            
+            // Reset pot and bets
+            _pot = 0;
+            _currentBet = 0;
+            
+            // Reset player statuses
+            foreach (var player in _players)
+            {
+                player.ResetForNewHand();
+            }
+            
+            // Move dealer position
+            if (_players.Count > 0)
+            {
+                _dealerPosition = (_dealerPosition + 1) % _players.Count;
+            }
+        }
+        
+        /// <summary>
         /// Clears all community cards
         /// </summary>
         public void ClearCommunityCards()
