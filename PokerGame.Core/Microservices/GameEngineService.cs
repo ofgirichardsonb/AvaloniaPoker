@@ -547,7 +547,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
     // Process the action using our base class method
     await base.HandleMessageAsync(actionMessage);
     
-    // For now, assume success
+    // We'll check if round is complete in the message handler
     return true;
 }
 
@@ -1122,107 +1122,33 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             
                             // Log the state after action
                             Console.WriteLine($"Game state after action: {_gameEngine.State}");
-                            
-                            // If we need to deal community cards after this action
-                            if (_gameEngine.State == Game.GameState.Flop)
+                            // Check if betting round is complete
+                            if (_gameEngine.IsBettingRoundComplete())
                             {
-                                Console.WriteLine("Dealing FLOP cards");
-                                // Announce that we're transitioning to the Flop phase
-                                var flopMessage = Message.Create(MessageType.DealFlop);
-                                flopMessage.SenderId = _serviceId;
-                                Broadcast(flopMessage);
+                                Console.WriteLine("BETTING ROUND IS COMPLETE - Sending RoundComplete message");
                                 
-                                await DealCommunityCardsAsync(3); // Flop
-                                
-                                // Announce that the flop has been dealt
-                                var flopDealtMessage = Message.Create(MessageType.FlopDealt);
-                                flopDealtMessage.SenderId = _serviceId;
-                                var flopDealtPayload = new GameStatePayload
+                                // Create and send a RoundComplete message to progress to the next phase
+                                var playerActionRoundCompletePayload = new RoundCompletePayload
                                 {
-                                    CurrentState = _gameEngine.State,
+                                    RoundType = _gameEngine.State,
+                                    Pot = _gameEngine.Pot,
                                     CommunityCards = new List<Card>(_gameEngine.CommunityCards)
                                 };
-                                flopDealtMessage.SetPayload(flopDealtPayload);
-                                Broadcast(flopDealtMessage);
+                                
+                                var roundCompleteMessage = Message.Create(MessageType.RoundComplete);
+                                roundCompleteMessage.SenderId = _serviceId;
+                                roundCompleteMessage.SetPayload(playerActionRoundCompletePayload);
+                                
+                                // Send the message to trigger the next phase
+                                Console.WriteLine($"Broadcasting RoundComplete for {_gameEngine.State}");
+                                Broadcast(roundCompleteMessage);
                             }
-                            else if (_gameEngine.State == Game.GameState.Turn)
+                            else
                             {
-                                Console.WriteLine("Dealing TURN card");
-                                // Announce that we're transitioning to the Turn phase
-                                var turnMessage = Message.Create(MessageType.DealTurn);
-                                turnMessage.SenderId = _serviceId;
-                                Broadcast(turnMessage);
+                                Console.WriteLine("Betting round still in progress - waiting for more player actions");
                                 
-                                await DealCommunityCardsAsync(1); // Turn
-                                
-                                // Announce that the turn has been dealt
-                                var turnDealtMessage = Message.Create(MessageType.TurnDealt);
-                                turnDealtMessage.SenderId = _serviceId;
-                                var turnDealtPayload = new GameStatePayload
-                                {
-                                    CurrentState = _gameEngine.State,
-                                    CommunityCards = new List<Card>(_gameEngine.CommunityCards)
-                                };
-                                turnDealtMessage.SetPayload(turnDealtPayload);
-                                Broadcast(turnDealtMessage);
-                            }
-                            else if (_gameEngine.State == Game.GameState.River)
-                            {
-                                Console.WriteLine("Dealing RIVER card");
-                                // Announce that we're transitioning to the River phase
-                                var riverMessage = Message.Create(MessageType.DealRiver);
-                                riverMessage.SenderId = _serviceId;
-                                Broadcast(riverMessage);
-                                
-                                await DealCommunityCardsAsync(1); // River
-                                
-                                // Announce that the river has been dealt
-                                var riverDealtMessage = Message.Create(MessageType.RiverDealt);
-                                riverDealtMessage.SenderId = _serviceId;
-                                var riverDealtPayload = new GameStatePayload
-                                {
-                                    CurrentState = _gameEngine.State,
-                                    CommunityCards = new List<Card>(_gameEngine.CommunityCards)
-                                };
-                                riverDealtMessage.SetPayload(riverDealtPayload);
-                                Broadcast(riverDealtMessage);
-                            }
-                            else if (_gameEngine.State == Game.GameState.Showdown)
-                            {
-                                Console.WriteLine("Starting SHOWDOWN phase");
-                                // Announce that we're transitioning to the Showdown phase
-                                var showdownMessage = Message.Create(MessageType.StartShowdown);
-                                showdownMessage.SenderId = _serviceId;
-                                Broadcast(showdownMessage);
-                                
-                                // Send a specific showdown started message with all player hands visible
-                                var showdownStartedMessage = Message.Create(MessageType.ShowdownStarted);
-                                showdownStartedMessage.SenderId = _serviceId;
-                                
-                                // Create a specialized GameStatePayload for showdown
-                                var showdownPayload = new GameStatePayload
-                                {
-                                    CurrentState = _gameEngine.State,
-                                    CommunityCards = new List<Card>(_gameEngine.CommunityCards),
-                                    Pot = _gameEngine.Pot
-                                };
-                                
-                                // Add all players with their hole cards visible
-                                foreach (var player in _gameEngine.Players)
-                                {
-                                    if (!player.HasFolded)
-                                    {
-                                        showdownPayload.Players.Add(PlayerInfo.FromPlayer(player, true));
-                                    }
-                                    else
-                                    {
-                                        // For folded players, don't show cards
-                                        showdownPayload.Players.Add(PlayerInfo.FromPlayer(player, false));
-                                    }
-                                }
-                                
-                                showdownStartedMessage.SetPayload(showdownPayload);
-                                Broadcast(showdownStartedMessage);
+                                // Update all clients with the current game state
+                                BroadcastGameState();
                             }
                             
                             // Make sure to update the game state to all clients
@@ -1317,11 +1243,11 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 // Move to Flop phase
                                 Console.WriteLine("Transitioning from PreFlop to Flop");
                                 
-                                // Deal flop cards first and let the game engine handle state transition
-                                await DealCommunityCardsAsync(3);
+                                // First move to the flop state
+                                _gameEngine.MoveToNextRound();
                                 
-                                // Note: We don't call MoveToNextRound() here because
-                                // DealCommunityCardsAsync already transitioned the state internally
+                                // Then deal flop cards (3) without allowing automatic state transition
+                                await DealCommunityCardsAsync(3, false);
                                 
                                 // Broadcast updated game state with flop cards
                                 var flopDealtMessage = Message.Create(MessageType.FlopDealt);
@@ -1344,11 +1270,11 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 // Move to Turn phase
                                 Console.WriteLine("Transitioning from Flop to Turn");
                                 
-                                // Deal turn card first and let the game engine handle state transition
-                                await DealCommunityCardsAsync(1);
+                                // First move to the turn state
+                                _gameEngine.MoveToNextRound();
                                 
-                                // Note: We don't call MoveToNextRound() here because
-                                // DealCommunityCardsAsync already transitioned the state internally
+                                // Then deal turn card (1) without allowing automatic state transition
+                                await DealCommunityCardsAsync(1, false);
                                 
                                 // Broadcast updated game state with turn card
                                 var turnDealtMessage = Message.Create(MessageType.TurnDealt);
@@ -1371,11 +1297,11 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 // Move to River phase
                                 Console.WriteLine("Transitioning from Turn to River");
                                 
-                                // Deal river card first and let the game engine handle state transition
-                                await DealCommunityCardsAsync(1);
+                                // First move to the river state
+                                _gameEngine.MoveToNextRound();
                                 
-                                // Note: We don't call MoveToNextRound() here because
-                                // DealCommunityCardsAsync already transitioned the state internally
+                                // Then deal river card (1) without allowing automatic state transition
+                                await DealCommunityCardsAsync(1, false);
                                 
                                 // Broadcast updated game state with river card
                                 var riverDealtMessage = Message.Create(MessageType.RiverDealt);
@@ -1393,7 +1319,6 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 
                                 // Return immediately and don't progress to next round until explicitly told
                                 return; // Wait for another RoundComplete message to proceed
-                                break;
                                 
                             case Game.GameState.River:
                                 // Move to Showdown phase
@@ -1863,7 +1788,8 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
         /// Deals community cards to the table
         /// </summary>
         /// <param name="count">Number of cards to deal</param>
-        private async Task DealCommunityCardsAsync(int count)
+        /// <param name="allowStateTransition">If true, allows automatic state transition; otherwise, only adds cards</param>
+        private async Task DealCommunityCardsAsync(int count, bool allowStateTransition = true)
         {
             // Check if we need to use the emergency deck
             if (_currentDeckId == "emergency-local-deck" && _emergencyDeck != null)
@@ -1928,7 +1854,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                 
                 // Go back and use the emergency deck path
                 await Task.Delay(50); // Small delay before recursive call
-                await DealCommunityCardsAsync(count);
+                await DealCommunityCardsAsync(count, allowStateTransition);
                 return;
             }
             
@@ -1952,7 +1878,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     _currentDeckId = "emergency-local-deck";
                     
                     // Recursively call this method now that we're using the emergency deck
-                    await DealCommunityCardsAsync(count);
+                    await DealCommunityCardsAsync(count, allowStateTransition);
                 }
             }
         }

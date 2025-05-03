@@ -121,11 +121,15 @@ namespace PokerGame.Core.ServiceManagement
                 // Log the startup
                 Console.WriteLine($"Starting services host with port offset {portOffset} (verbose: {verbose})...");
                 
-                // Get the central broker instance
+                // Initialize the broker manager first
+                BrokerManager.Instance.Start();
+                
+                // Now get the central broker instance (should always be available after Start())
                 var broker = BrokerManager.Instance.CentralBroker;
                 if (broker == null)
                 {
-                    throw new InvalidOperationException("Central broker is not initialized");
+                    Console.WriteLine("Warning: Central broker is not available after initialization - creating it directly");
+                    broker = BrokerManager.Instance.StartCentralBroker(ServiceConstants.Ports.GetCentralBrokerPort(portOffset), null, verbose);
                 }
                 
                 // Create and start the required services

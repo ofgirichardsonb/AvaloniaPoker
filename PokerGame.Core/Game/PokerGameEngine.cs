@@ -369,15 +369,15 @@ namespace PokerGame.Core.Game
             switch (_gameState)
             {
                 case GameState.PreFlop:
-                    DealFlop();
+                    DealFlop(true); // Use internal betting process for standard flow
                     break;
                     
                 case GameState.Flop:
-                    DealTurn();
+                    DealTurn(true); // Use internal betting process for standard flow
                     break;
                     
                 case GameState.Turn:
-                    DealRiver();
+                    DealRiver(true); // Use internal betting process for standard flow
                     break;
                     
                 case GameState.River:
@@ -389,7 +389,8 @@ namespace PokerGame.Core.Game
         /// <summary>
         /// Deals the flop (first three community cards)
         /// </summary>
-        private void DealFlop()
+        /// <param name="processBetting">If true, will process the betting round; otherwise, just deal cards</param>
+        private void DealFlop(bool processBetting = true)
         {
             // Burn a card
             _deck.DealCard();
@@ -410,13 +411,18 @@ namespace PokerGame.Core.Game
             _currentPlayerIndex = (_dealerPosition + 1) % _players.Count;
             EnsureCurrentPlayerIsActive();
             
-            ProcessBettingRound();
+            // Only process betting if requested (used by microservices to control game flow)
+            if (processBetting)
+            {
+                ProcessBettingRound();
+            }
         }
         
         /// <summary>
         /// Deals the turn (fourth community card)
         /// </summary>
-        private void DealTurn()
+        /// <param name="processBetting">If true, will process the betting round; otherwise, just deal cards</param>
+        private void DealTurn(bool processBetting = true)
         {
             // Burn a card
             _deck.DealCard();
@@ -434,13 +440,18 @@ namespace PokerGame.Core.Game
             _currentPlayerIndex = (_dealerPosition + 1) % _players.Count;
             EnsureCurrentPlayerIsActive();
             
-            ProcessBettingRound();
+            // Only process betting if requested (used by microservices to control game flow)
+            if (processBetting)
+            {
+                ProcessBettingRound();
+            }
         }
         
         /// <summary>
         /// Deals the river (fifth community card)
         /// </summary>
-        private void DealRiver()
+        /// <param name="processBetting">If true, will process the betting round; otherwise, just deal cards</param>
+        private void DealRiver(bool processBetting = true)
         {
             // Burn a card
             _deck.DealCard();
@@ -458,7 +469,11 @@ namespace PokerGame.Core.Game
             _currentPlayerIndex = (_dealerPosition + 1) % _players.Count;
             EnsureCurrentPlayerIsActive();
             
-            ProcessBettingRound();
+            // Only process betting if requested (used by microservices to control game flow)
+            if (processBetting)
+            {
+                ProcessBettingRound();
+            }
         }
         
         /// <summary>
@@ -553,7 +568,7 @@ namespace PokerGame.Core.Game
         /// <summary>
         /// Checks if the current betting round is complete
         /// </summary>
-        private bool IsBettingRoundComplete()
+        public bool IsBettingRoundComplete()
         {
             var activePlayers = GetActivePlayers();
             
