@@ -428,6 +428,10 @@ namespace PokerGame.Avalonia.ViewModels
                 gameEngine.Players[0].IsCurrentUser = true;
             }
             
+            // Get the current player from the game engine
+            Player? currentPlayerFromEngine = gameEngine.CurrentPlayer;
+            PlayerViewModel? currentPlayerViewModel = null;
+            
             foreach (var player in gameEngine.Players)
             {
                 // Create player view model - it will use the Player.IsCurrentUser value
@@ -435,6 +439,17 @@ namespace PokerGame.Avalonia.ViewModels
                 
                 // Update card visibility based on game state
                 playerViewModel.UpdateCardVisibility(gameOver);
+                
+                // Mark this player as current if it matches the engine's current player
+                if (currentPlayerFromEngine != null && player.Name == currentPlayerFromEngine.Name)
+                {
+                    playerViewModel.IsCurrent = true;
+                    currentPlayerViewModel = playerViewModel;
+                }
+                else
+                {
+                    playerViewModel.IsCurrent = false;
+                }
                 
                 _players.Add(playerViewModel);
                 
@@ -467,13 +482,16 @@ namespace PokerGame.Avalonia.ViewModels
                         player.UpdateCardVisibility(true);
                     }
                 }
+                return; // No need to process button states for end-of-hand
             }
             
-            // If we have a current player, update their available actions based on the new game state
-            if (CurrentPlayer != null)
+            // Always update the current player to match the game engine's current player
+            if (currentPlayerViewModel != null)
             {
-                // Find the corresponding Player model for the current PlayerViewModel
-                var playerModel = gameEngine.Players.FirstOrDefault(p => p.Name == CurrentPlayer.Name);
+                CurrentPlayer = currentPlayerViewModel;
+                
+                // Find the current player's data model
+                var playerModel = gameEngine.Players.FirstOrDefault(p => p.Name == currentPlayerViewModel.Name);
                 
                 if (playerModel != null)
                 {
@@ -515,7 +533,22 @@ namespace PokerGame.Avalonia.ViewModels
                     // Update minimum raise amount
                     MinRaiseAmount = gameEngine.CurrentBet + 10;
                     RaiseAmount = MinRaiseAmount;
+                    
+                    // Update game status based on whether this is the current user or another player
+                    if (currentPlayerViewModel.IsCurrentUser)
+                    {
+                        GameStatus = "Your turn - make your move";
+                    }
+                    else
+                    {
+                        GameStatus = $"Waiting for {playerModel.Name} to make a move";
+                    }
                 }
+            }
+            else if (gameEngine.CurrentPlayer != null)
+            {
+                // If we have a current player in the engine but not in our view model, log a warning
+                Console.WriteLine($"★★★★★ [UI] WARNING: Current player in engine ({gameEngine.CurrentPlayer.Name}) not found in UI model! ★★★★★");
             }
         }
         
