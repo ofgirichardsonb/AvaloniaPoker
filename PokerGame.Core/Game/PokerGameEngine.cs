@@ -181,6 +181,9 @@ namespace PokerGame.Core.Game
                 player.ResetForNewHand();
             }
             
+            // Reset HasActed flags for all players at the start of a new hand
+            ResetHasActedFlags();
+            
             // Move dealer button to next player (make sure we have players)
             if (_players.Count > 0)
             {
@@ -304,6 +307,9 @@ namespace PokerGame.Core.Game
                     return;
             }
             
+            // Mark that this player has acted in this round
+            player.HasActed = true;
+            
             // Move to next player
             MoveToNextPlayer();
             _ui.UpdateGameState(this);
@@ -345,6 +351,17 @@ namespace PokerGame.Core.Game
         }
         
         /// <summary>
+        /// Resets the HasActed flag for all players
+        /// </summary>
+        private void ResetHasActedFlags()
+        {
+            foreach (var player in _players)
+            {
+                player.HasActed = false;
+            }
+        }
+        
+        /// <summary>
         /// Advances the game state to the next stage
         /// </summary>
         private void AdvanceGameState()
@@ -355,6 +372,9 @@ namespace PokerGame.Core.Game
                 _pot += player.CurrentBet;
                 player.ResetBetForNewRound();
             }
+            
+            // Reset HasActed flags for all players at the start of a new betting round
+            ResetHasActedFlags();
             
             _currentBet = 0;
             
@@ -411,6 +431,9 @@ namespace PokerGame.Core.Game
             _currentPlayerIndex = (_dealerPosition + 1) % _players.Count;
             EnsureCurrentPlayerIsActive();
             
+            // Reset HasActed flags at the start of this betting round
+            ResetHasActedFlags();
+            
             // Only process betting if requested (used by microservices to control game flow)
             if (processBetting)
             {
@@ -440,6 +463,9 @@ namespace PokerGame.Core.Game
             _currentPlayerIndex = (_dealerPosition + 1) % _players.Count;
             EnsureCurrentPlayerIsActive();
             
+            // Reset HasActed flags at the start of this betting round
+            ResetHasActedFlags();
+            
             // Only process betting if requested (used by microservices to control game flow)
             if (processBetting)
             {
@@ -468,6 +494,9 @@ namespace PokerGame.Core.Game
             // Reset for new betting round
             _currentPlayerIndex = (_dealerPosition + 1) % _players.Count;
             EnsureCurrentPlayerIsActive();
+            
+            // Reset HasActed flags at the start of this betting round
+            ResetHasActedFlags();
             
             // Only process betting if requested (used by microservices to control game flow)
             if (processBetting)
@@ -570,6 +599,9 @@ namespace PokerGame.Core.Game
         /// </summary>
         public bool IsBettingRoundComplete()
         {
+            // Using this method to delegate to the extension method would create
+            // an infinite recursion, so we'll implement it directly.
+            
             var activePlayers = GetActivePlayers();
             
             // If only one player remains, betting is complete
@@ -586,20 +618,12 @@ namespace PokerGame.Core.Game
                 }
             }
             
-            // Check if everyone has had a chance to act since the last raise
-            int startIndex = _currentPlayerIndex;
-            int index = startIndex;
+            // Check if all active players have acted
+            var playersToAct = activePlayers.Where(p => !p.IsAllIn && p.Chips > 0).ToList();
+            bool allPlayersHaveActed = playersToAct.All(p => p.HasActed);
             
-            do
-            {
-                Player player = _players[index];
-                if (player.IsActive && !player.IsAllIn && player.CurrentBet < targetBet)
-                {
-                    return false;
-                }
-                
-                index = (index + 1) % _players.Count;
-            } while (index != startIndex);
+            if (!allPlayersHaveActed)
+                return false;
             
             return true;
         }

@@ -1155,14 +1155,21 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             // Log the state after action
                             Console.WriteLine($"★★★★★ Game state after action: {_gameEngine.State} ★★★★★");
                             
-                            // Check if betting round is complete
-                            if (_gameEngine.IsBettingRoundComplete())
+                            // Check if betting round is complete using our enhanced extension method
+                            Console.WriteLine("★★★★★ Checking if betting round is complete using enhanced extension method ★★★★★");
+                            if (_gameEngine.CheckBettingRoundComplete())
                             {
                                 Console.WriteLine("★★★★★ BETTING ROUND IS COMPLETE - Sending RoundComplete message ★★★★★");
+                                
+                                // Log the control flags before changing them
+                                Console.WriteLine($"★★★★★ Control flags before change: waitingForBettingRound={_waitingForBettingRound}, waitingForPlayerActions={_waitingForPlayerActions}, allowStateTransition={_allowStateTransition} ★★★★★");
                                 
                                 // Set the control flags
                                 _waitingForBettingRound = false;
                                 _allowStateTransition = true;
+                                
+                                // Log the control flags after changing them
+                                Console.WriteLine($"★★★★★ Control flags after change: waitingForBettingRound={_waitingForBettingRound}, waitingForPlayerActions={_waitingForPlayerActions}, allowStateTransition={_allowStateTransition} ★★★★★");
                                 
                                 // Add a delay before completing the round to give UI time to update
                                 Console.WriteLine("Adding a brief delay before completing the round...");
@@ -1280,18 +1287,24 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     break;
                     
                 case MessageType.RoundComplete:
-                    Console.WriteLine("★★★★★ Received RoundComplete message ★★★★★");
+                    Console.WriteLine("\n\n★★★★★ Received RoundComplete message ★★★★★");
                     var roundCompletePayload = message.GetPayload<RoundCompletePayload>();
                     if (roundCompletePayload != null)
                     {
-                        Console.WriteLine($"Round complete: {roundCompletePayload.RoundType}");
-                        Console.WriteLine($"Current game state: {_gameEngine.State}");
-                        Console.WriteLine($"Current pot: {_gameEngine.Pot}");
-                        Console.WriteLine($"Number of community cards: {_gameEngine.CommunityCards.Count}");
-                        Console.WriteLine($"Active players: {_gameEngine.Players.Count(p => p.IsActive)}");
+                        Console.WriteLine($"★★★★★ Round complete: {roundCompletePayload.RoundType} ★★★★★");
+                        Console.WriteLine($"★★★★★ Current game state: {_gameEngine.State} ★★★★★");
+                        Console.WriteLine($"★★★★★ Current pot: {_gameEngine.Pot} ★★★★★");
+                        Console.WriteLine($"★★★★★ Number of community cards: {_gameEngine.CommunityCards.Count} ★★★★★");
+                        Console.WriteLine($"★★★★★ Active players: {_gameEngine.Players.Count(p => p.IsActive)} ★★★★★");
+                        
+                        // Log control flags before changing
+                        Console.WriteLine($"★★★★★ Control flags before change: waitingForBettingRound={_waitingForBettingRound}, waitingForPlayerActions={_waitingForPlayerActions}, allowStateTransition={_allowStateTransition} ★★★★★");
                         
                         // Clear any previous waiting state
                         _waitingForPlayerActions = false;
+                        
+                        // Log control flags after changing
+                        Console.WriteLine($"★★★★★ Control flags after change: waitingForBettingRound={_waitingForBettingRound}, waitingForPlayerActions={_waitingForPlayerActions}, allowStateTransition={_allowStateTransition} ★★★★★");
                         
                         // Add a delay before proceeding to the next round to allow for betting
                         Console.WriteLine("Adding a delay before proceeding to the next round...");

@@ -10,11 +10,11 @@ namespace PokerGame.Core.Game
     public static class IsBettingRoundCompleteExtension
     {
         /// <summary>
-        /// Determines if the current betting round is complete
+        /// Enhanced checking of betting round completion with detailed diagnostics
         /// </summary>
         /// <param name="engine">The poker game engine instance</param>
         /// <returns>True if the betting round is complete, false otherwise</returns>
-        public static bool IsBettingRoundComplete(this PokerGameEngine engine)
+        public static bool CheckBettingRoundComplete(this PokerGameEngine engine)
         {
             if (engine == null)
             {
@@ -38,10 +38,32 @@ namespace PokerGame.Core.Game
             // Count players still able to act (not all-in and with chips)
             var playersToAct = activePlayers.Where(p => !p.IsAllIn && p.Chips > 0).ToList();
             
+            // Log the current state of players for debugging
+            Console.WriteLine($"★★★★★ Active players: {activePlayers.Count}, Players able to act: {playersToAct.Count} ★★★★★");
+            foreach (var player in activePlayers)
+            {
+                Console.WriteLine($"★★★★★ Player {player.Name}: IsAllIn={player.IsAllIn}, HasActed={player.HasActed}, Chips={player.Chips}, CurrentBet={player.CurrentBet} ★★★★★");
+            }
+            
             if (playersToAct.Count == 0)
             {
                 // All players are either folded or all-in
                 Console.WriteLine("★★★★★ Betting round complete: All remaining players are all-in ★★★★★");
+                return true;
+            }
+            
+            // Special case: If only one player can act, and that player has the biggest bet, round is complete
+            if (playersToAct.Count == 1 && playersToAct[0].CurrentBet >= engine.CurrentBet)
+            {
+                Console.WriteLine($"★★★★★ Special case: Only one player can act ({playersToAct[0].Name}) with bet {playersToAct[0].CurrentBet} >= current bet {engine.CurrentBet} ★★★★★");
+                return true;
+            }
+            
+            // Safety check for abnormal game states
+            if (engine.CurrentBet < 0)
+            {
+                Console.WriteLine($"★★★★★ WARNING: Detected negative current bet: {engine.CurrentBet}. This shouldn't happen! ★★★★★");
+                // In case of a corrupt game state, don't block the game - allow it to continue
                 return true;
             }
             
@@ -63,10 +85,11 @@ namespace PokerGame.Core.Game
             }
             else
             {
-                // For other rounds, we only need all bets to be equal
-                bettingComplete = allBetsEqual;
+                // For other rounds, we need all bets to be equal AND all players must have acted
+                bool allPlayersHaveActed = playersToAct.All(p => p.HasActed);
+                bettingComplete = allBetsEqual && allPlayersHaveActed;
                 
-                Console.WriteLine($"★★★★★ Betting complete check for {engine.State}: allBetsEqual={allBetsEqual}, result={bettingComplete} ★★★★★");
+                Console.WriteLine($"★★★★★ Betting complete check for {engine.State}: allBetsEqual={allBetsEqual}, allPlayersHaveActed={allPlayersHaveActed}, result={bettingComplete} ★★★★★");
             }
             
             return bettingComplete;
