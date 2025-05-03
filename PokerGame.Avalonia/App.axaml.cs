@@ -98,13 +98,16 @@ namespace PokerGame.Avalonia
                 Console.WriteLine("Cleaning up all execution contexts...");
                 MSA.Foundation.ServiceManagement.ExecutionContext.CleanupAll();
                 
-                // Additional NetMQ cleanup
+                // Schedule NetMQ cleanup properly through the helper class
                 try
                 {
-                    Console.WriteLine("Cleaning up NetMQ context...");
-                    // Call NetMQConfig.Cleanup directly - no need for a helper
-                    NetMQ.NetMQConfig.Cleanup(false);
-                    Console.WriteLine("NetMQ context cleaned up");
+                    Console.WriteLine("Scheduling NetMQ cleanup...");
+                    // Use the helper to properly schedule cleanup - avoid direct calls to NetMQConfig
+                    PokerGame.Core.Microservices.NetMQContextHelper.ScheduleCleanup(100);
+                    
+                    // Wait for cleanup to complete - short delay to let sockets close
+                    System.Threading.Thread.Sleep(200);
+                    Console.WriteLine("NetMQ cleanup scheduled");
                 } 
                 catch (Exception ex)
                 {
