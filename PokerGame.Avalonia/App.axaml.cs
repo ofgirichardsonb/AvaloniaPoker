@@ -143,39 +143,22 @@ namespace PokerGame.Avalonia
                     // Ignore errors in process termination
                 }
                 
+                // Just use standard application exit - let NetMQContextHelper handle the cleanup
                 Console.WriteLine("Avalonia application cleanup completed");
                 
-                // Force immediate application exit - the nuclear option
-                // This bypasses all normal shutdown procedures and immediately terminates the process
-                Console.WriteLine("Forcing immediate process termination");
-                
-                // Set a timeout to force exit if something is blocking
-                var forceExitTimer = new System.Threading.Timer(_ => 
-                {
-                    Console.WriteLine("Force exit timer triggered - terminating process immediately");
-                    Environment.Exit(0);
-                }, null, 1000, Timeout.Infinite);
-                
-                // First try normal shutdown
+                // Give NetMQ a chance to clean up on its own
                 if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
                 {
                     try 
                     {
+                        // Normal shutdown
                         desktop.Shutdown(0);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // Ignore shutdown errors
+                        Console.WriteLine($"Error shutting down: {ex.Message}");
                     }
                 }
-                
-                // Then try emergency exit on a separate thread
-                Task.Run(() => 
-                {
-                    Thread.Sleep(500);
-                    Console.WriteLine("Emergency shutdown triggered");
-                    Environment.Exit(0);
-                });
             }
             catch (Exception ex)
             {

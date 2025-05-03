@@ -53,43 +53,54 @@ namespace PokerGame.Core.Microservices
             // Create a timer that will perform cleanup if it hasn't happened by application exit
             _cleanupTimer = new Timer(_ => PerformCleanup(), null, Timeout.Infinite, Timeout.Infinite);
             
-            // Register for process exit to ensure cleanup happens
+            // Simple process exit handler - this is the key to fixing the issue
             AppDomain.CurrentDomain.ProcessExit += (s, e) => {
                 Console.WriteLine("Process exit detected - performing NetMQ cleanup");
                 
-                // Skip the normal cleanup and use force cleanup directly
                 try
                 {
-                    Console.WriteLine("Executing nuclear option for NetMQ cleanup");
+                    // Set cleanup flag to prevent other threads from using the sockets
+                    _cleanupComplete = true;
                     
-                    // First close any shared sockets
-                    try 
+                    // First null out the socket references to prevent other threads from using them
+                    var tempPublisher = _sharedPublisher;
+                    var tempSubscriber = _sharedSubscriber;
+                    
+                    _sharedPublisher = null;
+                    _sharedSubscriber = null;
+                    
+                    // Give any active operations a moment to complete
+                    Thread.Sleep(50);
+                    
+                    // Close and dispose the sockets if they aren't null
+                    if (tempPublisher != null)
                     {
-                        if (_sharedPublisher != null)
-                        {
-                            _sharedPublisher.Close();
-                            _sharedPublisher.Dispose();
-                            _sharedPublisher = null;
-                        }
-                        
-                        if (_sharedSubscriber != null)
-                        {
-                            _sharedSubscriber.Close();
-                            _sharedSubscriber.Dispose();
-                            _sharedSubscriber = null;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error closing shared sockets: {ex.Message}");
+                        try { tempPublisher.Close(); } catch { }
+                        try { tempPublisher.Dispose(); } catch { }
                     }
                     
-                    // Then force a cleanup with true parameter
-                    NetMQConfig.Cleanup(true);
+                    if (tempSubscriber != null)
+                    {
+                        try { tempSubscriber.Close(); } catch { }
+                        try { tempSubscriber.Dispose(); } catch { }
+                    }
+                    
+                    // Clean up the NetMQ context
+                    NetMQConfig.Cleanup(false);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error during nuclear cleanup: {ex.Message}");
+                    Console.WriteLine($"Error during NetMQ cleanup: {ex.Message}");
+                    
+                    // If something went wrong, try the forced cleanup
+                    try
+                    {
+                        NetMQConfig.Cleanup(true);
+                    }
+                    catch
+                    {
+                        // Nothing more we can do
+                    }
                 }
             };
         }

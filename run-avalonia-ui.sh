@@ -4,38 +4,18 @@
 # This script runs the Avalonia UI in development mode, with services managed directly
 # For standalone deployment, use the build-standalone.sh script
 
-# Trap for proper cleanup on exit - super aggressive version
+# Trap for proper cleanup on exit
 cleanup() {
     echo "Performing cleanup..."
-    # First try gentle termination 
+    # Kill any running dotnet processes started by this script
     if [ ! -z "$AVALONIA_PID" ]; then
         echo "Stopping Avalonia UI (PID: $AVALONIA_PID)..."
         kill $AVALONIA_PID 2>/dev/null || true
-        
-        # Give it a short time to exit cleanly
-        sleep 0.5
-        
-        # If still running, use SIGKILL (cannot be caught or ignored)
-        if kill -0 $AVALONIA_PID 2>/dev/null; then
-            echo "Application still running - using SIGKILL..."
-            kill -9 $AVALONIA_PID 2>/dev/null || true
-        fi
     fi
     
-    # Forcefully kill all dotnet processes related to our application
-    echo "Terminating all related processes..."
-    pkill -9 -f "PokerGame.Avalonia" 2>/dev/null || true
-    pkill -9 -f "PokerGame.Core" 2>/dev/null || true
-    pkill -9 -f "PokerGame.Foundation" 2>/dev/null || true
-    
-    # As a nuclear option, check if any netmq processes are hanging
-    NETMQ_PIDS=$(ps aux | grep -i netmq | grep -v grep | awk '{print $2}')
-    if [ ! -z "$NETMQ_PIDS" ]; then
-        echo "Found potential hanging NetMQ processes, terminating..."
-        for PID in $NETMQ_PIDS; do
-            kill -9 $PID 2>/dev/null || true
-        done
-    fi
+    # Final check for any remaining processes
+    echo "Checking for any lingering processes..."
+    pkill -f "PokerGame.Avalonia" 2>/dev/null || true
     
     echo "Cleanup complete."
     exit 0
@@ -102,46 +82,8 @@ EOT
 dotnet run --project PokerGame.Avalonia/PokerGame.Avalonia.csproj --configuration Debug &
 AVALONIA_PID=$!
 
-# Create a fifo for IPC to allow termination from another terminal
-TERMINATION_FIFO="/tmp/poker_terminate_fifo"
-[ -p "$TERMINATION_FIFO" ] || mkfifo "$TERMINATION_FIFO"
-
-# Start background monitoring for termination commands
-(
-    while true; do
-        if read -r command < "$TERMINATION_FIFO"; then
-            if [ "$command" = "terminate" ]; then
-                echo "Termination command received. Shutting down..."
-                # Signal the main process
-                kill -TERM $$
-                break
-            fi
-        fi
-    done
-) &
-MONITOR_PID=$!
-
-# Create the termination helper script
-TERM_SCRIPT="/tmp/poker-terminate.sh"
-cat > "$TERM_SCRIPT" << 'EOF'
-#!/bin/bash
-echo "terminate" > /tmp/poker_terminate_fifo
-echo "Termination command sent to Poker Game. Application should exit shortly."
-EOF
-chmod +x "$TERM_SCRIPT"
-
 # Wait for the Avalonia UI process to exit
-echo "Poker Game is running."
-echo "Press Ctrl+C to exit OR run the following command from another terminal to cleanly terminate:"
-echo "$ /tmp/poker-terminate.sh"
-
-# Wait for the application to finish
+echo "Poker Game is running. Press Ctrl+C to exit."
 wait $AVALONIA_PID
-
-# Clean up the monitor process
-kill $MONITOR_PID 2>/dev/null || true
-
-# Remove the fifo and script
-rm -f "$TERMINATION_FIFO" "$TERM_SCRIPT"
 
 # Cleanup happens automatically through the trap handler
