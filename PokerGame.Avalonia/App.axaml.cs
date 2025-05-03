@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using MSA.Foundation.ServiceManagement;
+using NetMQ;
 using PokerGame.Avalonia.ViewModels;
 using PokerGame.Avalonia.Views;
 using System;
@@ -73,10 +74,13 @@ namespace PokerGame.Avalonia
                     var broker = PokerGame.Core.Messaging.BrokerManager.Instance?.CentralBroker;
                     if (broker != null)
                     {
-                        var shutdownMessage = new MSA.Foundation.Messaging.Message
+                        // Create shutdown message using the NetworkMessage from PokerGame.Core.Messaging
+                        var shutdownMessage = new PokerGame.Core.Messaging.NetworkMessage
                         {
-                            MessageType = "Shutdown",
-                            Source = "AvaloniaUI"
+                            MessageId = Guid.NewGuid().ToString(),
+                            Type = PokerGame.Core.Messaging.MessageType.Shutdown,
+                            SenderId = "AvaloniaUI",
+                            Timestamp = DateTime.UtcNow
                         };
                         broker.Publish(shutdownMessage);
                         Console.WriteLine("Shutdown signal sent to all services");
@@ -98,8 +102,8 @@ namespace PokerGame.Avalonia
                 try
                 {
                     Console.WriteLine("Cleaning up NetMQ context...");
-                    var netMQHelper = MSA.Foundation.Messaging.NetMQContextHelper.Instance;
-                    netMQHelper?.Cleanup();
+                    // Call NetMQConfig.Cleanup directly - no need for a helper
+                    NetMQ.NetMQConfig.Cleanup(false);
                     Console.WriteLine("NetMQ context cleaned up");
                 } 
                 catch (Exception ex)
