@@ -1306,6 +1306,10 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     {
                         Console.WriteLine($"Round complete: {roundCompletePayload.RoundType}");
                         
+                        // Add a delay before proceeding to the next round to allow for betting
+                        Console.WriteLine("Adding a delay before proceeding to the next round...");
+                        await Task.Delay(2000); // 2-second pause between rounds
+                        
                         // Process the round completion based on the current game state
                         switch (_gameEngine.State)
                         {
@@ -1331,8 +1335,10 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 Broadcast(flopDealtMessage);
                                 
                                 // IMPORTANT: Let the UI control the betting round
-                                Console.WriteLine("Starting FLOP betting round");
-                                break;
+                                Console.WriteLine("Starting FLOP betting round - waiting for player actions");
+                                
+                                // Return immediately and don't progress to next round until explicitly told
+                                return; // Wait for another RoundComplete message to proceed
                                 
                             case Game.GameState.Flop:
                                 // Move to Turn phase
@@ -1356,8 +1362,10 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 Broadcast(turnDealtMessage);
                                 
                                 // IMPORTANT: Let the UI control the betting round
-                                Console.WriteLine("Starting TURN betting round");
-                                break;
+                                Console.WriteLine("Starting TURN betting round - waiting for player actions");
+                                
+                                // Return immediately and don't progress to next round until explicitly told
+                                return; // Wait for another RoundComplete message to proceed
                                 
                             case Game.GameState.Turn:
                                 // Move to River phase
@@ -1381,7 +1389,10 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 Broadcast(riverDealtMessage);
                                 
                                 // IMPORTANT: Let the UI control the betting round
-                                Console.WriteLine("Starting RIVER betting round");
+                                Console.WriteLine("Starting RIVER betting round - waiting for player actions");
+                                
+                                // Return immediately and don't progress to next round until explicitly told
+                                return; // Wait for another RoundComplete message to proceed
                                 break;
                                 
                             case Game.GameState.River:
@@ -1420,7 +1431,12 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 showdownStartedMessage.SenderId = _serviceId;
                                 showdownStartedMessage.SetPayload(showdownPayload);
                                 Broadcast(showdownStartedMessage);
-                                break;
+                                
+                                // IMPORTANT: Add pause before proceeding to the hand complete process
+                                Console.WriteLine("Starting SHOWDOWN - pausing to view cards");
+                                
+                                // Return immediately and don't progress to next round until explicitly told
+                                return; // Wait for another RoundComplete message to proceed
                                 
                             case Game.GameState.Showdown:
                                 // Process hand completion
