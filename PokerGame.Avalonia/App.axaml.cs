@@ -98,20 +98,38 @@ namespace PokerGame.Avalonia
                 Console.WriteLine("Cleaning up all execution contexts...");
                 MSA.Foundation.ServiceManagement.ExecutionContext.CleanupAll();
                 
-                // Schedule NetMQ cleanup properly through the helper class
+                // We need to be more aggressive with NetMQ cleanup to avoid deadlocks
                 try
                 {
-                    Console.WriteLine("Scheduling NetMQ cleanup...");
-                    // Use the helper to properly schedule cleanup - avoid direct calls to NetMQConfig
-                    PokerGame.Core.Microservices.NetMQContextHelper.ScheduleCleanup(100);
+                    Console.WriteLine("Performing direct NetMQ cleanup...");
                     
-                    // Wait for cleanup to complete - short delay to let sockets close
-                    System.Threading.Thread.Sleep(200);
-                    Console.WriteLine("NetMQ cleanup scheduled");
+                    // Force a very quick shutdown without waiting for socket closure
+                    NetMQ.NetMQConfig.Cleanup(false);
+                    
+                    // Close sockets in the helper class directly
+                    var closeSockets = typeof(PokerGame.Core.Microservices.NetMQContextHelper)
+                        .GetMethod("PerformCleanup", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                    
+                    if (closeSockets != null)
+                    {
+                        closeSockets.Invoke(null, null);
+                    }
+                    
+                    Console.WriteLine("NetMQ direct cleanup completed");
                 } 
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error during NetMQ cleanup: {ex.Message}");
+                    
+                    // As a fallback, try forcing cleanup
+                    try
+                    {
+                        NetMQConfig.Cleanup(true);
+                    }
+                    catch
+                    {
+                        // Ignore errors in forced cleanup
+                    }
                 }
                 
                 // Forcibly kill any remaining processes as a last resort

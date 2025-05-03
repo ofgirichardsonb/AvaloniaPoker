@@ -152,63 +152,104 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         private static void PerformCleanup()
         {
-            lock (_lockObject)
+            // Use a non-blocking approach to lock, allowing concurrent cleanup attempts to continue
+            bool lockAcquired = false;
+            try
             {
-                if (_cleanupComplete)
+                Monitor.TryEnter(_lockObject, 100, ref lockAcquired);
+                
+                // If we couldn't get the lock in 100ms or cleanup is already done, just return
+                if (!lockAcquired || _cleanupComplete)
                     return;
                 
+                Console.WriteLine("Performing NetMQ context cleanup");
+                
+                // Set the flag immediately to prevent other cleanup attempts
+                _cleanupComplete = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in NetMQ cleanup lock acquisition: {ex.Message}");
+                return;
+            }
+            
+            try
+            {
+                // Close shared sockets before general cleanup
                 try
                 {
-                    Console.WriteLine("Performing NetMQ context cleanup");
-                    
-                    // Set a flag to indicate cleanup is happening
-                    _cleanupComplete = true;
-                    
-                    // Close shared sockets before general cleanup
-                    try
+                    if (_sharedPublisher != null)
                     {
-                        _sharedPublisher?.Close();
-                        _sharedSubscriber?.Close();
-                        _sharedPublisher?.Dispose();
-                        _sharedSubscriber?.Dispose();
+                        try { _sharedPublisher.Close(); } catch { /* ignore */ }
+                        try { _sharedPublisher.Dispose(); } catch { /* ignore */ }
                         _sharedPublisher = null;
-                        _sharedSubscriber = null;
-                        Console.WriteLine("Closed and disposed shared sockets");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error closing shared sockets: {ex.Message}");
                     }
                     
-                    // Terminate the NetMQ context - this will affect all running sockets
-                    NetMQConfig.Cleanup(false);
-                    Console.WriteLine("NetMQ context cleanup completed successfully");
+                    if (_sharedSubscriber != null)
+                    {
+                        try { _sharedSubscriber.Close(); } catch { /* ignore */ }
+                        try { _sharedSubscriber.Dispose(); } catch { /* ignore */ }
+                        _sharedSubscriber = null;
+                    }
+                    
+                    Console.WriteLine("Closed and disposed shared sockets");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error during NetMQ cleanup: {ex.Message}");
+                    Console.WriteLine($"Error closing shared sockets: {ex.Message}");
                 }
-                finally
+                
+                // Terminate the NetMQ context with forced termination for reliability
+                try
+                {
+                    // First try gentle cleanup
+                    NetMQConfig.Cleanup(false);
+                }
+                catch
                 {
                     try
                     {
-                        // Dispose the timer
-                        _cleanupTimer?.Dispose();
-                        
-                        // Only force exit during shutdown, otherwise let program continue
-                        if (Environment.HasShutdownStarted)
-                        {
-                            Console.WriteLine("Cleanup completed during shutdown process");
-                        }
-                        else
-                        {
-                            Console.WriteLine("NetMQ cleanup completed, program continues running");
-                        }
+                        // If gentle failed, force it
+                        NetMQConfig.Cleanup(true);
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error during cleanup finalization: {ex.Message}");
+                        Console.WriteLine($"Even forced NetMQ cleanup failed: {ex.Message}");
                     }
+                }
+                
+                Console.WriteLine("NetMQ context cleanup completed successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during NetMQ cleanup: {ex.Message}");
+            }
+            finally
+            {
+                try
+                {
+                    // Dispose the timer
+                    _cleanupTimer?.Dispose();
+                    
+                    // Only force exit during shutdown, otherwise let program continue
+                    if (Environment.HasShutdownStarted)
+                    {
+                        Console.WriteLine("Cleanup completed during shutdown process");
+                    }
+                    else
+                    {
+                        Console.WriteLine("NetMQ cleanup completed, program continues running");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error during cleanup finalization: {ex.Message}");
+                }
+                
+                // Release the lock if we acquired it
+                if (lockAcquired)
+                {
+                    Monitor.Exit(_lockObject);
                 }
             }
         }
