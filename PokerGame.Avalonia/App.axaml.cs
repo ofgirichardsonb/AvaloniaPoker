@@ -78,7 +78,7 @@ namespace PokerGame.Avalonia
                         var shutdownMessage = new PokerGame.Core.Messaging.NetworkMessage
                         {
                             MessageId = Guid.NewGuid().ToString(),
-                            Type = PokerGame.Core.Messaging.MessageType.Shutdown,
+                            Type = PokerGame.Core.Messaging.MessageType.EndGame,
                             SenderId = "AvaloniaUI",
                             Timestamp = DateTime.UtcNow
                         };
