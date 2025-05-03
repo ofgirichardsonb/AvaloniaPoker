@@ -38,7 +38,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && dotnet build MSA.Foundation/MSA.Foundation.csproj -c Debug"
+args = "cd /home/runner/workspace && dotnet build MSA.Foundation/MSA.Foundation.csproj -c Debug && dotnet build PokerGame.Core/PokerGame.Core.csproj -c Debug"
 
 [[workflows.workflow]]
 name = "poker-game-test"
@@ -46,7 +46,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
+args = "cd /home/runner/workspace && ./run-avalonia-ui.sh"
 
 [[workflows.workflow]]
 name = "rebuild-foundation"

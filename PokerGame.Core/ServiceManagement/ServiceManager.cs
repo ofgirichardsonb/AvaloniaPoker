@@ -118,81 +118,89 @@ namespace PokerGame.Core.ServiceManagement
                     CancellationTokenSource = cts
                 };
                 
-                // Get configuration
-                string? dotnetPath = "dotnet"; // Default command
-                
-                // Get base directory - the executing assembly's location
-                string baseDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? string.Empty;
-                
-                // Navigate to the solution root from the bin directory
-                string solutionRoot = Path.GetFullPath(Path.Combine(baseDir, "..","..","..",".."));
-                Console.WriteLine($"Solution root directory: {solutionRoot}");
-                
-                string servicesProjectPath = Path.Combine(solutionRoot, "PokerGame.Services", "PokerGame.Services.csproj");
-                Console.WriteLine($"Services project path: {servicesProjectPath}");
-                
                 // Log the startup
                 Console.WriteLine($"Starting services host with port offset {portOffset} (verbose: {verbose})...");
                 
-                // Build the arguments list
-                List<string> args = new List<string>
+                // Get the central broker instance
+                var broker = BrokerManager.Instance.CentralBroker;
+                if (broker == null)
                 {
-                    "run",
-                    "--project",
-                    servicesProjectPath,
-                    "--",
-                    $"--port-offset={portOffset}"
-                };
-                
-                if (verbose)
-                {
-                    args.Add("--verbose");
+                    throw new InvalidOperationException("Central broker is not initialized");
                 }
                 
-                // Add the --all-services flag to run all services
-                args.Add("--all-services");
-                
-                // Set up the process information
-                var psi = new System.Diagnostics.ProcessStartInfo
+                // Create and start the required services
+                // Instead of spawning external processes, we'll create the services directly
+                Task serviceTask = Task.Run(() =>
                 {
-                    FileName = dotnetPath,
-                    Arguments = string.Join(" ", args),
-                    UseShellExecute = false,
-                    CreateNoWindow = false,
-                    RedirectStandardOutput = false,
-                    RedirectStandardError = false,
-                    WorkingDirectory = solutionRoot
-                };
-                
-                // Start the process
-                var process = new System.Diagnostics.Process
-                {
-                    StartInfo = psi,
-                    EnableRaisingEvents = true
-                };
-                
-                // Set up event handler for when the process exits
-                process.Exited += (sender, e) =>
-                {
-                    Console.WriteLine($"Services host process exited with code {process.ExitCode}");
-                    _services.Remove(serviceName);
-                };
-                
-                // Start the process
-                process.Start();
-                
-                Console.WriteLine($"Started services host process with PID {process.Id}");
-                
-                // Create a task that completes when the process exits
-                var processTask = Task.Run(() =>
-                {
-                    process.WaitForExit();
-                    return Task.CompletedTask;
-                });
+                    try
+                    {
+                        // Get service type constants
+                        string cardDeckType = PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.CardDeck;
+                        string gameEngineType = PokerGame.Core.ServiceManagement.ServiceConstants.ServiceTypes.GameEngine;
+                        
+                        // Calculate actual ports based on port offset
+                        int gameEnginePublisherPort = ServiceConstants.Ports.GetGameEnginePublisherPort(portOffset);
+                        int gameEngineSubscriberPort = ServiceConstants.Ports.GetGameEngineSubscriberPort(portOffset);
+                        int cardDeckPublisherPort = ServiceConstants.Ports.GetCardDeckPublisherPort(portOffset);
+                        int cardDeckSubscriberPort = ServiceConstants.Ports.GetCardDeckSubscriberPort(portOffset);
+                        
+                        // Create a microservice manager to help with service creation
+                        var microserviceManager = new Microservices.MicroserviceManager();
+                        
+                        // Create the Game Engine service
+                        Console.WriteLine("Starting Game Engine Service...");
+                        var gameEngineService = new Microservices.GameEngineService(
+                            gameEngineType,
+                            "Game Engine Service",
+                            gameEnginePublisherPort,
+                            gameEngineSubscriberPort);
+                        
+                        Console.WriteLine($"Game Engine Service started with ID: {gameEngineService.ServiceId}");
+                            
+                        // Create the Card Deck service
+                        Console.WriteLine("Starting Card Deck Service...");
+                        var cardDeckService = new Microservices.CardDeckService(
+                            cardDeckType, 
+                            "Card Deck Service", 
+                            cardDeckPublisherPort, 
+                            cardDeckSubscriberPort,
+                            false);  // Don't use emergency deck mode
+                            
+                        Console.WriteLine($"Card Deck Service started with ID: {cardDeckService.ServiceId}");
+                        
+                        // Small delay to let the services initialize
+                        Thread.Sleep(2000);
+                        
+                        // Ensure the Card Deck service is registered with the Game Engine
+                        Console.WriteLine("Notifying game engine about card deck service...");
+                        cardDeckService.PublishServiceRegistration();
+                        
+                        // Wait indefinitely until cancellation is requested
+                        try {
+                            while (!cts.Token.IsCancellationRequested) {
+                                Thread.Sleep(100);
+                            }
+                        }
+                        catch (OperationCanceledException) {
+                            // This is expected when cancellation is requested
+                        }
+                        
+                        Console.WriteLine("All services started successfully");
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Normal cancellation - this is expected
+                        Console.WriteLine("Services host canceled");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error in services host: {ex.Message}");
+                        Console.WriteLine(ex.StackTrace);
+                    }
+                }, cts.Token);
                 
                 // Store the task and process info
-                serviceInfo.Task = processTask;
-                serviceInfo.Process = process;
+                serviceInfo.Task = serviceTask;
                 
                 // Add the service to the dictionary
                 _services[serviceName] = serviceInfo;
@@ -208,7 +216,7 @@ namespace PokerGame.Core.ServiceManagement
         }
         
         /// <summary>
-        /// Start the console client
+        /// Start the console client - this is a stub method since we're no longer using the Console UI
         /// </summary>
         /// <param name="portOffset">Port offset for services</param>
         /// <param name="useCurses">Whether to use the curses UI</param>
@@ -216,112 +224,9 @@ namespace PokerGame.Core.ServiceManagement
         /// <returns>An identifier for the client or -1 if failed</returns>
         public int StartConsoleClient(int portOffset, bool useCurses, bool verbose)
         {
-            // Ensure the manager is initialized
-            Initialize();
-            
-            try
-            {
-                // Create a cancellation token source for the service
-                var cts = new CancellationTokenSource();
-                
-                // Define the service name
-                string serviceName = "ConsoleClient";
-                
-                // Create the service info
-                var serviceInfo = new ServiceInfo
-                {
-                    Name = serviceName,
-                    CancellationTokenSource = cts
-                };
-                
-                // Get configuration
-                string? dotnetPath = "dotnet"; // Default command
-                
-                // Get base directory - the executing assembly's location
-                string baseDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? string.Empty;
-                
-                // Navigate to the solution root from the bin directory
-                string solutionRoot = Path.GetFullPath(Path.Combine(baseDir, "..","..","..",".."));
-                Console.WriteLine($"Solution root directory: {solutionRoot}");
-                
-                string consoleProjectPath = Path.Combine(solutionRoot, "PokerGame.Console", "PokerGame.Console.csproj");
-                Console.WriteLine($"Console project path: {consoleProjectPath}");
-                
-                // Log the startup
-                Console.WriteLine($"Starting console client with port offset {portOffset} (curses: {useCurses})...");
-                
-                // Build the arguments list
-                List<string> args = new List<string>
-                {
-                    "run",
-                    "--project",
-                    consoleProjectPath,
-                    "--",
-                    $"--port-offset={portOffset}"
-                };
-                
-                if (useCurses)
-                {
-                    args.Add("--curses");
-                }
-                
-                if (verbose)
-                {
-                    args.Add("--verbose");
-                }
-                
-                // Set up the process information
-                var psi = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = dotnetPath,
-                    Arguments = string.Join(" ", args),
-                    UseShellExecute = false,
-                    CreateNoWindow = false,
-                    RedirectStandardOutput = false,
-                    RedirectStandardError = false,
-                    WorkingDirectory = solutionRoot
-                };
-                
-                // Start the process
-                var process = new System.Diagnostics.Process
-                {
-                    StartInfo = psi,
-                    EnableRaisingEvents = true
-                };
-                
-                // Set up event handler for when the process exits
-                process.Exited += (sender, e) =>
-                {
-                    Console.WriteLine($"Console client process exited with code {process.ExitCode}");
-                    _services.Remove(serviceName);
-                };
-                
-                // Start the process
-                process.Start();
-                
-                Console.WriteLine($"Started console client process with PID {process.Id}");
-                
-                // Create a task that completes when the process exits
-                var processTask = Task.Run(() =>
-                {
-                    process.WaitForExit();
-                    return Task.CompletedTask;
-                });
-                
-                // Store the task and process info
-                serviceInfo.Task = processTask;
-                serviceInfo.Process = process;
-                
-                // Add the service to the dictionary
-                _services[serviceName] = serviceInfo;
-                
-                return process.Id;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error starting console client: {ex.Message}");
-                return -1;
-            }
+            // We're no longer using the Console UI, but we need to keep this method for compatibility
+            Console.WriteLine("Console UI is no longer supported - using Avalonia UI only");
+            return -1;
         }
         
         /// <summary>

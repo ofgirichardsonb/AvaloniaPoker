@@ -1,27 +1,21 @@
 #!/bin/bash
 
+# run-avalonia-ui.sh - Development script for running Avalonia UI with services
+# This script runs the Avalonia UI in development mode, with services managed directly
+# For standalone deployment, use the build-standalone.sh script
+
 # Trap for proper cleanup on exit
 cleanup() {
     echo "Performing cleanup..."
     # Kill any running dotnet processes started by this script
-    if [ ! -z "$SERVICES_PID" ]; then
-        echo "Stopping services (PID: $SERVICES_PID)..."
-        kill $SERVICES_PID 2>/dev/null || true
-    fi
-    
     if [ ! -z "$AVALONIA_PID" ]; then
         echo "Stopping Avalonia UI (PID: $AVALONIA_PID)..."
         kill $AVALONIA_PID 2>/dev/null || true
     fi
     
-    # Run the launcher with stop-all command to ensure all processes are shutdown
-    echo "Executing stop-all command through launcher..."
-    dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --configuration Debug -- stop-all 2>/dev/null || true
-    
     # Final check for any remaining processes
     echo "Checking for any lingering processes..."
-    pkill -f "PokerGame.Launcher" 2>/dev/null || true
-    pkill -f "PokerGame.Services" 2>/dev/null || true
+    pkill -f "PokerGame.Avalonia" 2>/dev/null || true
     
     echo "Cleanup complete."
     exit 0
@@ -30,7 +24,7 @@ cleanup() {
 # Set up trap to call cleanup function on script exit
 trap cleanup EXIT INT TERM
 
-echo "Building Avalonia UI frontend..."
+echo "Starting Avalonia UI application..."
 cd /home/runner/workspace
 
 # Make sure we have the latest builds
@@ -40,13 +34,7 @@ dotnet build PokerGame.Abstractions/PokerGame.Abstractions.csproj --configuratio
 dotnet build PokerGame.Core/PokerGame.Core.csproj --configuration Debug
 dotnet build PokerGame.Avalonia/PokerGame.Avalonia.csproj --configuration Debug
 
-# First start the central broker and services
-echo "Starting services..."
-dotnet run --project PokerGame.Launcher/PokerGame.Launcher.csproj --configuration Debug -- start-services --port-offset 0 --verbose &
-SERVICES_PID=$!
-
-# Wait a moment for services to initialize
-sleep 3
+# Note: We no longer need to start services separately as the Avalonia app now handles this internally
 
 # Build and run the Avalonia UI
 echo "Starting Avalonia UI..."
@@ -88,19 +76,22 @@ cat > /tmp/poker-ui/index.html << EOT
             <li>Lobby Service</li>
         </ul>
         <p>Check the console output for application logs and events.</p>
+        <h2>Deployment</h2>
+        <p>To create a standalone executable for distribution:</p>
+        <div class="command">./build-standalone.sh</div>
+        <p>This will create a self-contained executable in the ./publish directory that can be run without the dotnet runtime.</p>
     </div>
 </body>
 </html>
 EOT
 
 # Start the Avalonia UI in the background
+echo "Starting Avalonia UI with integrated service management..."
 dotnet run --project PokerGame.Avalonia/PokerGame.Avalonia.csproj --configuration Debug &
 AVALONIA_PID=$!
 
-# Note: We've removed the HTTP server to avoid port conflicts
-
 # Wait for the Avalonia UI process to exit
-echo "Services running. Press Ctrl+C to exit..."
+echo "Poker Game running with integrated services. Press Ctrl+C to exit..."
 wait $AVALONIA_PID
 
 # Cleanup happens automatically through the trap handler

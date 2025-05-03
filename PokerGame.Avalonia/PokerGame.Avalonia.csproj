@@ -7,14 +7,40 @@
     <Nullable>enable</Nullable>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <AssemblyName>PokerGame.Avalonia</AssemblyName>
+    <AssemblyName>PokerGame</AssemblyName>
     <!-- Windows and macOS desktop support only -->
     <RuntimeIdentifiers>win-x64;osx-x64</RuntimeIdentifiers>
+    <!-- Version information -->
+    <Version>0.1.0</Version>
+    <Authors>PokerGame Team</Authors>
+    <Product>PokerGame</Product>
+    <Description>Texas Hold'em poker game with microservices architecture</Description>
   </PropertyGroup>
 
   <!-- Desktop specific configuration -->
   <PropertyGroup>
     <StartupObject>PokerGame.Avalonia.Program</StartupObject>
+    <!-- Packaging properties -->
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+  
+  <!-- Configure for Mac/Windows specific builds -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'osx-x64'">
+    <CFBundleName>PokerGame</CFBundleName>
+    <CFBundleDisplayName>PokerGame</CFBundleDisplayName>
+    <CFBundleIdentifier>com.pokergame</CFBundleIdentifier>
+    <CFBundleVersion>0.1.0</CFBundleVersion>
+    <CFBundleShortVersionString>0.1.0</CFBundleShortVersionString>
+    <CFBundlePackageType>APPL</CFBundlePackageType>
+    <CFBundleSignature>????</CFBundleSignature>
+    <NSHighResolutionCapable>true</NSHighResolutionCapable>
+    <NSRequiresAquaSystemAppearance>true</NSRequiresAquaSystemAppearance>
   </PropertyGroup>
 
   <ItemGroup>

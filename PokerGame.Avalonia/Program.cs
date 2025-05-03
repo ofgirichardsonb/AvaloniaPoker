@@ -10,6 +10,9 @@ namespace PokerGame.Avalonia
 {
     internal class Program
     {
+        // Store reference to service manager for proper cleanup
+        private static PokerGame.Core.ServiceManagement.ServiceManager? _serviceManager = null;
+        
         // Initialization code. Don't use any Avalonia, third-party APIs or any
         // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
         // yet and stuff might break.
@@ -19,12 +22,14 @@ namespace PokerGame.Avalonia
             AppDomain.CurrentDomain.ProcessExit += (s, e) => 
             {
                 Console.WriteLine("Process exit detected, cleaning up...");
-                // Try to do any necessary cleanup here
-                MSA.Foundation.ServiceManagement.ExecutionContext.CleanupAll();
+                PerformCleanup();
             };
             
             try 
             {
+                // Start the required services before launching the UI
+                StartRequiredServices();
+                
                 // Start with the appropriate lifetime
                 BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, ShutdownMode.OnMainWindowClose);
             }
@@ -34,14 +39,79 @@ namespace PokerGame.Avalonia
                 Console.WriteLine(ex.StackTrace);
                 
                 // On fatal error, ensure we clean up any lingering processes
+                PerformCleanup();
+            }
+        }
+        
+        /// <summary>
+        /// Starts all required services for the Avalonia UI application
+        /// </summary>
+        private static void StartRequiredServices()
+        {
+            Console.WriteLine("Starting required services for Avalonia UI...");
+            try
+            {
+                // Get the service manager instance
+                _serviceManager = PokerGame.Core.ServiceManagement.ServiceManager.Instance;
+                
+                // Start the services with port offset 0
+                int portOffset = 0;
+                bool verbose = true;
+                
+                Console.WriteLine($"Starting services with port offset {portOffset}...");
+                _serviceManager.StartServicesHost(portOffset, verbose);
+                
+                // Give services a moment to initialize
+                System.Threading.Thread.Sleep(1000);
+                
+                Console.WriteLine("Services started successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error starting services: {ex.Message}");
+                throw; // Re-throw to abort startup
+            }
+        }
+        
+        /// <summary>
+        /// Performs thorough cleanup of all resources
+        /// </summary>
+        private static void PerformCleanup()
+        {
+            try
+            {
+                Console.WriteLine("Performing application cleanup...");
+                
+                // Stop all services
+                if (_serviceManager != null)
+                {
+                    Console.WriteLine("Stopping all services...");
+                    _serviceManager.StopAllServices();
+                }
+                
+                // Allow some time for services to shut down gracefully
+                System.Threading.Thread.Sleep(500);
+                
+                // Clean up execution contexts
+                Console.WriteLine("Cleaning up execution contexts...");
+                MSA.Foundation.ServiceManagement.ExecutionContext.CleanupAll();
+                
+                // Clean up NetMQ resources
+                Console.WriteLine("Cleaning up NetMQ resources...");
                 try 
                 {
-                    MSA.Foundation.ServiceManagement.ExecutionContext.CleanupAll();
+                    NetMQ.NetMQConfig.Cleanup(false);
                 }
-                catch 
+                catch (Exception ex)
                 {
-                    // Last-ditch effort - ignore any errors here
+                    Console.WriteLine($"Error during NetMQ cleanup: {ex.Message}");
                 }
+                
+                Console.WriteLine("Cleanup completed.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during cleanup: {ex.Message}");
             }
         }
 
