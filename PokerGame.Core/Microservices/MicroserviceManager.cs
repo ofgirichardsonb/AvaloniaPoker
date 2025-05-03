@@ -79,25 +79,23 @@ namespace PokerGame.Core.Microservices
                 
             try
             {
+                // Create execution contexts for all services
+                Console.WriteLine("Creating execution contexts for microservices...");
+                var gameEngineContext = MSA.Foundation.ServiceManagement.ExecutionContext.WithCancellation();
+                var cardDeckContext = MSA.Foundation.ServiceManagement.ExecutionContext.WithCancellation();
+                var consoleUIContext = MSA.Foundation.ServiceManagement.ExecutionContext.WithCancellation();
+                
                 Console.WriteLine("Starting Game Engine Service...");
-                // Create the game engine service
-                var gameEngineService = new GameEngineService(
-                    GameEnginePublisherPort, 
-                    GameEngineSubscriberPort);
+                // Create the game engine service with execution context (no port parameters)
+                var gameEngineService = new GameEngineService(gameEngineContext);
                 _services.Add(gameEngineService);
                 
                 // Small delay for initialization
                 Thread.Sleep(500);
                 
-                // Create execution contexts for each service
-                var cardDeckContext = MSA.Foundation.ServiceManagement.ExecutionContext.WithCancellation();
-                
-                var consoleUIContext = MSA.Foundation.ServiceManagement.ExecutionContext.WithCancellation();
-                
                 Console.WriteLine("Starting Card Deck Service...");
-                // Create the card deck service with execution context
-                // Create the card deck service with proper port configuration instead of execution context
-                var cardDeckService = new CardDeckService(CardDeckPublisherPort, CardDeckSubscriberPort);
+                // Create the card deck service with execution context (no port parameters)
+                var cardDeckService = new CardDeckService(cardDeckContext);
                 _services.Add(cardDeckService);
                 
                 // Small delay for initialization
@@ -248,7 +246,7 @@ namespace PokerGame.Core.Microservices
                 gameEngineService.Start();
                 
                 Console.WriteLine("Game Engine Service started successfully");
-                Console.WriteLine($"Publisher Port: {GameEnginePublisherPort}, Subscriber Port: {GameEngineSubscriberPort}");
+                Console.WriteLine("Using in-process communication (no TCP ports used)");
             }
             catch (Exception ex)
             {
@@ -274,11 +272,8 @@ namespace PokerGame.Core.Microservices
                 // Create execution context for card deck service
                 var cardDeckContext = MSA.Foundation.ServiceManagement.ExecutionContext.WithCancellation();
                 
-                // Create the card deck service with port settings and emergency flag
-                var cardDeckService = new CardDeckService(
-                    CardDeckPublisherPort, 
-                    CardDeckSubscriberPort, 
-                    useEmergencyDeck);
+                // Create the card deck service with execution context and emergency flag
+                var cardDeckService = new CardDeckService(cardDeckContext, useEmergencyDeck);
                 _services.Add(cardDeckService);
                 
                 // Start the service
@@ -288,7 +283,7 @@ namespace PokerGame.Core.Microservices
                 cardDeckService.PublishServiceRegistration();
                 
                 Console.WriteLine("Card Deck Service started successfully");
-                Console.WriteLine($"Publisher Port: {CardDeckPublisherPort}, Subscriber Port: {CardDeckSubscriberPort}");
+                Console.WriteLine("Using in-process communication (no TCP ports used)");
                 if (useEmergencyDeck)
                 {
                     Console.WriteLine("Using emergency deck mode - will create decks immediately without network communication");
@@ -339,7 +334,7 @@ namespace PokerGame.Core.Microservices
                 consoleUIService.Start();
                 
                 Console.WriteLine("Console UI Service started successfully");
-                Console.WriteLine($"Publisher Port: {ConsoleUIPublisherPort}, Subscriber Port: {ConsoleUISubscriberPort}");
+                Console.WriteLine("Using in-process communication (no TCP ports used)");
                 Console.WriteLine($"Curses UI: {(useEnhancedUi ? "Enabled" : "Disabled")}");
             }
             catch (Exception ex)
