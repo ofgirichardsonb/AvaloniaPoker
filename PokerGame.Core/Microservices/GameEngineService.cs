@@ -1155,9 +1155,54 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             // Log the state after action
                             Console.WriteLine($"★★★★★ Game state after action: {_gameEngine.State} ★★★★★");
                             
-                            // Check if betting round is complete using our enhanced extension method
-                            Console.WriteLine("★★★★★ Checking if betting round is complete using enhanced extension method ★★★★★");
-                            if (_gameEngine.CheckBettingRoundComplete())
+                            // Directly check betting round completion with detailed logging rather than relying on extension method
+                            Console.WriteLine("★★★★★ DIRECT CHECK: Checking if betting round is complete ★★★★★");
+                            
+                            // Get active players
+                            var currentActivePlayers = _gameEngine.Players.Where(p => !p.HasFolded).ToList();
+                            
+                            // Log each player's state
+                            Console.WriteLine($"★★★★★ Active players: {currentActivePlayers.Count} ★★★★★");
+                            foreach (var player in currentActivePlayers)
+                            {
+                                Console.WriteLine($"★★★★★ Player {player.Name}: IsAllIn={player.IsAllIn}, HasActed={player.HasActed}, Chips={player.Chips}, CurrentBet={player.CurrentBet} ★★★★★");
+                            }
+                            
+                            bool bettingRoundComplete = false;
+                            
+                            // Check condition 1: Only one player remains active
+                            if (currentActivePlayers.Count <= 1)
+                            {
+                                Console.WriteLine("★★★★★ DIRECT CHECK: Betting round complete because only one player is active ★★★★★");
+                                bettingRoundComplete = true;
+                            }
+                            // Check condition 2: All players are either all-in or have acted with equal bets
+                            else
+                            {
+                                // Players who can still act
+                                var playersToAct = currentActivePlayers.Where(p => !p.IsAllIn && p.Chips > 0).ToList();
+                                
+                                if (playersToAct.Count == 0)
+                                {
+                                    Console.WriteLine("★★★★★ DIRECT CHECK: Betting round complete because all players are all-in or have no chips ★★★★★");
+                                    bettingRoundComplete = true;
+                                }
+                                else
+                                {
+                                    bool allBetsEqual = playersToAct.All(p => p.CurrentBet == _gameEngine.CurrentBet);
+                                    bool allPlayersHaveActed = playersToAct.All(p => p.HasActed);
+                                    
+                                    Console.WriteLine($"★★★★★ DIRECT CHECK: State={_gameEngine.State}, allBetsEqual={allBetsEqual}, allPlayersHaveActed={allPlayersHaveActed} ★★★★★");
+                                    
+                                    if (allBetsEqual && allPlayersHaveActed)
+                                    {
+                                        Console.WriteLine("★★★★★ DIRECT CHECK: Betting round complete because all bets are equal and all players have acted ★★★★★");
+                                        bettingRoundComplete = true;
+                                    }
+                                }
+                            }
+                            
+                            if (bettingRoundComplete)
                             {
                                 Console.WriteLine("★★★★★ BETTING ROUND IS COMPLETE - Sending RoundComplete message ★★★★★");
                                 
@@ -1204,8 +1249,8 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 Console.WriteLine("=================================================");
                                 Console.WriteLine("Betting round is NOT complete yet - player actions still needed");
                                 Console.WriteLine($"Current game state: {_gameEngine.State}");
-                                int activePlayers = _gameEngine.Players.Count(p => p.IsActive);
-                                Console.WriteLine($"Active players: {activePlayers}");
+                                int activePlayerCount = _gameEngine.Players.Count(p => p.IsActive);
+                                Console.WriteLine($"Active players: {activePlayerCount}");
                                 Console.WriteLine("=================================================");
                                 
                                 // Update all clients with the current game state
@@ -1325,6 +1370,14 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 // Move to Flop phase
                                 Console.WriteLine("★★★★★ Transitioning from PreFlop to Flop ★★★★★");
                                 
+                                // CRITICAL FIX: Reset HasActed flags for all players before the flop betting round
+                                Console.WriteLine("★★★★★ EXPLICITLY resetting HasActed flags for all players before Flop ★★★★★");
+                                foreach (var player in _gameEngine.Players)
+                                {
+                                    player.HasActed = false;
+                                    Console.WriteLine($"★★★★★ Reset HasActed for player {player.Name} ★★★★★");
+                                }
+                                
                                 // Set waiting flags for next round
                                 _waitingForBettingRound = true;
                                 _waitingForPlayerActions = true;
@@ -1372,6 +1425,14 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 // Move to Turn phase
                                 Console.WriteLine("★★★★★ Transitioning from Flop to Turn ★★★★★");
                                 
+                                // CRITICAL FIX: Reset HasActed flags for all players before the turn betting round
+                                Console.WriteLine("★★★★★ EXPLICITLY resetting HasActed flags for all players before Turn ★★★★★");
+                                foreach (var player in _gameEngine.Players)
+                                {
+                                    player.HasActed = false;
+                                    Console.WriteLine($"★★★★★ Reset HasActed for player {player.Name} ★★★★★");
+                                }
+                                
                                 // Set waiting flags for next round
                                 _waitingForBettingRound = true;
                                 _waitingForPlayerActions = true;
@@ -1418,6 +1479,14 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 
                                 // Move to River phase
                                 Console.WriteLine("★★★★★ Transitioning from Turn to River ★★★★★");
+                                
+                                // CRITICAL FIX: Reset HasActed flags for all players before the river betting round
+                                Console.WriteLine("★★★★★ EXPLICITLY resetting HasActed flags for all players before River ★★★★★");
+                                foreach (var player in _gameEngine.Players)
+                                {
+                                    player.HasActed = false;
+                                    Console.WriteLine($"★★★★★ Reset HasActed for player {player.Name} ★★★★★");
+                                }
                                 
                                 // Set waiting flags for next round
                                 _waitingForBettingRound = true;
