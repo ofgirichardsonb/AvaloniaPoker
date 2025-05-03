@@ -138,30 +138,16 @@ namespace PokerGame.Avalonia
             }
             else 
             {
-                // For Replit testing environment, temporarily allow Linux
-                bool isReplit = Environment.GetEnvironmentVariable("REPL_ID") != null;
-                if (isReplit)
-                {
-                    Console.WriteLine("Replit environment detected - temporarily allowing Linux for testing");
-                    return AppBuilder.Configure<App>()
-                        .UsePlatformDetect()
-                        .UseReactiveUI()
-                        .WithInterFont()
-                        .LogToTrace();
-                }
-                else
-                {
-                    // Linux is not supported in this application
-                    Console.WriteLine("ERROR: This application only supports Windows and macOS platforms.");
-                    Console.WriteLine("Please run on a supported platform. Exiting...");
-                    
-                    // Exit the application immediately to prevent SkiaSharp initialization
-                    Environment.Exit(1);
-                    
-                    // This code will never be reached but is required for compilation
-                    return AppBuilder.Configure<App>()
-                        .LogToTrace();
-                }
+                // Linux is not supported in this application
+                Console.WriteLine("ERROR: This application only supports Windows and macOS platforms.");
+                Console.WriteLine("Please run on a supported platform. Exiting...");
+                
+                // Exit the application immediately to prevent SkiaSharp initialization
+                Environment.Exit(1);
+                
+                // This code will never be reached but is required for compilation
+                return AppBuilder.Configure<App>()
+                    .LogToTrace();
             }
         }
     }
