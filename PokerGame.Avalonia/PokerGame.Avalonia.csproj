@@ -58,10 +58,16 @@
     <ProjectReference Include="../PokerGame.Core/PokerGame.Core.csproj" />
   </ItemGroup>
 
+  <!-- Standard Avalonia resources -->
   <ItemGroup>
-    <AvaloniaResource Include="Assets/**">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </AvaloniaResource>
+    <AvaloniaResource Include="Assets/**/*" />
+  </ItemGroup>
+
+  <!-- Explicit file resources -->
+  <ItemGroup>
+    <Content Include="Assets/poker-cards.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

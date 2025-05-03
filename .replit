@@ -70,7 +70,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && dotnet build PokerGame.Avalonia/PokerGame.Avalonia.csproj"
+args = "cd /home/runner/workspace && dotnet build PokerGame.Avalonia/PokerGame.Avalonia.csproj -c Debug"
 
 [deployment]
 run = ["sh", "-c", "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 200 --curses"]
