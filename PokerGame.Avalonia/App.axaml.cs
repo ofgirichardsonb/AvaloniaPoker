@@ -143,14 +143,39 @@ namespace PokerGame.Avalonia
                     // Ignore errors in process termination
                 }
                 
-                // Exit the application after cleanup
+                Console.WriteLine("Avalonia application cleanup completed");
+                
+                // Force immediate application exit - the nuclear option
+                // This bypasses all normal shutdown procedures and immediately terminates the process
+                Console.WriteLine("Forcing immediate process termination");
+                
+                // Set a timeout to force exit if something is blocking
+                var forceExitTimer = new System.Threading.Timer(_ => 
+                {
+                    Console.WriteLine("Force exit timer triggered - terminating process immediately");
+                    Environment.Exit(0);
+                }, null, 1000, Timeout.Infinite);
+                
+                // First try normal shutdown
                 if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
                 {
-                    Console.WriteLine("Forcing application exit...");
-                    desktop.Shutdown(0);
+                    try 
+                    {
+                        desktop.Shutdown(0);
+                    }
+                    catch
+                    {
+                        // Ignore shutdown errors
+                    }
                 }
                 
-                Console.WriteLine("Avalonia application cleanup completed");
+                // Then try emergency exit on a separate thread
+                Task.Run(() => 
+                {
+                    Thread.Sleep(500);
+                    Console.WriteLine("Emergency shutdown triggered");
+                    Environment.Exit(0);
+                });
             }
             catch (Exception ex)
             {

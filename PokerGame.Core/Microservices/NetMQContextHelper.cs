@@ -56,7 +56,41 @@ namespace PokerGame.Core.Microservices
             // Register for process exit to ensure cleanup happens
             AppDomain.CurrentDomain.ProcessExit += (s, e) => {
                 Console.WriteLine("Process exit detected - performing NetMQ cleanup");
-                PerformCleanup();
+                
+                // Skip the normal cleanup and use force cleanup directly
+                try
+                {
+                    Console.WriteLine("Executing nuclear option for NetMQ cleanup");
+                    
+                    // First close any shared sockets
+                    try 
+                    {
+                        if (_sharedPublisher != null)
+                        {
+                            _sharedPublisher.Close();
+                            _sharedPublisher.Dispose();
+                            _sharedPublisher = null;
+                        }
+                        
+                        if (_sharedSubscriber != null)
+                        {
+                            _sharedSubscriber.Close();
+                            _sharedSubscriber.Dispose();
+                            _sharedSubscriber = null;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error closing shared sockets: {ex.Message}");
+                    }
+                    
+                    // Then force a cleanup with true parameter
+                    NetMQConfig.Cleanup(true);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error during nuclear cleanup: {ex.Message}");
+                }
             };
         }
         
