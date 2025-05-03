@@ -32,6 +32,8 @@ namespace PokerGame.Core.Game
             if (activePlayers.Count <= 1)
             {
                 Console.WriteLine("★★★★★ Betting round complete: Only one player remains active ★★★★★");
+                // Track the decision in telemetry
+                BettingRoundTelemetry.TrackBettingRoundCheck(engine, true, "OnlyOnePlayerRemains");
                 return true;
             }
             
@@ -49,6 +51,8 @@ namespace PokerGame.Core.Game
             {
                 // All players are either folded or all-in
                 Console.WriteLine("★★★★★ Betting round complete: All remaining players are all-in ★★★★★");
+                // Track the decision in telemetry
+                BettingRoundTelemetry.TrackBettingRoundCheck(engine, true, "AllPlayersAreAllIn");
                 return true;
             }
             
@@ -56,6 +60,8 @@ namespace PokerGame.Core.Game
             if (playersToAct.Count == 1 && playersToAct[0].CurrentBet >= engine.CurrentBet)
             {
                 Console.WriteLine($"★★★★★ Special case: Only one player can act ({playersToAct[0].Name}) with bet {playersToAct[0].CurrentBet} >= current bet {engine.CurrentBet} ★★★★★");
+                // Track the decision in telemetry
+                BettingRoundTelemetry.TrackBettingRoundCheck(engine, true, "OnePlayerCanActWithHighestBet");
                 return true;
             }
             
@@ -64,6 +70,8 @@ namespace PokerGame.Core.Game
             {
                 Console.WriteLine($"★★★★★ WARNING: Detected negative current bet: {engine.CurrentBet}. This shouldn't happen! ★★★★★");
                 // In case of a corrupt game state, don't block the game - allow it to continue
+                // Track the decision in telemetry
+                BettingRoundTelemetry.TrackBettingRoundCheck(engine, true, "AbnormalGameState_NegativeCurrentBet");
                 return true;
             }
             
@@ -73,6 +81,7 @@ namespace PokerGame.Core.Game
             // In pre-flop, we need to make sure everyone had a chance to act
             // In other rounds, just check if all bets are equal
             bool bettingComplete;
+            string reason;
             
             if (engine.State == GameState.PreFlop)
             {
@@ -80,6 +89,10 @@ namespace PokerGame.Core.Game
                 // so we'll simplify by just checking if all bets are equal and all players have acted at least once
                 bool allPlayersHaveActed = playersToAct.All(p => p.HasActed);
                 bettingComplete = allBetsEqual && allPlayersHaveActed;
+                
+                reason = bettingComplete ? 
+                    "PreFlop_AllBetsEqualAndAllPlayersActed" : 
+                    (!allBetsEqual ? "PreFlop_BetsNotEqual" : "PreFlop_NotAllPlayersHaveActed");
                 
                 Console.WriteLine($"★★★★★ PreFlop betting complete check: allBetsEqual={allBetsEqual}, allPlayersHaveActed={allPlayersHaveActed}, result={bettingComplete} ★★★★★");
             }
@@ -89,8 +102,15 @@ namespace PokerGame.Core.Game
                 bool allPlayersHaveActed = playersToAct.All(p => p.HasActed);
                 bettingComplete = allBetsEqual && allPlayersHaveActed;
                 
+                reason = bettingComplete ? 
+                    $"{engine.State}_AllBetsEqualAndAllPlayersActed" : 
+                    (!allBetsEqual ? $"{engine.State}_BetsNotEqual" : $"{engine.State}_NotAllPlayersHaveActed");
+                
                 Console.WriteLine($"★★★★★ Betting complete check for {engine.State}: allBetsEqual={allBetsEqual}, allPlayersHaveActed={allPlayersHaveActed}, result={bettingComplete} ★★★★★");
             }
+            
+            // Track the decision in telemetry
+            BettingRoundTelemetry.TrackBettingRoundCheck(engine, bettingComplete, reason);
             
             return bettingComplete;
         }

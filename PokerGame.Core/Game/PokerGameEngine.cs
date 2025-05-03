@@ -182,7 +182,7 @@ namespace PokerGame.Core.Game
             }
             
             // Reset HasActed flags for all players at the start of a new hand
-            ResetHasActedFlags();
+            ResetHasActedFlags("StartHand");
             
             // Move dealer button to next player (make sure we have players)
             if (_players.Count > 0)
@@ -260,12 +260,17 @@ namespace PokerGame.Core.Game
         public void ProcessPlayerAction(string action, int betAmount = 0)
         {
             Player player = _players[_currentPlayerIndex];
+            ActionType actionType = ActionType.Check; // Default
+            int amount = 0;
+            
+            Console.WriteLine($"★★★★★ Processing player action: {player.Name} performs {action} with bet amount {betAmount}. Current game state: {_gameState} ★★★★★");
             
             switch (action.ToLower())
             {
                 case "fold":
                     player.Fold();
                     _ui.ShowMessage($"{player.Name} folds.");
+                    actionType = ActionType.Fold;
                     break;
                     
                 case "check":
@@ -273,9 +278,11 @@ namespace PokerGame.Core.Game
                     {
                         // Can't check if there's a bet to call
                         _ui.ShowMessage("You can't check, you must call or fold.");
+                        Console.WriteLine($"★★★★★ Rejected check action: {player.Name} cannot check with current bet {_currentBet} > player bet {player.CurrentBet} ★★★★★");
                         return;
                     }
                     _ui.ShowMessage($"{player.Name} checks.");
+                    actionType = ActionType.Check;
                     break;
                     
                 case "call":
@@ -283,6 +290,8 @@ namespace PokerGame.Core.Game
                         int callAmount = _currentBet - player.CurrentBet;
                         int actualBet = player.PlaceBet(callAmount);
                         _ui.ShowMessage($"{player.Name} calls {actualBet}.");
+                        actionType = ActionType.Call;
+                        amount = actualBet;
                     }
                     break;
                     
@@ -292,6 +301,7 @@ namespace PokerGame.Core.Game
                         if (betAmount < minRaise)
                         {
                             _ui.ShowMessage($"Minimum raise is {minRaise}.");
+                            Console.WriteLine($"★★★★★ Rejected raise action: {player.Name} cannot raise to {betAmount} < minimum {minRaise} ★★★★★");
                             return;
                         }
                         
@@ -299,25 +309,41 @@ namespace PokerGame.Core.Game
                         int actualBet = player.PlaceBet(raiseAmount);
                         _currentBet = player.CurrentBet;
                         _ui.ShowMessage($"{player.Name} raises to {player.CurrentBet}.");
+                        actionType = ActionType.Raise;
+                        amount = player.CurrentBet;
                     }
                     break;
                     
                 default:
                     _ui.ShowMessage("Invalid action. Try fold, check, call, or raise.");
+                    Console.WriteLine($"★★★★★ Invalid action: {action}. Only fold, check, call, or raise are allowed. ★★★★★");
                     return;
             }
             
             // Mark that this player has acted in this round
             player.HasActed = true;
             
+            // Track the action in telemetry
+            BettingRoundTelemetry.TrackPlayerAction(this, player, actionType, amount);
+            
+            Console.WriteLine($"★★★★★ Player {player.Name} HasActed flag set to TRUE after {action} ★★★★★");
+            
             // Move to next player
             MoveToNextPlayer();
             _ui.UpdateGameState(this);
             
             // Check if betting round is complete
-            if (IsBettingRoundComplete())
+            Console.WriteLine($"★★★★★ Checking if betting round is complete after player {player.Name}'s {action} action ★★★★★");
+            bool isComplete = IsBettingRoundComplete();
+            
+            if (isComplete)
             {
+                Console.WriteLine($"★★★★★ Betting round is complete, advancing game state from {_gameState} ★★★★★");
                 AdvanceGameState();
+            }
+            else
+            {
+                Console.WriteLine($"★★★★★ Betting round continues. Current state: {_gameState} ★★★★★");
             }
         }
         
@@ -353,12 +379,22 @@ namespace PokerGame.Core.Game
         /// <summary>
         /// Resets the HasActed flag for all players
         /// </summary>
-        private void ResetHasActedFlags()
+        /// <param name="context">Optional context string indicating where the reset occurred</param>
+        private void ResetHasActedFlags(string context = "Default")
         {
+            Console.WriteLine($"★★★★★ Resetting HasActed flags for {_players.Count} players, context: {context}, state: {_gameState} ★★★★★");
+            
             foreach (var player in _players)
             {
+                // Log the before state for debugging
+                Console.WriteLine($"★★★★★ Player {player.Name} HasActed before reset: {player.HasActed} ★★★★★");
+                
+                // Reset the flag
                 player.HasActed = false;
             }
+            
+            // Track this reset in telemetry
+            BettingRoundTelemetry.TrackHasActedReset(this, context);
         }
         
         /// <summary>
@@ -374,7 +410,7 @@ namespace PokerGame.Core.Game
             }
             
             // Reset HasActed flags for all players at the start of a new betting round
-            ResetHasActedFlags();
+            ResetHasActedFlags("AdvanceGameState");
             
             _currentBet = 0;
             
@@ -432,7 +468,7 @@ namespace PokerGame.Core.Game
             EnsureCurrentPlayerIsActive();
             
             // Reset HasActed flags at the start of this betting round
-            ResetHasActedFlags();
+            ResetHasActedFlags("DealFlop");
             
             // Only process betting if requested (used by microservices to control game flow)
             if (processBetting)
@@ -464,7 +500,7 @@ namespace PokerGame.Core.Game
             EnsureCurrentPlayerIsActive();
             
             // Reset HasActed flags at the start of this betting round
-            ResetHasActedFlags();
+            ResetHasActedFlags("DealTurn");
             
             // Only process betting if requested (used by microservices to control game flow)
             if (processBetting)
@@ -496,7 +532,7 @@ namespace PokerGame.Core.Game
             EnsureCurrentPlayerIsActive();
             
             // Reset HasActed flags at the start of this betting round
-            ResetHasActedFlags();
+            ResetHasActedFlags("DealRiver");
             
             // Only process betting if requested (used by microservices to control game flow)
             if (processBetting)
@@ -606,7 +642,11 @@ namespace PokerGame.Core.Game
             
             // If only one player remains, betting is complete
             if (activePlayers.Count <= 1)
+            {
+                Console.WriteLine($"★★★★★ Betting round complete: Only {activePlayers.Count} active player(s) remain ★★★★★");
+                BettingRoundTelemetry.TrackBettingRoundCheck(this, true, "Only one active player remains");
                 return true;
+            }
                 
             // Check if all active players have bet the same amount or are all-in
             int targetBet = _currentBet;
@@ -614,6 +654,8 @@ namespace PokerGame.Core.Game
             {
                 if (player.CurrentBet < targetBet && !player.IsAllIn)
                 {
+                    Console.WriteLine($"★★★★★ Betting round NOT complete: Player {player.Name} has bet {player.CurrentBet} < target {targetBet} and is not all-in ★★★★★");
+                    BettingRoundTelemetry.TrackBettingRoundCheck(this, false, $"Player {player.Name} has not matched the current bet");
                     return false;
                 }
             }
@@ -623,8 +665,16 @@ namespace PokerGame.Core.Game
             bool allPlayersHaveActed = playersToAct.All(p => p.HasActed);
             
             if (!allPlayersHaveActed)
+            {
+                var playersWhoHaveNotActed = playersToAct.Where(p => !p.HasActed).ToList();
+                string playerNames = string.Join(", ", playersWhoHaveNotActed.Select(p => p.Name));
+                Console.WriteLine($"★★★★★ Betting round NOT complete: Not all players have acted. Waiting for: {playerNames} ★★★★★");
+                BettingRoundTelemetry.TrackBettingRoundCheck(this, false, $"Players who have not acted: {playerNames}");
                 return false;
+            }
             
+            Console.WriteLine($"★★★★★ Betting round complete: All {playersToAct.Count} player(s) have acted and all bets are equal to {targetBet} ★★★★★");
+            BettingRoundTelemetry.TrackBettingRoundCheck(this, true, "All players have acted and all bets are equal");
             return true;
         }
         
