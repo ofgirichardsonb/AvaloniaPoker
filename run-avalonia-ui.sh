@@ -36,15 +36,10 @@ dotnet build PokerGame.Avalonia/PokerGame.Avalonia.csproj --configuration Debug
 
 # Note: We no longer need to start services separately as the Avalonia app now handles this internally
 
-# Build and run the Avalonia UI
-echo "Starting Avalonia UI..."
-# Note: These environment variables enable Avalonia UI to run in a headless environment like Replit
+# Configure environment for headless mode (no GUI in Replit environment)
+# Note: In a real desktop environment, this would launch the graphical interface
 export AVALONIA_HEADLESS=true
 export AVALONIA_HEADLESS_FRAMEBUFFER=true
-
-# Run the Avalonia UI in headless mode
-echo "Running Avalonia UI in headless mode (Replit environment)..."
-echo "Note: In a real desktop environment, this would launch the graphical interface."
 
 # Setup a simple status file for Replit to show we're running
 mkdir -p /tmp/poker-ui
@@ -86,12 +81,11 @@ cat > /tmp/poker-ui/index.html << EOT
 EOT
 
 # Start the Avalonia UI in the background
-echo "Starting Avalonia UI with integrated service management..."
 dotnet run --project PokerGame.Avalonia/PokerGame.Avalonia.csproj --configuration Debug &
 AVALONIA_PID=$!
 
 # Wait for the Avalonia UI process to exit
-echo "Poker Game running with integrated services. Press Ctrl+C to exit..."
+echo "Poker Game is running. Press Ctrl+C to exit."
 wait $AVALONIA_PID
 
 # Cleanup happens automatically through the trap handler
