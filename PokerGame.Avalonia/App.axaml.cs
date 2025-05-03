@@ -65,10 +65,73 @@ namespace PokerGame.Avalonia
             {
                 Console.WriteLine("Avalonia application cleanup starting...");
                 
-                // Perform all necessary cleanup
+                // Kill all running services first
+                try
+                {
+                    Console.WriteLine("Terminating all running microservices...");
+                    // Try to use the MicroserviceManager to stop services if available
+                    var broker = PokerGame.Core.Messaging.BrokerManager.Instance?.CentralBroker;
+                    if (broker != null)
+                    {
+                        var shutdownMessage = new MSA.Foundation.Messaging.Message
+                        {
+                            MessageType = "Shutdown",
+                            Source = "AvaloniaUI"
+                        };
+                        broker.Publish(shutdownMessage);
+                        Console.WriteLine("Shutdown signal sent to all services");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error stopping services: {ex.Message}");
+                }
+                
+                // Small delay to allow services to process shutdown messages
+                System.Threading.Thread.Sleep(500);
+                
+                // Perform all necessary ExecutionContext cleanup
+                Console.WriteLine("Cleaning up all execution contexts...");
                 MSA.Foundation.ServiceManagement.ExecutionContext.CleanupAll();
                 
-                // If we have any other custom cleanup, do it here
+                // Additional NetMQ cleanup
+                try
+                {
+                    Console.WriteLine("Cleaning up NetMQ context...");
+                    var netMQHelper = MSA.Foundation.Messaging.NetMQContextHelper.Instance;
+                    netMQHelper?.Cleanup();
+                    Console.WriteLine("NetMQ context cleaned up");
+                } 
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error during NetMQ cleanup: {ex.Message}");
+                }
+                
+                // Forcibly kill any remaining processes as a last resort
+                try
+                {
+                    // Force terminate any remaining child processes
+                    var processes = System.Diagnostics.Process.GetProcessesByName("dotnet");
+                    foreach (var process in processes)
+                    {
+                        if (process.Id != System.Diagnostics.Process.GetCurrentProcess().Id)
+                        {
+                            try
+                            {
+                                process.Kill(true);
+                                Console.WriteLine($"Terminated process ID: {process.Id}");
+                            }
+                            catch
+                            {
+                                // Ignore errors killing processes
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore errors in process termination
+                }
                 
                 Console.WriteLine("Avalonia application cleanup completed.");
             }

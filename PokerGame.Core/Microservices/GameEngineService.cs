@@ -1312,10 +1312,12 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             case Game.GameState.PreFlop:
                                 // Move to Flop phase
                                 Console.WriteLine("Transitioning from PreFlop to Flop");
-                                _gameEngine.MoveToNextRound();
                                 
-                                // Deal flop cards
+                                // Deal flop cards first
                                 await DealCommunityCardsAsync(3);
+                                
+                                // Now move to the next state
+                                _gameEngine.MoveToNextRound();
                                 
                                 // Broadcast updated game state with flop cards
                                 var flopDealtMessage = Message.Create(MessageType.FlopDealt);
@@ -1327,15 +1329,20 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 };
                                 flopDealtMessage.SetPayload(flopDealtPayload);
                                 Broadcast(flopDealtMessage);
+                                
+                                // IMPORTANT: Let the UI control the betting round
+                                Console.WriteLine("Starting FLOP betting round");
                                 break;
                                 
                             case Game.GameState.Flop:
                                 // Move to Turn phase
                                 Console.WriteLine("Transitioning from Flop to Turn");
-                                _gameEngine.MoveToNextRound();
                                 
-                                // Deal turn card
+                                // Deal turn card first
                                 await DealCommunityCardsAsync(1);
+                                
+                                // Now move to the next state
+                                _gameEngine.MoveToNextRound();
                                 
                                 // Broadcast updated game state with turn card
                                 var turnDealtMessage = Message.Create(MessageType.TurnDealt);
@@ -1347,15 +1354,20 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 };
                                 turnDealtMessage.SetPayload(turnDealtPayload);
                                 Broadcast(turnDealtMessage);
+                                
+                                // IMPORTANT: Let the UI control the betting round
+                                Console.WriteLine("Starting TURN betting round");
                                 break;
                                 
                             case Game.GameState.Turn:
                                 // Move to River phase
                                 Console.WriteLine("Transitioning from Turn to River");
-                                _gameEngine.MoveToNextRound();
                                 
-                                // Deal river card
+                                // Deal river card first
                                 await DealCommunityCardsAsync(1);
+                                
+                                // Now move to the next state
+                                _gameEngine.MoveToNextRound();
                                 
                                 // Broadcast updated game state with river card
                                 var riverDealtMessage = Message.Create(MessageType.RiverDealt);
@@ -1367,6 +1379,9 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 };
                                 riverDealtMessage.SetPayload(riverDealtPayload);
                                 Broadcast(riverDealtMessage);
+                                
+                                // IMPORTANT: Let the UI control the betting round
+                                Console.WriteLine("Starting RIVER betting round");
                                 break;
                                 
                             case Game.GameState.River:
