@@ -138,11 +138,15 @@ namespace PokerGame.Avalonia
             }
             else 
             {
-                Console.WriteLine("Linux/other platform detected");
+                // Linux is not supported in this application
+                Console.WriteLine("ERROR: This application only supports Windows and macOS platforms.");
+                Console.WriteLine("Please run on a supported platform. Exiting...");
+                
+                // Exit the application immediately to prevent SkiaSharp initialization
+                Environment.Exit(1);
+                
+                // This code will never be reached but is required for compilation
                 return AppBuilder.Configure<App>()
-                    .UsePlatformDetect()
-                    .UseReactiveUI()
-                    .WithInterFont()
                     .LogToTrace();
             }
         }

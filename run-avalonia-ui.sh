@@ -36,10 +36,8 @@ dotnet build PokerGame.Avalonia/PokerGame.Avalonia.csproj --configuration Debug
 
 # Note: We no longer need to start services separately as the Avalonia app now handles this internally
 
-# Configure environment for headless mode (no GUI in Replit environment)
-# Note: In a real desktop environment, this would launch the graphical interface
-export AVALONIA_HEADLESS=true
-export AVALONIA_HEADLESS_FRAMEBUFFER=true
+# Run in regular mode - no headless configuration
+# (previously had headless mode configuration here, removed as requested)
 
 # Setup a simple status file for Replit to show we're running
 mkdir -p /tmp/poker-ui
@@ -60,8 +58,8 @@ cat > /tmp/poker-ui/index.html << EOT
     <div class="container">
         <h1>Poker Game UI Status</h1>
         <div class="status">
-            <p><strong>Status:</strong> The Poker Game desktop application is currently running in headless mode.</p>
-            <p>This is a desktop application built with Avalonia UI for Windows and macOS, so the actual interface is not visible in the Replit environment.</p>
+            <p><strong>Status:</strong> The Poker Game desktop application is currently running.</p>
+            <p>This is a desktop application built with Avalonia UI for Windows and macOS.</p>
         </div>
         <p>The services architecture is running in the background with the following components:</p>
         <ul>
