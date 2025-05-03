@@ -1127,6 +1127,10 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             {
                                 Console.WriteLine("BETTING ROUND IS COMPLETE - Sending RoundComplete message");
                                 
+                                // Add a delay before completing the round to give UI time to update
+                                Console.WriteLine("Adding a brief delay before completing the round...");
+                                await Task.Delay(500);
+                                
                                 // Create and send a RoundComplete message to progress to the next phase
                                 var playerActionRoundCompletePayload = new RoundCompletePayload
                                 {
@@ -1142,10 +1146,23 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 // Send the message to trigger the next phase
                                 Console.WriteLine($"Broadcasting RoundComplete for {_gameEngine.State}");
                                 Broadcast(roundCompleteMessage);
+                                
+                                // Log detailed information about the round completion
+                                Console.WriteLine("=================================================");
+                                Console.WriteLine($"ROUND COMPLETE: {_gameEngine.State}");
+                                Console.WriteLine($"Current pot: {_gameEngine.Pot}");
+                                Console.WriteLine($"Number of community cards: {_gameEngine.CommunityCards.Count}");
+                                Console.WriteLine($"Active players: {_gameEngine.Players.Count(p => p.IsActive)}");
+                                Console.WriteLine("=================================================");
                             }
                             else
                             {
-                                Console.WriteLine("Betting round still in progress - waiting for more player actions");
+                                Console.WriteLine("=================================================");
+                                Console.WriteLine("Betting round is NOT complete yet - player actions still needed");
+                                Console.WriteLine($"Current game state: {_gameEngine.State}");
+                                int activePlayers = _gameEngine.Players.Count(p => p.IsActive);
+                                Console.WriteLine($"Active players: {activePlayers}");
+                                Console.WriteLine("=================================================");
                                 
                                 // Update all clients with the current game state
                                 BroadcastGameState();
