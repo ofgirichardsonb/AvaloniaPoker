@@ -97,10 +97,7 @@ EOT
 dotnet run --project PokerGame.Avalonia/PokerGame.Avalonia.csproj --configuration Debug &
 AVALONIA_PID=$!
 
-# Start a simple HTTP server to serve the status page
-cd /tmp/poker-ui
-python3 -m http.server 5000 &
-HTTP_SERVER_PID=$!
+# Note: We've removed the HTTP server to avoid port conflicts
 
 # Wait for the Avalonia UI process to exit
 echo "Services running. Press Ctrl+C to exit..."

@@ -25,24 +25,8 @@ namespace PokerGame.Avalonia
             
             try 
             {
-                var builder = BuildAvaloniaApp();
-                
-                // Use platform detection to select appropriate backend
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                {
-                    Console.WriteLine("Windows platform detected");
-                }
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                {
-                    Console.WriteLine("macOS platform detected");
-                }
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                {
-                    Console.WriteLine("Linux platform detected");
-                }
-                
                 // Start with the appropriate lifetime
-                builder.StartWithClassicDesktopLifetime(args, ShutdownMode.OnMainWindowClose);
+                BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, ShutdownMode.OnMainWindowClose);
             }
             catch (Exception ex)
             {
@@ -63,9 +47,34 @@ namespace PokerGame.Avalonia
 
         // Avalonia configuration, don't remove; also used by visual designer.
         public static AppBuilder BuildAvaloniaApp()
-            => AppBuilder.Configure<App>()
-                .UseReactiveUI()
-                .WithInterFont()
-                .LogToTrace();
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                Console.WriteLine("macOS platform detected - using native backend");
+                return AppBuilder.Configure<App>()
+                    .UsePlatformDetect()
+                    .UseReactiveUI()
+                    .WithInterFont()
+                    .LogToTrace();
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                Console.WriteLine("Windows platform detected");
+                return AppBuilder.Configure<App>()
+                    .UsePlatformDetect()
+                    .UseReactiveUI() 
+                    .WithInterFont()
+                    .LogToTrace();
+            }
+            else 
+            {
+                Console.WriteLine("Linux/other platform detected");
+                return AppBuilder.Configure<App>()
+                    .UsePlatformDetect()
+                    .UseReactiveUI()
+                    .WithInterFont()
+                    .LogToTrace();
+            }
+        }
     }
 }
