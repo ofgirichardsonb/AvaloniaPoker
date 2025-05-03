@@ -14,6 +14,63 @@ namespace PokerGame.Core.Game
         private static readonly TelemetryService _telemetry = TelemetryService.Instance;
         
         /// <summary>
+        /// Creates an annotation in Application Insights for significant game events
+        /// </summary>
+        /// <param name="engine">The poker game engine instance</param>
+        /// <param name="title">The annotation title</param>
+        /// <param name="description">Detailed description of the annotation</param>
+        /// <param name="category">The category of the annotation (e.g., Bug, Feature, UI Issue)</param>
+        public static void CreateAnnotation(PokerGameEngine engine, string title, string description, string category)
+        {
+            if (engine == null) return;
+            
+            try
+            {
+                if (!_telemetry.Initialize(Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY") ?? ""))
+                {
+                    Console.WriteLine("Failed to initialize telemetry for annotation");
+                    return;
+                }
+                
+                var properties = new Dictionary<string, string>
+                {
+                    { "Type", "Annotation" },
+                    { "Title", title },
+                    { "Description", description },
+                    { "Category", category },
+                    { "GameState", engine.State.ToString() },
+                    { "Timestamp", DateTime.UtcNow.ToString("o") },
+                    { "ActivePlayers", engine.Players.Count(p => !p.HasFolded).ToString() },
+                    { "CurrentBet", engine.CurrentBet.ToString() },
+                    { "TotalPot", engine.Pot.ToString() }
+                };
+                
+                // Add details about each player's state
+                int playerIndex = 0;
+                foreach (var player in engine.Players)
+                {
+                    properties[$"Player{playerIndex}.Name"] = player.Name;
+                    properties[$"Player{playerIndex}.Chips"] = player.Chips.ToString();
+                    properties[$"Player{playerIndex}.CurrentBet"] = player.CurrentBet.ToString();
+                    properties[$"Player{playerIndex}.HasActed"] = player.HasActed.ToString();
+                    properties[$"Player{playerIndex}.IsAllIn"] = player.IsAllIn.ToString();
+                    properties[$"Player{playerIndex}.HasFolded"] = player.HasFolded.ToString();
+                    playerIndex++;
+                }
+                
+                // Create a specialized event type for annotations to make them easier to find
+                _telemetry.TrackEvent("GameAnnotation", properties);
+                _telemetry.Flush(); // Force sending the telemetry immediately
+                
+                Console.WriteLine($"✓ Created annotation: {title} - {category}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating annotation: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
         /// Tracks a betting round check for completion
         /// </summary>
         /// <param name="engine">The poker game engine instance</param>

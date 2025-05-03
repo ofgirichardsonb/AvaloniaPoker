@@ -347,10 +347,37 @@ namespace PokerGame.Avalonia.ViewModels
             {
                 CurrentPlayer = playerViewModel;
                 
-                // Update available actions
-                CanCheck = player.CurrentBet == gameEngine.CurrentBet;
-                CanCall = player.CurrentBet < gameEngine.CurrentBet && player.Chips > 0;
-                CanRaise = player.Chips > 0;
+                // Update available actions with detailed logging and enhanced state management
+                bool shouldCheck = player.CurrentBet == gameEngine.CurrentBet;
+                bool shouldCall = player.CurrentBet < gameEngine.CurrentBet && player.Chips > 0;
+                
+                // Fix for the issue where Call button is disabled when it should be enabled
+                // If current bet is higher than player's bet, they MUST call or fold
+                bool mustCallOrFold = gameEngine.CurrentBet > player.CurrentBet && player.Chips > 0;
+                
+                // Enable raising only if player has enough chips and it's not a forced call situation
+                bool shouldRaise = player.Chips > 0;
+                
+                Console.WriteLine($"★★★★★ UI Action Evaluation for {player.Name} ★★★★★");
+                Console.WriteLine($"★★★★★ Player CurrentBet: {player.CurrentBet}, GameEngine CurrentBet: {gameEngine.CurrentBet}, Player Chips: {player.Chips} ★★★★★");
+                Console.WriteLine($"★★★★★ Should Check: {shouldCheck} (CurrentBet == GameEngine.CurrentBet: {player.CurrentBet == gameEngine.CurrentBet}) ★★★★★");
+                Console.WriteLine($"★★★★★ Should Call: {shouldCall} (CurrentBet < GameEngine.CurrentBet: {player.CurrentBet < gameEngine.CurrentBet} AND Chips > 0: {player.Chips > 0}) ★★★★★");
+                Console.WriteLine($"★★★★★ Must Call Or Fold: {mustCallOrFold} ★★★★★");
+                Console.WriteLine($"★★★★★ Should Raise: {shouldRaise} (Chips > 0: {player.Chips > 0}) ★★★★★");
+                
+                // Set the UI button states
+                CanCheck = shouldCheck;
+                CanCall = shouldCall; // This MUST be true when CurrentBet < GameEngine.CurrentBet
+                
+                // Force-enable call button if the player must call (can't check)
+                if (mustCallOrFold)
+                {
+                    Console.WriteLine($"★★★★★ FORCE ENABLING CALL BUTTON for {player.Name} - Must call {gameEngine.CurrentBet - player.CurrentBet} or fold ★★★★★");
+                    CanCall = true;
+                    CanCheck = false; // Can't check when call is required
+                }
+                
+                CanRaise = shouldRaise;
                 CanFold = true;
                 
                 // Update minimum raise amount

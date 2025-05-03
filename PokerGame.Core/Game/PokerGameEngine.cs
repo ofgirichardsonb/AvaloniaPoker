@@ -279,6 +279,15 @@ namespace PokerGame.Core.Game
                         // Can't check if there's a bet to call
                         _ui.ShowMessage("You can't check, you must call or fold.");
                         Console.WriteLine($"★★★★★ Rejected check action: {player.Name} cannot check with current bet {_currentBet} > player bet {player.CurrentBet} ★★★★★");
+                        
+                        // Create an annotation for this UI issue to help diagnose it in App Insights
+                        BettingRoundTelemetry.CreateAnnotation(
+                            this,
+                            "UI Button State Issue Detected",
+                            $"Player {player.Name} attempted to check when they should call. Current bet: {_currentBet}, Player bet: {player.CurrentBet}",
+                            "UI Bug"
+                        );
+                        
                         return;
                     }
                     _ui.ShowMessage($"{player.Name} checks.");
