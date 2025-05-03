@@ -92,6 +92,11 @@ namespace PokerGame.Core.Models
         public bool IsCurrentUser { get; set; }
         
         /// <summary>
+        /// Gets or sets whether the player has acted in the current betting round
+        /// </summary>
+        public bool HasActed { get; set; }
+        
+        /// <summary>
         /// Gets or sets the player's hole cards
         /// </summary>
         public List<Card> HoleCards { get; set; } = new List<Card>();
@@ -183,6 +188,7 @@ namespace PokerGame.Core.Models
             ClearHand();
             IsDealer = false;
             IsActive = true;
+            HasActed = false;
         }
         
         /// <summary>

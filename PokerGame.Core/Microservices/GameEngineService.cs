@@ -29,6 +29,11 @@ namespace PokerGame.Core.Microservices
         private string _currentDeckId = string.Empty;
         private Models.Deck? _emergencyDeck;
         
+        // Game flow control flags
+        private bool _waitingForPlayerActions = false;  // When true, game won't progress to next state automatically
+        private bool _waitingForBettingRound = false;   // When true, game is waiting for a betting round to complete
+        private bool _allowStateTransition = true;      // When false, dealing cards won't trigger state changes
+        
         /// <summary>
         /// Gets a value indicating whether the service is currently running
         /// </summary>
@@ -685,6 +690,10 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     Console.WriteLine($"# To: {message.ReceiverId ?? "broadcast"}");
                     Console.WriteLine($"# Time: {DateTime.Now.ToString("HH:mm:ss.fff")}");
                     Console.WriteLine("##########################################################");
+                    
+                    // Add control flag state visibility
+                    Console.WriteLine($"★★★★★ Current control flags at StartHand: waitingForBettingRound={_waitingForBettingRound}, waitingForPlayerActions={_waitingForPlayerActions}, allowStateTransition={_allowStateTransition} ★★★★★");
+                    Console.WriteLine($"★★★★★ Current game state: {_gameEngine.State} ★★★★★");
                     Console.WriteLine("\n\n");
                     
                     // Log to standard debug and message trace files
@@ -930,7 +939,12 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                     Broadcast(notification);
                                 }
                                 
-                                Console.WriteLine($"Hand started successfully. State is now: {_gameEngine.State}");
+                                Console.WriteLine($"★★★★★ Hand started successfully. State is now: {_gameEngine.State} ★★★★★");
+                                
+                                // Set the control flags for initial betting round
+                                _waitingForBettingRound = true;
+                                _waitingForPlayerActions = true;
+                                Console.WriteLine($"★★★★★ Setting control flags: waitingForBettingRound={_waitingForBettingRound}, waitingForPlayerActions={_waitingForPlayerActions} ★★★★★");
                             }
                             catch (Exception ex) {
                                 Console.WriteLine("Error starting hand: " + ex.Message);
@@ -939,6 +953,11 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 // Force state change
                                 Console.WriteLine("Forcing state change after error");
                                 typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, Game.GameState.PreFlop);
+                                
+                                // Set the control flags even after an error
+                                _waitingForBettingRound = true;
+                                _waitingForPlayerActions = true;
+                                Console.WriteLine($"★★★★★ Setting control flags after error: waitingForBettingRound={_waitingForBettingRound}, waitingForPlayerActions={_waitingForPlayerActions} ★★★★★");
                             }
                         }
                     }
@@ -1099,12 +1118,25 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     break;
                     
                 case MessageType.PlayerAction:
-                    Console.WriteLine($"Received PlayerAction message from {message.SenderId}");
+                    Console.WriteLine($"★★★★★ Received PlayerAction message from {message.SenderId} ★★★★★");
                     
                     var actionPayload = message.GetPayload<PlayerActionPayload>();
                     if (actionPayload != null)
                     {
-                        Console.WriteLine($"Processing player action: {actionPayload.ActionType} from player {actionPayload.PlayerId}");
+                        Console.WriteLine($"★★★★★ Processing player action: {actionPayload.ActionType} from player {actionPayload.PlayerId} ★★★★★");
+                        Console.WriteLine($"★★★★★ Current control flags: waitingForBettingRound={_waitingForBettingRound}, waitingForPlayerActions={_waitingForPlayerActions} ★★★★★");
+                        
+                        // Check if we're expecting player actions
+                        if (!_waitingForBettingRound)
+                        {
+                            Console.WriteLine("★★★★★ WARNING: Received player action when not waiting for betting round! ★★★★★");
+                            Console.WriteLine("★★★★★ This could be due to a UI timing issue or race condition. ★★★★★");
+                            Console.WriteLine("★★★★★ Setting waitingForBettingRound=true to handle this action properly. ★★★★★");
+                            _waitingForBettingRound = true;
+                        }
+                        
+                        // Acknowledge that we received a player action
+                        _waitingForPlayerActions = false;
                         
                         // Force updating of active player if needed
                         try
@@ -1112,20 +1144,25 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             // Ensure we're in a proper state to process actions
                             if (_gameEngine.State == Game.GameState.Setup)
                             {
-                                Console.WriteLine("Forcing game state to PreFlop before processing action");
+                                Console.WriteLine("★★★★★ Forcing game state to PreFlop before processing action ★★★★★");
                                 typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, Game.GameState.PreFlop);
                             }
                             
                             // Process the action
-                            Console.WriteLine($"Processing action: {actionPayload.ActionType} with amount: {actionPayload.BetAmount}");
+                            Console.WriteLine($"★★★★★ Processing action: {actionPayload.ActionType} with amount: {actionPayload.BetAmount} ★★★★★");
                             _gameEngine.ProcessPlayerAction(actionPayload.ActionType, actionPayload.BetAmount);
                             
                             // Log the state after action
-                            Console.WriteLine($"Game state after action: {_gameEngine.State}");
+                            Console.WriteLine($"★★★★★ Game state after action: {_gameEngine.State} ★★★★★");
+                            
                             // Check if betting round is complete
                             if (_gameEngine.IsBettingRoundComplete())
                             {
-                                Console.WriteLine("BETTING ROUND IS COMPLETE - Sending RoundComplete message");
+                                Console.WriteLine("★★★★★ BETTING ROUND IS COMPLETE - Sending RoundComplete message ★★★★★");
+                                
+                                // Set the control flags
+                                _waitingForBettingRound = false;
+                                _allowStateTransition = true;
                                 
                                 // Add a delay before completing the round to give UI time to update
                                 Console.WriteLine("Adding a brief delay before completing the round...");
@@ -1243,11 +1280,18 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     break;
                     
                 case MessageType.RoundComplete:
-                    Console.WriteLine("Received RoundComplete message");
+                    Console.WriteLine("★★★★★ Received RoundComplete message ★★★★★");
                     var roundCompletePayload = message.GetPayload<RoundCompletePayload>();
                     if (roundCompletePayload != null)
                     {
                         Console.WriteLine($"Round complete: {roundCompletePayload.RoundType}");
+                        Console.WriteLine($"Current game state: {_gameEngine.State}");
+                        Console.WriteLine($"Current pot: {_gameEngine.Pot}");
+                        Console.WriteLine($"Number of community cards: {_gameEngine.CommunityCards.Count}");
+                        Console.WriteLine($"Active players: {_gameEngine.Players.Count(p => p.IsActive)}");
+                        
+                        // Clear any previous waiting state
+                        _waitingForPlayerActions = false;
                         
                         // Add a delay before proceeding to the next round to allow for betting
                         Console.WriteLine("Adding a delay before proceeding to the next round...");
@@ -1257,11 +1301,26 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                         switch (_gameEngine.State)
                         {
                             case Game.GameState.PreFlop:
+                                // Check if we're actively waiting for player actions
+                                if (_waitingForPlayerActions)
+                                {
+                                    // Return immediately and don't progress to next round until explicitly told
+                                    Console.WriteLine("★★★★★ PREFLOP active - return to wait for player actions ★★★★★");
+                                    return; // Wait for another RoundComplete message to proceed
+                                }
+                                
                                 // Move to Flop phase
-                                Console.WriteLine("Transitioning from PreFlop to Flop");
+                                Console.WriteLine("★★★★★ Transitioning from PreFlop to Flop ★★★★★");
+                                
+                                // Set waiting flags for next round
+                                _waitingForBettingRound = true;
+                                _waitingForPlayerActions = true;
                                 
                                 // First move to the flop state
                                 _gameEngine.MoveToNextRound();
+                                
+                                // Prevent automatic state transitions during card dealing
+                                _allowStateTransition = false;
                                 
                                 // Then deal flop cards (3) without allowing automatic state transition
                                 await DealCommunityCardsAsync(3, false);
@@ -1277,18 +1336,38 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 flopDealtMessage.SetPayload(flopDealtPayload);
                                 Broadcast(flopDealtMessage);
                                 
-                                // IMPORTANT: Let the UI control the betting round
-                                Console.WriteLine("Starting FLOP betting round - waiting for player actions");
+                                // Set flag to wait for player actions before continuing
+                                _waitingForPlayerActions = true;
+                                Console.WriteLine("★★★★★ Starting FLOP betting round - waiting for player actions ★★★★★");
+                                
+                                // Broadcast game state to refresh UI
+                                BroadcastGameState();
                                 
                                 // Return immediately and don't progress to next round until explicitly told
+                                Console.WriteLine("★★★★★ FLOP betting round active - return to wait for player actions ★★★★★");
                                 return; // Wait for another RoundComplete message to proceed
                                 
                             case Game.GameState.Flop:
+                                // Check if we're actively waiting for player actions
+                                if (_waitingForPlayerActions)
+                                {
+                                    // Return immediately and don't progress to next round until explicitly told
+                                    Console.WriteLine("★★★★★ FLOP active - return to wait for player actions ★★★★★");
+                                    return; // Wait for another RoundComplete message to proceed
+                                }
+                                
                                 // Move to Turn phase
-                                Console.WriteLine("Transitioning from Flop to Turn");
+                                Console.WriteLine("★★★★★ Transitioning from Flop to Turn ★★★★★");
+                                
+                                // Set waiting flags for next round
+                                _waitingForBettingRound = true;
+                                _waitingForPlayerActions = true;
                                 
                                 // First move to the turn state
                                 _gameEngine.MoveToNextRound();
+                                
+                                // Prevent automatic state transitions during card dealing
+                                _allowStateTransition = false;
                                 
                                 // Then deal turn card (1) without allowing automatic state transition
                                 await DealCommunityCardsAsync(1, false);
@@ -1304,18 +1383,38 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 turnDealtMessage.SetPayload(turnDealtPayload);
                                 Broadcast(turnDealtMessage);
                                 
-                                // IMPORTANT: Let the UI control the betting round
-                                Console.WriteLine("Starting TURN betting round - waiting for player actions");
+                                // Set flag to wait for player actions before continuing
+                                _waitingForPlayerActions = true;
+                                Console.WriteLine("★★★★★ Starting TURN betting round - waiting for player actions ★★★★★");
+                                
+                                // Broadcast game state to refresh UI
+                                BroadcastGameState();
                                 
                                 // Return immediately and don't progress to next round until explicitly told
+                                Console.WriteLine("★★★★★ TURN betting round active - return to wait for player actions ★★★★★");
                                 return; // Wait for another RoundComplete message to proceed
                                 
                             case Game.GameState.Turn:
+                                // Check if we're actively waiting for player actions
+                                if (_waitingForPlayerActions)
+                                {
+                                    // Return immediately and don't progress to next round until explicitly told
+                                    Console.WriteLine("★★★★★ TURN active - return to wait for player actions ★★★★★");
+                                    return; // Wait for another RoundComplete message to proceed
+                                }
+                                
                                 // Move to River phase
-                                Console.WriteLine("Transitioning from Turn to River");
+                                Console.WriteLine("★★★★★ Transitioning from Turn to River ★★★★★");
+                                
+                                // Set waiting flags for next round
+                                _waitingForBettingRound = true;
+                                _waitingForPlayerActions = true;
                                 
                                 // First move to the river state
                                 _gameEngine.MoveToNextRound();
+                                
+                                // Prevent automatic state transitions during card dealing
+                                _allowStateTransition = false;
                                 
                                 // Then deal river card (1) without allowing automatic state transition
                                 await DealCommunityCardsAsync(1, false);
@@ -1331,15 +1430,33 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 riverDealtMessage.SetPayload(riverDealtPayload);
                                 Broadcast(riverDealtMessage);
                                 
-                                // IMPORTANT: Let the UI control the betting round
-                                Console.WriteLine("Starting RIVER betting round - waiting for player actions");
+                                // Set flag to wait for player actions before continuing
+                                _waitingForPlayerActions = true;
+                                Console.WriteLine("★★★★★ Starting RIVER betting round - waiting for player actions ★★★★★");
+                                
+                                // Broadcast game state to refresh UI
+                                BroadcastGameState();
                                 
                                 // Return immediately and don't progress to next round until explicitly told
+                                Console.WriteLine("★★★★★ RIVER betting round active - return to wait for player actions ★★★★★");
                                 return; // Wait for another RoundComplete message to proceed
                                 
                             case Game.GameState.River:
+                                // Check if we're actively waiting for player actions
+                                if (_waitingForPlayerActions)
+                                {
+                                    // Return immediately and don't progress to next round until explicitly told
+                                    Console.WriteLine("★★★★★ RIVER active - return to wait for player actions ★★★★★");
+                                    return; // Wait for another RoundComplete message to proceed
+                                }
+                                
                                 // Move to Showdown phase
-                                Console.WriteLine("Transitioning from River to Showdown");
+                                Console.WriteLine("★★★★★ Transitioning from River to Showdown ★★★★★");
+                                
+                                // Set waiting flags for showdown
+                                _waitingForBettingRound = false;
+                                _waitingForPlayerActions = true;
+                                
                                 _gameEngine.MoveToNextRound();
                                 
                                 // Begin showdown process
@@ -1375,14 +1492,38 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 Broadcast(showdownStartedMessage);
                                 
                                 // IMPORTANT: Add pause before proceeding to the hand complete process
-                                Console.WriteLine("Starting SHOWDOWN - pausing to view cards");
+                                _waitingForPlayerActions = true;
+                                Console.WriteLine("★★★★★ Starting SHOWDOWN - pausing to view cards ★★★★★");
+                                
+                                // Broadcast game state to refresh UI
+                                BroadcastGameState();
                                 
                                 // Return immediately and don't progress to next round until explicitly told
+                                Console.WriteLine("★★★★★ SHOWDOWN active - return to wait for player actions ★★★★★");
                                 return; // Wait for another RoundComplete message to proceed
                                 
                             case Game.GameState.Showdown:
+                                // Check if we're actively waiting for player actions
+                                if (_waitingForPlayerActions)
+                                {
+                                    // Return immediately and don't progress to next round until explicitly told
+                                    Console.WriteLine("★★★★★ SHOWDOWN active - return to wait for player actions ★★★★★");
+                                    return; // Wait for another RoundComplete message to proceed
+                                }
+                                
                                 // Process hand completion
-                                Console.WriteLine("Completing hand after showdown");
+                                Console.WriteLine("★★★★★ Completing hand after showdown ★★★★★");
+                                
+                                // Reset waiting flags with detailed logging
+                                Console.WriteLine("★★★★★ Before reset - Control flags: waitingForPlayerActions={0}, waitingForBettingRound={1}, allowStateTransition={2} ★★★★★", 
+                                    _waitingForPlayerActions, _waitingForBettingRound, _allowStateTransition);
+                                
+                                _waitingForPlayerActions = false;
+                                _waitingForBettingRound = false;
+                                _allowStateTransition = true;
+                                
+                                Console.WriteLine("★★★★★ After reset - Control flags: waitingForPlayerActions={0}, waitingForBettingRound={1}, allowStateTransition={2} ★★★★★", 
+                                    _waitingForPlayerActions, _waitingForBettingRound, _allowStateTransition);
                                 
                                 // Create and send HandComplete message
                                 var handCompleteMessage = Message.Create(MessageType.HandComplete);
@@ -1416,11 +1557,22 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                     break;
                     
                 case MessageType.HandComplete:
-                    Console.WriteLine("Received HandComplete message");
+                    Console.WriteLine("★★★★★ Received HandComplete message ★★★★★");
                     var handCompletePayload = message.GetPayload<HandCompletePayload>();
                     if (handCompletePayload != null)
                     {
-                        Console.WriteLine($"Hand complete with pot: {handCompletePayload.Pot}");
+                        Console.WriteLine($"★★★★★ Hand complete with pot: {handCompletePayload.Pot} ★★★★★");
+                        
+                        // Log the control flags before reset
+                        Console.WriteLine($"★★★★★ Before reset - Control flags: waitingForPlayerActions={_waitingForPlayerActions}, waitingForBettingRound={_waitingForBettingRound}, allowStateTransition={_allowStateTransition} ★★★★★");
+                        
+                        // Reset all game flow control flags for the next hand
+                        _waitingForPlayerActions = false;
+                        _waitingForBettingRound = false;
+                        _allowStateTransition = true;
+                        
+                        // Log the control flags after reset
+                        Console.WriteLine($"★★★★★ After reset - Control flags: waitingForPlayerActions={_waitingForPlayerActions}, waitingForBettingRound={_waitingForBettingRound}, allowStateTransition={_allowStateTransition} ★★★★★");
                         
                         // Determine winners and distribute pot
                         foreach (var winnerId in handCompletePayload.WinnerIds)
@@ -1431,12 +1583,18 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 // If multiple winners, split the pot (simplistic approach)
                                 int winAmount = _gameEngine.Pot / handCompletePayload.WinnerIds.Count;
                                 winner.Chips += winAmount;
-                                Console.WriteLine($"Player {winner.Name} wins {winAmount} chips");
+                                Console.WriteLine($"★★★★★ Player {winner.Name} wins {winAmount} chips ★★★★★");
                             }
                         }
                         
                         // Reset the game state for the next hand
                         _gameEngine.ResetForNextHand();
+                        
+                        // Set the control flags for the start of a new hand
+                        _waitingForBettingRound = false; // No betting round active yet
+                        _waitingForPlayerActions = false; // Not waiting for player actions until cards are dealt
+                        
+                        Console.WriteLine("★★★★★ Game reset for next hand, all control flags cleared ★★★★★");
                         
                         // Broadcast the updated game state after hand completion
                         BroadcastGameState();
@@ -1808,6 +1966,9 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
         /// <param name="allowStateTransition">If true, allows automatic state transition; otherwise, only adds cards</param>
         private async Task DealCommunityCardsAsync(int count, bool allowStateTransition = true)
         {
+            // Store the parameter value in our control flag
+            _allowStateTransition = allowStateTransition;
+            Console.WriteLine($"★★★★★ DealCommunityCardsAsync with allowStateTransition={allowStateTransition} ★★★★★");
             // Check if we need to use the emergency deck
             if (_currentDeckId == "emergency-local-deck" && _emergencyDeck != null)
             {
@@ -1992,7 +2153,7 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
             // If we're dealing hole cards (2 per player)
             if (_gameEngine.CommunityCards.Count == 0 && _gameEngine.Players.Any(p => p.HoleCards.Count < 2))
             {
-                Console.WriteLine("Dealing hole cards to a player");
+                Console.WriteLine("★★★★★ Dealing hole cards to a player ★★★★★");
                 foreach (var player in _gameEngine.Players)
                 {
                     if (player.HoleCards.Count < 2 && cards.Count >= 2)
@@ -2008,11 +2169,13 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                 // Check if all players have cards, and if so, make sure we start the hand
                 if (_gameEngine.Players.All(p => p.HoleCards.Count == 2))
                 {
-                    Console.WriteLine("All players have hole cards, transitioning to PreFlop");
+                    Console.WriteLine("★★★★★ All players have hole cards ★★★★★");
                     
-                    // Force state transition to PreFlop using reflection since regular StartHand might not work
-                    if (_gameEngine.State != Game.GameState.PreFlop)
+                    // Force state transition to PreFlop only if allowed
+                    if (_allowStateTransition && _gameEngine.State != Game.GameState.PreFlop)
                     {
+                        Console.WriteLine("★★★★★ Transitioning to PreFlop state (allowStateTransition=true) ★★★★★");
+                        
                         try
                         {
                             // Small blinds and big blinds setup
@@ -2030,19 +2193,63 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                             Console.WriteLine($"Error forcing state change: {ex.Message}");
                         }
                     }
+                    else if (!_allowStateTransition)
+                    {
+                        Console.WriteLine("★★★★★ Not transitioning to PreFlop state (allowStateTransition=false) ★★★★★");
+                    }
                     
-                    Console.WriteLine($"Game state is now: {_gameEngine.State}");
+                    Console.WriteLine($"★★★★★ Game state is now: {_gameEngine.State} ★★★★★");
                 }
             }
             // Otherwise, we're dealing community cards
             else
             {
-                Console.WriteLine("Dealing community cards");
+                Console.WriteLine("★★★★★ Dealing community cards ★★★★★");
+                Console.WriteLine($"★★★★★ Current game state: {_gameEngine.State} (allowStateTransition={_allowStateTransition}) ★★★★★");
+                
                 foreach (var card in cards)
                 {
                     _gameEngine.AddCommunityCard(card);
                     Console.WriteLine($"Added community card: {card}");
                 }
+                
+                // Determine if we need to transition to the next state based on community card count
+                if (_allowStateTransition)
+                {
+                    Console.WriteLine("★★★★★ State transitions allowed, checking if we need to move to next state ★★★★★");
+                    
+                    // Check community card count to determine appropriate state
+                    switch (_gameEngine.CommunityCards.Count)
+                    {
+                        case 3: // Flop
+                            if (_gameEngine.State == Game.GameState.PreFlop)
+                            {
+                                Console.WriteLine("★★★★★ Transitioning to Flop state ★★★★★");
+                                typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, Game.GameState.Flop);
+                            }
+                            break;
+                        case 4: // Turn
+                            if (_gameEngine.State == Game.GameState.Flop)
+                            {
+                                Console.WriteLine("★★★★★ Transitioning to Turn state ★★★★★");
+                                typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, Game.GameState.Turn);
+                            }
+                            break;
+                        case 5: // River
+                            if (_gameEngine.State == Game.GameState.Turn)
+                            {
+                                Console.WriteLine("★★★★★ Transitioning to River state ★★★★★");
+                                typeof(PokerGameEngine).GetField("_gameState", BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(_gameEngine, Game.GameState.River);
+                            }
+                            break;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("★★★★★ State transitions not allowed, keeping current state ★★★★★");
+                }
+                
+                Console.WriteLine($"★★★★★ Game state after dealing community cards: {_gameEngine.State} ★★★★★");
             }
             
             // Update the game state after dealing cards
