@@ -60,21 +60,29 @@ namespace PokerGame.Avalonia
             PerformCleanup();
         }
         
+        // Tracks if cleanup has been completed
+        private static bool _cleanupComplete = false;
+        
+        // Use a completely new approach with no reflection, focusing on reliable cleanup
         private void PerformCleanup()
         {
+            // Only run cleanup once
+            if (_cleanupComplete)
+                return;
+            
+            _cleanupComplete = true;
+            
             try
             {
                 Console.WriteLine("Avalonia application cleanup starting...");
                 
-                // Kill all running services first
+                // Stop services first to reduce active sockets
                 try
                 {
                     Console.WriteLine("Terminating all running microservices...");
-                    // Try to use the MicroserviceManager to stop services if available
                     var broker = PokerGame.Core.Messaging.BrokerManager.Instance?.CentralBroker;
                     if (broker != null)
                     {
-                        // Create shutdown message using the NetworkMessage from PokerGame.Core.Messaging
                         var shutdownMessage = new PokerGame.Core.Messaging.NetworkMessage
                         {
                             MessageId = Guid.NewGuid().ToString(),
@@ -91,73 +99,28 @@ namespace PokerGame.Avalonia
                     Console.WriteLine($"Error stopping services: {ex.Message}");
                 }
                 
-                // Small delay to allow services to process shutdown messages
-                System.Threading.Thread.Sleep(500);
+                // Smaller delay to reduce hanging
+                System.Threading.Thread.Sleep(200);
                 
-                // Perform all necessary ExecutionContext cleanup
+                // Perform ExecutionContext cleanup
                 Console.WriteLine("Cleaning up all execution contexts...");
                 MSA.Foundation.ServiceManagement.ExecutionContext.CleanupAll();
                 
-                // Use the most aggressive approach possible for NetMQ cleanup
+                // Directly attempt cleanup with forced parameter (immediately terminates sockets)
                 try
                 {
-                    Console.WriteLine("Performing emergency NetMQ termination...");
-                    
-                    // Try to use reflection to directly get to the NetMQ static context
-                    try
-                    {
-                        // Access the NetMQ.NetMQConfig.Context field via reflection
-                        var contextField = typeof(NetMQ.NetMQConfig).GetField("Context", 
-                            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
-                        
-                        if (contextField != null)
-                        {
-                            var context = contextField.GetValue(null);
-                            if (context != null)
-                            {
-                                // Try to invoke Terminate() directly
-                                var terminateMethod = context.GetType().GetMethod("Terminate", 
-                                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
-                                
-                                if (terminateMethod != null)
-                                {
-                                    Console.WriteLine("Directly terminating NetMQ context...");
-                                    terminateMethod.Invoke(context, new object[] { true });
-                                    Console.WriteLine("NetMQ context terminated directly.");
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Direct termination failed: {ex.Message}, trying standard cleanup...");
-                    }
-                    
-                    // Force a very quick shutdown without waiting for socket closure
-                    try 
-                    {
-                        NetMQ.NetMQConfig.Cleanup(true);
-                        Console.WriteLine("NetMQ forced cleanup succeeded");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Forced cleanup failed: {ex.Message}");
-                    }
-                    
-                    Console.WriteLine("NetMQ emergency cleanup completed");
-                    
-                    // Let's ensure we're not blocked by threads
-                    System.Threading.Thread.Sleep(100);
-                } 
+                    Console.WriteLine("Performing forced NetMQ cleanup...");
+                    NetMQ.NetMQConfig.Cleanup(true);
+                    Console.WriteLine("NetMQ forced cleanup completed");
+                }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Critical error during NetMQ termination: {ex.Message}");
+                    Console.WriteLine($"Error during NetMQ cleanup: {ex.Message}");
                 }
                 
-                // Forcibly kill any remaining processes as a last resort
+                // Terminate any lingering subprocesses
                 try
                 {
-                    // Force terminate any remaining child processes
                     var processes = System.Diagnostics.Process.GetProcessesByName("dotnet");
                     foreach (var process in processes)
                     {
@@ -180,12 +143,22 @@ namespace PokerGame.Avalonia
                     // Ignore errors in process termination
                 }
                 
-                Console.WriteLine("Avalonia application cleanup completed.");
+                // Exit the application after cleanup
+                if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                {
+                    Console.WriteLine("Forcing application exit...");
+                    desktop.Shutdown(0);
+                }
+                
+                Console.WriteLine("Avalonia application cleanup completed");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error during application cleanup: {ex.Message}");
                 Debug.WriteLine(ex);
+                
+                // Force exit in case of error
+                Environment.Exit(0);
             }
         }
     }

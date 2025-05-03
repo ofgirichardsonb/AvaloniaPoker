@@ -132,18 +132,55 @@ namespace PokerGame.Core.Microservices
         /// Schedules the cleanup to occur after giving time for sockets to close
         /// </summary>
         /// <param name="delayMs">The delay in milliseconds before cleanup</param>
-        public static void ScheduleCleanup(int delayMs = 100)
+        public static void ScheduleCleanup(int delayMs = 50)  // Reduced default delay
         {
-            lock (_lockObject)
+            // Don't use blocking lock - use a try/enter pattern
+            bool lockAcquired = false;
+            try
             {
+                Monitor.TryEnter(_lockObject, 50, ref lockAcquired);
+                if (!lockAcquired)
+                {
+                    // If we can't get the lock quickly, assume cleanup is already happening
+                    Console.WriteLine("Could not acquire lock for NetMQ cleanup scheduling");
+                    return;
+                }
+                
                 if (_cleanupScheduled || _cleanupComplete)
                     return;
                 
                 _cleanupScheduled = true;
                 Console.WriteLine($"NetMQ cleanup scheduled to occur in {delayMs}ms");
                 
-                // Schedule the cleanup to happen after a delay
+                // Schedule immediate cleanup for reliability
                 _cleanupTimer?.Change(delayMs, Timeout.Infinite);
+                
+                // Perform immediate cleanup as well, in case the timer doesn't fire
+                Task.Run(() => {
+                    Thread.Sleep(delayMs);
+                    PerformCleanup();
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error scheduling NetMQ cleanup: {ex.Message}");
+                
+                // If there was an error, try to force cleanup directly
+                try
+                {
+                    NetMQConfig.Cleanup(true);
+                }
+                catch
+                {
+                    // Ignore cleanup errors
+                }
+            }
+            finally
+            {
+                if (lockAcquired)
+                {
+                    Monitor.Exit(_lockObject);
+                }
             }
         }
         
