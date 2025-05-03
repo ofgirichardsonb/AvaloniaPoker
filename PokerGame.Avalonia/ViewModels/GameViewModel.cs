@@ -409,6 +409,8 @@ namespace PokerGame.Avalonia.ViewModels
             Pot = gameEngine.Pot;
             CurrentBet = gameEngine.CurrentBet.ToString();
             
+            Console.WriteLine($"★★★★★ [UI] UpdateGameState - CurrentBet: {gameEngine.CurrentBet}, Pot: {gameEngine.Pot}, State: {gameEngine.State} ★★★★★");
+            
             // Update game status
             GameStatus = $"Game State: {gameEngine.State}";
             
@@ -435,6 +437,8 @@ namespace PokerGame.Avalonia.ViewModels
                 playerViewModel.UpdateCardVisibility(gameOver);
                 
                 _players.Add(playerViewModel);
+                
+                Console.WriteLine($"★★★★★ [UI] Player {player.Name} - CurrentBet: {player.CurrentBet}, Chips: {player.Chips}, HasActed: {player.HasActed} ★★★★★");
             }
             
             // Update community cards
@@ -462,6 +466,55 @@ namespace PokerGame.Avalonia.ViewModels
                     {
                         player.UpdateCardVisibility(true);
                     }
+                }
+            }
+            
+            // If we have a current player, update their available actions based on the new game state
+            if (CurrentPlayer != null)
+            {
+                // Find the corresponding Player model for the current PlayerViewModel
+                var playerModel = gameEngine.Players.FirstOrDefault(p => p.Name == CurrentPlayer.Name);
+                
+                if (playerModel != null)
+                {
+                    Console.WriteLine($"★★★★★ [UI] Updating available actions for current player: {playerModel.Name} ★★★★★");
+                    
+                    // Update available actions with detailed logging and enhanced state management
+                    bool shouldCheck = playerModel.CurrentBet == gameEngine.CurrentBet;
+                    bool shouldCall = playerModel.CurrentBet < gameEngine.CurrentBet && playerModel.Chips > 0;
+                    
+                    // Fix for the issue where Call button is disabled when it should be enabled
+                    // If current bet is higher than player's bet, they MUST call or fold
+                    bool mustCallOrFold = gameEngine.CurrentBet > playerModel.CurrentBet && playerModel.Chips > 0;
+                    
+                    // Enable raising only if player has enough chips
+                    bool shouldRaise = playerModel.Chips > 0;
+                    
+                    Console.WriteLine($"★★★★★ [UI] Action Reevaluation for {playerModel.Name} ★★★★★");
+                    Console.WriteLine($"★★★★★ [UI] Player CurrentBet: {playerModel.CurrentBet}, GameEngine CurrentBet: {gameEngine.CurrentBet}, Player Chips: {playerModel.Chips} ★★★★★");
+                    Console.WriteLine($"★★★★★ [UI] Should Check: {shouldCheck} (CurrentBet == GameEngine.CurrentBet: {playerModel.CurrentBet == gameEngine.CurrentBet}) ★★★★★");
+                    Console.WriteLine($"★★★★★ [UI] Should Call: {shouldCall} (CurrentBet < GameEngine.CurrentBet: {playerModel.CurrentBet < gameEngine.CurrentBet} AND Chips > 0: {playerModel.Chips > 0}) ★★★★★");
+                    Console.WriteLine($"★★★★★ [UI] Must Call Or Fold: {mustCallOrFold} ★★★★★");
+                    Console.WriteLine($"★★★★★ [UI] Should Raise: {shouldRaise} (Chips > 0: {playerModel.Chips > 0}) ★★★★★");
+                    
+                    // Set the UI button states
+                    CanCheck = shouldCheck;
+                    CanCall = shouldCall; 
+                    
+                    // Force-enable call button if the player must call (can't check)
+                    if (mustCallOrFold)
+                    {
+                        Console.WriteLine($"★★★★★ [UI] FORCE ENABLING CALL BUTTON for {playerModel.Name} - Must call {gameEngine.CurrentBet - playerModel.CurrentBet} or fold ★★★★★");
+                        CanCall = true;
+                        CanCheck = false; // Can't check when call is required
+                    }
+                    
+                    CanRaise = shouldRaise;
+                    CanFold = true;
+                    
+                    // Update minimum raise amount
+                    MinRaiseAmount = gameEngine.CurrentBet + 10;
+                    RaiseAmount = MinRaiseAmount;
                 }
             }
         }
