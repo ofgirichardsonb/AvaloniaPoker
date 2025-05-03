@@ -14,30 +14,6 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "rebuild_test"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "poker-game"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "poker-game-5000"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "message-flow-test"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "poker-test"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "rebuild"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "core-build"
 
 [[workflows.workflow.tasks]]
@@ -54,55 +30,7 @@ args = "rebuild-abstractions"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "avalonia-ui"
-
-[[workflows.workflow]]
-name = "rebuild_test"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd /home/runner/workspace && ./rebuild.sh"
-
-[[workflows.workflow]]
-name = "poker-game"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
-
-[[workflows.workflow]]
-name = "poker-game-5000"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd /home/runner/workspace && ./poker-services.sh start --port-offset 0 --verbose --curses"
-
-[[workflows.workflow]]
-name = "message-flow-test"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd /home/runner/workspace/MessageFlowTestMinimal && dotnet build -c Debug && dotnet run -c Debug"
-
-[[workflows.workflow]]
-name = "poker-test"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 0 --verbose"
-
-[[workflows.workflow]]
-name = "rebuild"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd /home/runner/workspace && ./rebuild.sh"
+args = "build-avalonia"
 
 [[workflows.workflow]]
 name = "core-build"
@@ -110,7 +38,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && dotnet build PokerGame.Core/PokerGame.Core.csproj"
+args = "cd /home/runner/workspace && dotnet build MSA.Foundation/MSA.Foundation.csproj -c Debug"
 
 [[workflows.workflow]]
 name = "poker-game-test"
@@ -138,12 +66,12 @@ task = "shell.exec"
 args = "cd /home/runner/workspace && dotnet build PokerGame.Abstractions/PokerGame.Abstractions.csproj -c Release"
 
 [[workflows.workflow]]
-name = "avalonia-ui"
+name = "build-avalonia"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && ./run-avalonia-ui.sh"
+args = "cd /home/runner/workspace && dotnet build PokerGame.Avalonia/PokerGame.Avalonia.csproj"
 
 [deployment]
 run = ["sh", "-c", "cd /home/runner/workspace && ./poker-services.sh start-client --port-offset 200 --curses"]

@@ -71,6 +71,9 @@ namespace MSA.Foundation.ServiceManagement
             // Register process exit event to ensure cleanup on termination
             AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
             Console.CancelKeyPress += OnCancelKeyPress;
+            
+            // Register this context in the static collection of active contexts
+            RegisterContext(this);
         }
         
         private void OnProcessExit(object? sender, EventArgs e)
@@ -100,6 +103,9 @@ namespace MSA.Foundation.ServiceManagement
             // Register process exit event to ensure cleanup on termination
             AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
             Console.CancelKeyPress += OnCancelKeyPress;
+            
+            // Register this context in the static collection of active contexts
+            RegisterContext(this);
         }
         
         /// <summary>
@@ -117,6 +123,9 @@ namespace MSA.Foundation.ServiceManagement
             // Register process exit event to ensure cleanup on termination
             AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
             Console.CancelKeyPress += OnCancelKeyPress;
+            
+            // Register this context in the static collection of active contexts
+            RegisterContext(this);
         }
         
         /// <summary>
@@ -133,6 +142,9 @@ namespace MSA.Foundation.ServiceManagement
             // Register process exit event to ensure cleanup on termination
             AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
             Console.CancelKeyPress += OnCancelKeyPress;
+            
+            // Register this context in the static collection of active contexts
+            RegisterContext(this);
         }
         
         /// <summary>
@@ -294,6 +306,9 @@ namespace MSA.Foundation.ServiceManagement
                 Console.WriteLine($"Error while unregistering event handlers: {ex.Message}");
             }
             
+            // Unregister from the active contexts list
+            UnregisterContext(this);
+            
             _cts.Dispose();
         }
         
@@ -304,6 +319,75 @@ namespace MSA.Foundation.ServiceManagement
         public static ExecutionContext WithCancellation()
         {
             return new ExecutionContext(Guid.NewGuid().ToString());
+        }
+        
+        /// <summary>
+        /// Static collection of all active execution contexts
+        /// </summary>
+        private static readonly List<ExecutionContext> _activeContexts = new List<ExecutionContext>();
+        
+        /// <summary>
+        /// Lock object for thread-safe operations on the active contexts list
+        /// </summary>
+        private static readonly object _contextsLock = new object();
+        
+        /// <summary>
+        /// Registers an execution context as active
+        /// </summary>
+        /// <param name="context">The execution context to register</param>
+        public static void RegisterContext(ExecutionContext context)
+        {
+            lock (_contextsLock)
+            {
+                _activeContexts.Add(context);
+            }
+        }
+        
+        /// <summary>
+        /// Unregisters an execution context
+        /// </summary>
+        /// <param name="context">The execution context to unregister</param>
+        public static void UnregisterContext(ExecutionContext context)
+        {
+            lock (_contextsLock)
+            {
+                _activeContexts.Remove(context);
+            }
+        }
+        
+        /// <summary>
+        /// Cleans up all active execution contexts
+        /// </summary>
+        public static void CleanupAll()
+        {
+            Console.WriteLine("Cleaning up all execution contexts...");
+            
+            List<ExecutionContext> contexts;
+            lock (_contextsLock)
+            {
+                contexts = new List<ExecutionContext>(_activeContexts);
+            }
+            
+            foreach (var context in contexts)
+            {
+                try
+                {
+                    Console.WriteLine($"Stopping execution context {context.ServiceId}...");
+                    context.Stop();
+                    context.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error stopping execution context {context.ServiceId}: {ex.Message}");
+                }
+            }
+            
+            lock (_contextsLock)
+            {
+                _activeContexts.Clear();
+            }
+            
+            Console.WriteLine("All execution contexts cleaned up.");
         }
     }
 }
