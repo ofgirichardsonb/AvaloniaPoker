@@ -8,31 +8,19 @@
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>PokerGame.Avalonia</AssemblyName>
-    <!-- Enable browser support -->
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Windows and macOS desktop support only -->
+    <RuntimeIdentifiers>win-x64;osx-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
   <!-- Desktop specific configuration -->
-  <PropertyGroup Condition="'$(RuntimeIdentifier)' != 'browser-wasm'">
+  <PropertyGroup>
     <StartupObject>PokerGame.Avalonia.Program</StartupObject>
-  </PropertyGroup>
-
-  <!-- Browser specific configuration -->
-  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
-    <WasmMainJSPath>wwwroot/main.js</WasmMainJSPath>
-    <StartupObject>PokerGame.Avalonia.BrowserProgram</StartupObject>
-    <PublishTrimmed>true</PublishTrimmed>
-    <TrimMode>copyused</TrimMode>
-    <WasmBuildNative>true</WasmBuildNative>
-    <EmccCompileOptimizationFlag>-O2</EmccCompileOptimizationFlag>
-    <EmccLinkOptimizationFlag>-O2</EmccLinkOptimizationFlag>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.2.8" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.2.8" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.8" />
-    <PackageReference Include="Avalonia.Browser" Version="11.2.8" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.8" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.8" />
     <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.8" />
@@ -46,13 +34,6 @@
     <AvaloniaResource Include="Assets/**">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </AvaloniaResource>
-  </ItemGroup>
-
-  <!-- Include wwwroot files -->
-  <ItemGroup>
-    <Content Include="wwwroot\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
 
 </Project>

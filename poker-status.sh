@@ -1,18 +1,18 @@
 #!/bin/bash
 
-echo "Starting the Poker Game Status Server..."
+echo "Starting Poker Game Status Page on port 5000..."
 cd /home/runner/workspace
 
-# Make sure our web directory exists and is accessible
+# Create a web directory
 mkdir -p /tmp/poker-web
 chmod 777 /tmp/poker-web
 
-# Create a simple info page
+# Create status page HTML
 cat > /tmp/poker-web/index.html << 'EOT'
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Poker Game Project Status</title>
+    <title>Poker Game - Status</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f0f0f0; }
         .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -66,7 +66,7 @@ cat > /tmp/poker-web/index.html << 'EOT'
         <h2>Current Focuses</h2>
         <div class="feature in-progress">
             <h3>→ Platform Optimization</h3>
-            <p>Removing web/browser support to focus exclusively on Windows and macOS desktop platforms.</p>
+            <p>Removed web/browser support to focus exclusively on Windows and macOS desktop platforms.</p>
         </div>
         
         <div class="feature in-progress">
@@ -76,17 +76,15 @@ cat > /tmp/poker-web/index.html << 'EOT'
         
         <div class="info">
             <p>This is v0.1.0 of the Poker Game, focusing on creating a robust foundation for the MSA.Foundation library.</p>
+            <p>The desktop application UI using Avalonia is not shown here because Replit is a web environment, but the code has been updated to support desktop platforms.</p>
         </div>
     </div>
 </body>
 </html>
 EOT
 
-# Create a simple status page and bind to port 5000
-# This is simplified for Replit as we don't need to run the actual Avalonia UI
+# Set proper permissions on HTML file
 chmod 644 /tmp/poker-web/index.html
-echo "Starting HTTP server on port 5000..."
-cd /tmp/poker-web && python3 -m http.server 5000
 
-# This script intentionally doesn't start the actual Avalonia UI or services
-# to save Replit resources, since the Avalonia UI is for desktop deployment
+# Start a simple HTTP server on port 5000
+cd /tmp/poker-web && python3 -m http.server 5000

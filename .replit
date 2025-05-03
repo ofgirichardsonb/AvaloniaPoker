@@ -58,7 +58,7 @@ args = "avalonia-ui"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "avalonia-ui-web"
+args = "poker-status"
 
 [[workflows.workflow]]
 name = "rebuild_test"
@@ -151,12 +151,12 @@ args = "cd /home/runner/workspace && ./run-avalonia-ui.sh"
 waitForPort = 5000
 
 [[workflows.workflow]]
-name = "avalonia-ui-web"
+name = "poker-status"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "bash ./launch-avalonia-web.sh"
+args = "cd /home/runner/workspace && ./poker-status.sh"
 waitForPort = 5000
 
 [deployment]

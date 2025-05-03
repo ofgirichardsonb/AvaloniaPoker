@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -66,6 +67,23 @@ namespace MSA.Foundation.ServiceManagement
             _thread = Thread.CurrentThread;
             IsRunning = true;
             ServiceId = Guid.NewGuid().ToString();
+            
+            // Register process exit event to ensure cleanup on termination
+            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+            Console.CancelKeyPress += OnCancelKeyPress;
+        }
+        
+        private void OnProcessExit(object? sender, EventArgs e)
+        {
+            Console.WriteLine("Process exit detected - performing cleanup from ExecutionContext");
+            Stop();
+        }
+        
+        private void OnCancelKeyPress(object? sender, ConsoleCancelEventArgs e)
+        {
+            Console.WriteLine("Cancel key press detected - performing cleanup from ExecutionContext");
+            e.Cancel = true; // Prevent the process from terminating immediately
+            Stop();
         }
         
         /// <summary>
@@ -78,6 +96,10 @@ namespace MSA.Foundation.ServiceManagement
             _thread = Thread.CurrentThread;
             IsRunning = true;
             ServiceId = serviceId;
+            
+            // Register process exit event to ensure cleanup on termination
+            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+            Console.CancelKeyPress += OnCancelKeyPress;
         }
         
         /// <summary>
@@ -91,6 +113,10 @@ namespace MSA.Foundation.ServiceManagement
             _thread = Thread.CurrentThread;
             IsRunning = true;
             ServiceId = serviceId;
+            
+            // Register process exit event to ensure cleanup on termination
+            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+            Console.CancelKeyPress += OnCancelKeyPress;
         }
         
         /// <summary>
@@ -103,6 +129,10 @@ namespace MSA.Foundation.ServiceManagement
             _thread = thread;
             IsRunning = true;
             ServiceId = Guid.NewGuid().ToString();
+            
+            // Register process exit event to ensure cleanup on termination
+            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+            Console.CancelKeyPress += OnCancelKeyPress;
         }
         
         /// <summary>
@@ -194,7 +224,7 @@ namespace MSA.Foundation.ServiceManagement
         /// <typeparam name="T">The type of the metadata value</typeparam>
         /// <param name="key">The key to get metadata for</param>
         /// <returns>The metadata value for the specified key</returns>
-        public T GetMetadata<T>(string key)
+        public T? GetMetadata<T>(string key)
         {
             lock (_lock)
             {
@@ -252,6 +282,18 @@ namespace MSA.Foundation.ServiceManagement
         public void Dispose()
         {
             Stop();
+            
+            // Unregister event handlers to prevent memory leaks
+            try
+            {
+                AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+                Console.CancelKeyPress -= OnCancelKeyPress;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error while unregistering event handlers: {ex.Message}");
+            }
+            
             _cts.Dispose();
         }
         

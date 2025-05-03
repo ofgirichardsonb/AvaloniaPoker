@@ -72,7 +72,7 @@ namespace PokerGame.Avalonia.ViewModels
         public int Pot
         {
             get => _pot;
-            set => this.RaiseAndSetIfChanged(ref _pot, value);
+            set => SetProperty(ref _pot, value);
         }
         
         /// <summary>
@@ -81,7 +81,7 @@ namespace PokerGame.Avalonia.ViewModels
         public string GameStatus
         {
             get => _gameStatus;
-            set => this.RaiseAndSetIfChanged(ref _gameStatus, value);
+            set => SetProperty(ref _gameStatus, value);
         }
         
         /// <summary>
@@ -90,7 +90,7 @@ namespace PokerGame.Avalonia.ViewModels
         public string CurrentBet
         {
             get => _currentBet;
-            set => this.RaiseAndSetIfChanged(ref _currentBet, value);
+            set => SetProperty(ref _currentBet, value);
         }
         
         /// <summary>
@@ -101,6 +101,9 @@ namespace PokerGame.Avalonia.ViewModels
             get => _currentPlayer;
             set 
             {
+                if (_currentPlayer == value)
+                    return;
+                
                 // Clear any previous player's current status
                 if (_currentPlayer != null)
                 {
@@ -108,7 +111,6 @@ namespace PokerGame.Avalonia.ViewModels
                 }
                 
                 // Set the new current player
-                var oldPlayer = _currentPlayer;
                 _currentPlayer = value;
                 
                 // Set new player's current status
@@ -118,7 +120,7 @@ namespace PokerGame.Avalonia.ViewModels
                 }
                 
                 // Notify property changed
-                this.RaisePropertyChanged(nameof(CurrentPlayer));
+                RaisePropertyChanged(nameof(CurrentPlayer));
             }
         }
         
@@ -128,7 +130,7 @@ namespace PokerGame.Avalonia.ViewModels
         public bool CanCheck
         {
             get => _canCheck;
-            set => this.RaiseAndSetIfChanged(ref _canCheck, value);
+            set => SetProperty(ref _canCheck, value);
         }
         
         /// <summary>
@@ -137,7 +139,7 @@ namespace PokerGame.Avalonia.ViewModels
         public bool CanCall
         {
             get => _canCall;
-            set => this.RaiseAndSetIfChanged(ref _canCall, value);
+            set => SetProperty(ref _canCall, value);
         }
         
         /// <summary>
@@ -146,7 +148,7 @@ namespace PokerGame.Avalonia.ViewModels
         public bool CanRaise
         {
             get => _canRaise;
-            set => this.RaiseAndSetIfChanged(ref _canRaise, value);
+            set => SetProperty(ref _canRaise, value);
         }
         
         /// <summary>
@@ -155,7 +157,7 @@ namespace PokerGame.Avalonia.ViewModels
         public bool CanFold
         {
             get => _canFold;
-            set => this.RaiseAndSetIfChanged(ref _canFold, value);
+            set => SetProperty(ref _canFold, value);
         }
         
         /// <summary>
@@ -164,7 +166,7 @@ namespace PokerGame.Avalonia.ViewModels
         public bool CanStartHand
         {
             get => _canStartHand;
-            set => this.RaiseAndSetIfChanged(ref _canStartHand, value);
+            set => SetProperty(ref _canStartHand, value);
         }
         
         /// <summary>
@@ -173,7 +175,7 @@ namespace PokerGame.Avalonia.ViewModels
         public int MinRaiseAmount
         {
             get => _minRaiseAmount;
-            set => this.RaiseAndSetIfChanged(ref _minRaiseAmount, value);
+            set => SetProperty(ref _minRaiseAmount, value);
         }
         
         /// <summary>
@@ -182,7 +184,7 @@ namespace PokerGame.Avalonia.ViewModels
         public int RaiseAmount
         {
             get => _raiseAmount;
-            set => this.RaiseAndSetIfChanged(ref _raiseAmount, value);
+            set => SetProperty(ref _raiseAmount, value);
         }
         
         /// <summary>
@@ -191,7 +193,7 @@ namespace PokerGame.Avalonia.ViewModels
         public string LogMessages
         {
             get => _logMessages;
-            set => this.RaiseAndSetIfChanged(ref _logMessages, value);
+            set => SetProperty(ref _logMessages, value);
         }
         
         #endregion
@@ -499,16 +501,23 @@ namespace PokerGame.Avalonia.ViewModels
             get => _isCurrentUser;
             set
             {
-                this.RaiseAndSetIfChanged(ref _isCurrentUser, value);
-                UpdateCardVisibility();
+                if (SetProperty(ref _isCurrentUser, value))
+                {
+                    UpdateCardVisibility();
+                }
             }
         }
         
         /// <summary>
-        /// Gets whether this player is the player whose turn it is
+        /// Gets or sets whether this player is the player whose turn it is
         /// Used for UI highlighting
         /// </summary>
-        public bool IsCurrent { get; set; }
+        private bool _isCurrent;
+        public bool IsCurrent 
+        { 
+            get => _isCurrent;
+            set => SetProperty(ref _isCurrent, value);
+        }
         
         /// <summary>
         /// Gets the player's status text
@@ -569,7 +578,7 @@ namespace PokerGame.Avalonia.ViewModels
         public bool IsVisible
         {
             get => _isVisible;
-            set => this.RaiseAndSetIfChanged(ref _isVisible, value);
+            set => SetProperty(ref _isVisible, value);
         }
         
         /// <summary>

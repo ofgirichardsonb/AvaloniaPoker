@@ -3,7 +3,6 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using PokerGame.Avalonia.ViewModels;
 using PokerGame.Avalonia.Views;
-using System.Runtime.InteropServices;
 
 namespace PokerGame.Avalonia
 {
@@ -16,20 +15,10 @@ namespace PokerGame.Avalonia
 
         public override void OnFrameworkInitializationCompleted()
         {
-            bool isBrowser = RuntimeInformation.IsOSPlatform(OSPlatform.Create("BROWSER"));
-            
-            // Desktop application lifecycle
+            // Desktop application lifecycle only - we're focusing on Windows and macOS
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
                 desktop.MainWindow = new MainWindow
-                {
-                    DataContext = new MainWindowViewModel(),
-                };
-            }
-            // Browser application lifecycle
-            else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewLifetime)
-            {
-                singleViewLifetime.MainView = new MainView
                 {
                     DataContext = new MainWindowViewModel(),
                 };
