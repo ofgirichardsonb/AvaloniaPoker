@@ -1313,11 +1313,11 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 // Move to Flop phase
                                 Console.WriteLine("Transitioning from PreFlop to Flop");
                                 
-                                // Deal flop cards first
+                                // Deal flop cards first and let the game engine handle state transition
                                 await DealCommunityCardsAsync(3);
                                 
-                                // Now move to the next state
-                                _gameEngine.MoveToNextRound();
+                                // Note: We don't call MoveToNextRound() here because
+                                // DealCommunityCardsAsync already transitioned the state internally
                                 
                                 // Broadcast updated game state with flop cards
                                 var flopDealtMessage = Message.Create(MessageType.FlopDealt);
@@ -1338,11 +1338,11 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 // Move to Turn phase
                                 Console.WriteLine("Transitioning from Flop to Turn");
                                 
-                                // Deal turn card first
+                                // Deal turn card first and let the game engine handle state transition
                                 await DealCommunityCardsAsync(1);
                                 
-                                // Now move to the next state
-                                _gameEngine.MoveToNextRound();
+                                // Note: We don't call MoveToNextRound() here because
+                                // DealCommunityCardsAsync already transitioned the state internally
                                 
                                 // Broadcast updated game state with turn card
                                 var turnDealtMessage = Message.Create(MessageType.TurnDealt);
@@ -1363,11 +1363,11 @@ public async Task<bool> ProcessPlayerActionAsync(string playerId, string action,
                                 // Move to River phase
                                 Console.WriteLine("Transitioning from Turn to River");
                                 
-                                // Deal river card first
+                                // Deal river card first and let the game engine handle state transition
                                 await DealCommunityCardsAsync(1);
                                 
-                                // Now move to the next state
-                                _gameEngine.MoveToNextRound();
+                                // Note: We don't call MoveToNextRound() here because
+                                // DealCommunityCardsAsync already transitioned the state internally
                                 
                                 // Broadcast updated game state with river card
                                 var riverDealtMessage = Message.Create(MessageType.RiverDealt);
