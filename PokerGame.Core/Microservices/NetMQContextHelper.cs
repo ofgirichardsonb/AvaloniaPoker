@@ -53,46 +53,118 @@ namespace PokerGame.Core.Microservices
             // Create a timer that will perform cleanup if it hasn't happened by application exit
             _cleanupTimer = new Timer(_ => PerformCleanup(), null, Timeout.Infinite, Timeout.Infinite);
             
-            // Simple process exit handler - this is the key to fixing the issue
+            // Enhanced process exit handler with improved cleanup sequence
             AppDomain.CurrentDomain.ProcessExit += (s, e) => {
                 Console.WriteLine("Process exit detected - performing NetMQ cleanup");
                 
                 try
                 {
-                    // Set cleanup flag to prevent other threads from using the sockets
+                    // First mark for cleanup to prevent other threads from creating new sockets
+                    _cleanupScheduled = true;
                     _cleanupComplete = true;
                     
-                    // First null out the socket references to prevent other threads from using them
+                    // Capture socket references
                     var tempPublisher = _sharedPublisher;
                     var tempSubscriber = _sharedSubscriber;
                     
+                    // Clear references first to prevent others from using them
                     _sharedPublisher = null;
                     _sharedSubscriber = null;
                     
-                    // Give any active operations a moment to complete
-                    Thread.Sleep(50);
+                    // Logging for visibility
+                    Console.WriteLine("Process exit - captured socket references and cleared shared properties");
                     
-                    // Close and dispose the sockets if they aren't null
+                    // Give any active operations a moment to complete before socket cleanup
+                    // On process exit, we can afford a slightly longer delay for more thorough cleanup
+                    try { Thread.Sleep(100); } catch { /* ignore interruption */ }
+                    
+                    // First try to close sockets gracefully, then dispose them
+                    Console.WriteLine("Process exit - starting socket cleanup");
+                    
+                    // Close and dispose the sockets with better error handling
                     if (tempPublisher != null)
                     {
-                        try { tempPublisher.Close(); } catch { }
-                        try { tempPublisher.Dispose(); } catch { }
+                        try 
+                        { 
+                            Console.WriteLine("Process exit - closing publisher socket");
+                            tempPublisher.Close(); 
+                            Console.WriteLine("Process exit - publisher socket closed successfully");
+                        } 
+                        catch (Exception ex) 
+                        { 
+                            Console.WriteLine($"Process exit - error closing publisher socket: {ex.Message}");
+                        }
+                        
+                        try 
+                        { 
+                            Console.WriteLine("Process exit - disposing publisher socket");
+                            tempPublisher.Dispose();
+                            Console.WriteLine("Process exit - publisher socket disposed successfully"); 
+                        } 
+                        catch (Exception ex) 
+                        { 
+                            Console.WriteLine($"Process exit - error disposing publisher socket: {ex.Message}");
+                        }
                     }
                     
                     if (tempSubscriber != null)
                     {
-                        try { tempSubscriber.Close(); } catch { }
-                        try { tempSubscriber.Dispose(); } catch { }
+                        try 
+                        { 
+                            Console.WriteLine("Process exit - closing subscriber socket");
+                            tempSubscriber.Close(); 
+                            Console.WriteLine("Process exit - subscriber socket closed successfully");
+                        } 
+                        catch (Exception ex) 
+                        { 
+                            Console.WriteLine($"Process exit - error closing subscriber socket: {ex.Message}");
+                        }
+                        
+                        try 
+                        { 
+                            Console.WriteLine("Process exit - disposing subscriber socket");
+                            tempSubscriber.Dispose(); 
+                            Console.WriteLine("Process exit - subscriber socket disposed successfully");
+                        } 
+                        catch (Exception ex) 
+                        { 
+                            Console.WriteLine($"Process exit - error disposing subscriber socket: {ex.Message}");
+                        }
                     }
                     
-                    // Clean up the NetMQ context
-                    NetMQConfig.Cleanup(false);
+                    // Now attempt the overall NetMQ context cleanup with better logging
+                    Console.WriteLine("Process exit - proceeding to NetMQ context cleanup");
+                    
+                    try
+                    {
+                        Console.WriteLine("Process exit - performing graceful NetMQ context cleanup");
+                        NetMQConfig.Cleanup(false);
+                        Console.WriteLine("Process exit - graceful NetMQ context cleanup successful");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Process exit - error during graceful NetMQ cleanup: {ex.Message}");
+                        
+                        try
+                        {
+                            Console.WriteLine("Process exit - attempting forced NetMQ context cleanup");
+                            NetMQConfig.Cleanup(true);
+                            Console.WriteLine("Process exit - forced NetMQ context cleanup successful");
+                        }
+                        catch (Exception fex)
+                        {
+                            Console.WriteLine($"Process exit - forced NetMQ cleanup also failed: {fex.Message}");
+                        }
+                    }
+                    
+                    // Final logging
+                    Console.WriteLine("Process exit NetMQ cleanup sequence completed");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error during NetMQ cleanup: {ex.Message}");
+                    Console.WriteLine($"Error during NetMQ cleanup process: {ex.Message}");
                     
-                    // If something went wrong, try the forced cleanup
+                    // Last resort forced cleanup
                     try
                     {
                         NetMQConfig.Cleanup(true);

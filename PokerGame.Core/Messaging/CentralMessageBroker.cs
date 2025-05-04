@@ -107,10 +107,16 @@ namespace PokerGame.Core.Messaging
                 
                 _logger.Log("Stopping central message broker");
                 
-                // We don't cancel the token here because it might be shared with other components
-                // If we need to stop just this broker, we should create a linked token source
-                
+                // Mark as no longer started to prevent new messages
                 _isStarted = false;
+                
+                // We need to wait for the processing task to complete naturally,
+                // instead of forcibly canceling the token as the token might be
+                // shared with other components
+                
+                // Our ProcessMessages method checks both _isDisposed and the cancellation token,
+                // so it should exit when we set _isStarted = false and _isDisposed = true
+                
                 _logger.Log("Central message broker stopped");
             }
         }
@@ -414,11 +420,33 @@ namespace PokerGame.Core.Messaging
         {
             if (_isDisposed)
                 return;
-                
+            
+            _logger.Log("Disposing central message broker...");
+            
+            // First mark as disposed to prevent new messages from being processed
             _isDisposed = true;
             
             // Stop the broker
             Stop();
+            
+            // Wait for processing task to notice the disposed flag and exit
+            // This prevents collection modification while tasks might still be using them
+            if (_processingTask != null && !_processingTask.IsCompleted)
+            {
+                try
+                {
+                    // Give it a reasonable timeout
+                    var waitSuccess = _processingTask.Wait(500);
+                    if (!waitSuccess)
+                    {
+                        _logger.Log("Warning: Message processing task did not complete within timeout");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Log($"Error waiting for processing task to complete: {ex.Message}");
+                }
+            }
             
             // Clear all collections
             _subscribers.Clear();
@@ -429,6 +457,7 @@ namespace PokerGame.Core.Messaging
                 // Empty the queue
             }
             
+            _logger.Log("Message processing task stopped");
             _logger.Log("Central message broker disposed");
         }
     }
