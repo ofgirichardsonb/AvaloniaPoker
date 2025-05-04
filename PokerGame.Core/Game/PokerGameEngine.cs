@@ -372,21 +372,10 @@ namespace PokerGame.Core.Game
                         actionType = ActionType.Raise;
                         amount = player.CurrentBet;
                         
-                        // When a player raises, we need to explicitly reset HasActed flags for all other active players
-                        // so they can respond to the raise
-                        foreach (var otherPlayer in _players)
-                        {
-                            if (otherPlayer.Id != player.Id && otherPlayer.IsActive && !otherPlayer.IsAllIn && otherPlayer.Chips > 0)
-                            {
-                                // Reset the flag
-                                otherPlayer.HasActed = false;
-                                Console.WriteLine($"★★★★★ Player {otherPlayer.Name} HasActed reset from TRUE to FALSE after {player.Name}'s raise ★★★★★");
-                            }
-                        }
-                        
-                        // Track this reset in telemetry
-                        BettingRoundTelemetry.TrackHasActedReset(this, $"AfterRaiseBy{player.Name}");
-                        Console.WriteLine($"★★★★★ Reset HasActed flags for other players after {player.Name}'s raise ★★★★★");
+                        // Important: When a player raises, we need to reset other players' HasActed flags
+                        // Call the dedicated method that handles all the edge cases properly
+                        Console.WriteLine($"★★★★★ Calling ResetOtherPlayersHasActedFlags after {player.Name}'s raise ★★★★★");
+                        ResetOtherPlayersHasActedFlags(player);
                     }
                     break;
                     

@@ -132,6 +132,8 @@ namespace PokerGame.Core.AI
                 if (isCounterRaise)
                 {
                     Console.WriteLine($"★★★★★ [AI] COUNTER-RAISE DETECTED! {player.Name} already acted but needs to call {callAmount} more ★★★★★");
+                    Console.WriteLine($"★★★★★ [AI] {player.Name} state: HasActed={player.HasActed}, IsActive={player.IsActive}, HasFolded={player.HasFolded}, CurrentBet={player.CurrentBet} ★★★★★");
+                    Console.WriteLine($"★★★★★ [AI] Game state: {gameState}, Current bet: {currentBet}, Pot: {pot} ★★★★★");
                 }
                 
                 // NEVER fold pocket pairs on a counter-raise
