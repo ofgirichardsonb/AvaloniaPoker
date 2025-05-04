@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json;
 using MSA.Foundation.ServiceManagement;
+using MSA.Foundation.Messaging;
 using PokerGame.Core.Telemetry;
 
 // Suppress obsolete warnings for transition period
@@ -35,7 +36,7 @@ namespace PokerGame.Core.Messaging
         /// <summary>
         /// Gets the address used for in-process communication
         /// </summary>
-        public string BrokerAddress => Microservices.NetMQContextHelper.InProcessBrokerAddress;
+        public string BrokerAddress => MessageTransportFactory.CreateConnectionString(TransportType.Channel, "CentralBroker");
         
         /// <summary>
         /// Gets the port used for publishing messages

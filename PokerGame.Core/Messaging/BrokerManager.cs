@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using PokerGame.Core.Telemetry;
 using MSA.Foundation.ServiceManagement;
+using MSA.Foundation.Messaging;
 
 namespace PokerGame.Core.Messaging
 {
@@ -87,15 +88,22 @@ namespace PokerGame.Core.Messaging
                         _centralBroker.SetTelemetryHandler(_telemetryHandler);
                     }
                     
+                    // Set default transport type to Channel
+                    MessageTransportFactory.SetDefaultTransportType(TransportType.Channel);
+                    
+                    // Get the connection string from our factory
+                    string connectionString = MessageTransportFactory.CreateConnectionString(TransportType.Channel, "CentralBroker");
+                    
                     // Log central broker start
                     _telemetryService.TrackEvent("CentralMessageBrokerStarted", new Dictionary<string, string>
                     {
-                        ["InProcessAddress"] = Microservices.NetMQContextHelper.InProcessBrokerAddress,
+                        ["InProcessAddress"] = connectionString,
                         ["Verbose"] = "true",
-                        ["AutoCreated"] = "true"
+                        ["AutoCreated"] = "true",
+                        ["TransportType"] = "Channel"
                     });
                     
-                    Console.WriteLine($"BrokerManager: Central broker automatically created using in-process address: {Microservices.NetMQContextHelper.InProcessBrokerAddress}");
+                    Console.WriteLine($"BrokerManager: Central broker automatically created using in-process channel communication: {connectionString}");
                 }
                 
                 // Set started flag
@@ -145,14 +153,21 @@ namespace PokerGame.Core.Messaging
                         _centralBroker.SetTelemetryHandler(_telemetryHandler);
                     }
                     
+                    // Set default transport type to Channel
+                    MessageTransportFactory.SetDefaultTransportType(TransportType.Channel);
+                    
+                    // Get the connection string from our factory
+                    string connectionString = MessageTransportFactory.CreateConnectionString(TransportType.Channel, "CentralBroker");
+                    
                     // Log central broker start
                     _telemetryService.TrackEvent("CentralMessageBrokerStarted", new Dictionary<string, string>
                     {
-                        ["InProcessAddress"] = Microservices.NetMQContextHelper.InProcessBrokerAddress,
-                        ["Verbose"] = verbose.ToString()
+                        ["InProcessAddress"] = connectionString,
+                        ["Verbose"] = verbose.ToString(),
+                        ["TransportType"] = "Channel"
                     });
                     
-                    Console.WriteLine($"BrokerManager: Central broker created using in-process address: {Microservices.NetMQContextHelper.InProcessBrokerAddress}");
+                    Console.WriteLine($"BrokerManager: Central broker created using in-process channel communication: {connectionString}");
                 }
                 
                 return _centralBroker;

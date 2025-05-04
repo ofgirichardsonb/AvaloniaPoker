@@ -45,6 +45,21 @@ namespace MSA.Foundation.Messaging
         bool RequireAcknowledgement { get; }
         
         /// <summary>
+        /// Gets whether this message is an acknowledgement of another message
+        /// </summary>
+        bool IsAcknowledgement { get; }
+        
+        /// <summary>
+        /// Gets the ID of the message being acknowledged, if this is an acknowledgement message
+        /// </summary>
+        string AcknowledgedMessageId { get; }
+        
+        /// <summary>
+        /// Gets the receiver's identifier
+        /// </summary>
+        string ReceiverId { get; }
+        
+        /// <summary>
         /// Gets the content type of the message
         /// </summary>
         string ContentType { get; }
@@ -118,6 +133,21 @@ namespace MSA.Foundation.Messaging
         public bool RequireAcknowledgement { get; set; }
         
         /// <summary>
+        /// Gets or sets whether this message is an acknowledgement of another message
+        /// </summary>
+        public bool IsAcknowledgement { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the ID of the message being acknowledged, if this is an acknowledgement message
+        /// </summary>
+        public string AcknowledgedMessageId { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the receiver's identifier
+        /// </summary>
+        public string ReceiverId { get; set; }
+        
+        /// <summary>
         /// Gets or sets the content type of the message
         /// </summary>
         public string ContentType { get; set; }
@@ -144,6 +174,9 @@ namespace MSA.Foundation.Messaging
             CorrelationId = string.Empty;
             ReplyTo = string.Empty;
             RequireAcknowledgement = false;
+            IsAcknowledgement = false;
+            AcknowledgedMessageId = string.Empty;
+            ReceiverId = string.Empty;
             ContentType = "application/json";
             Content = Array.Empty<byte>();
         }
@@ -317,6 +350,47 @@ namespace MSA.Foundation.Messaging
         public ServiceMessage WithReplyTo(string replyTo)
         {
             ReplyTo = replyTo;
+            return this;
+        }
+        
+        /// <summary>
+        /// Sets the receiver's identifier
+        /// </summary>
+        /// <param name="receiverId">The receiver's identifier</param>
+        /// <returns>This message instance for fluent chaining</returns>
+        public ServiceMessage ToReceiver(string receiverId)
+        {
+            ReceiverId = receiverId;
+            return this;
+        }
+        
+        /// <summary>
+        /// Creates an acknowledgment message for the specified message
+        /// </summary>
+        /// <param name="messageToAcknowledge">The message to acknowledge</param>
+        /// <returns>A new acknowledgment message</returns>
+        public static ServiceMessage CreateAcknowledgment(IMessage messageToAcknowledge)
+        {
+            return new ServiceMessage
+            {
+                MessageType = "MessageAcknowledgment",
+                IsAcknowledgement = true,
+                AcknowledgedMessageId = messageToAcknowledge.MessageId,
+                SenderId = messageToAcknowledge.ReceiverId,
+                ReceiverId = messageToAcknowledge.SenderId,
+                CorrelationId = messageToAcknowledge.CorrelationId
+            };
+        }
+        
+        /// <summary>
+        /// Marks this message as an acknowledgment of another message
+        /// </summary>
+        /// <param name="acknowledgedMessageId">The ID of the message being acknowledged</param>
+        /// <returns>This message instance for fluent chaining</returns>
+        public ServiceMessage AsAcknowledgment(string acknowledgedMessageId)
+        {
+            IsAcknowledgement = true;
+            AcknowledgedMessageId = acknowledgedMessageId;
             return this;
         }
     }
