@@ -708,9 +708,29 @@ namespace PokerGame.Avalonia.ViewModels
                 {
                     playerViewModel = existingPlayers[player.Name];
                     
-                    // Clear hole cards and rebuild from scratch if the player has cards
+                    // Completely rebuild hole cards to avoid duplications
                     playerViewModel.HoleCards.Clear();
+                    
+                    // Create a deduplicated list of cards for this player
+                    var uniquePlayerCards = new HashSet<string>();
+                    var deduplicatedPlayerCards = new List<Card>();
+                    
                     foreach (var card in player.HoleCards)
+                    {
+                        string cardKey = $"{card.Rank}-{card.Suit}";
+                        if (!uniquePlayerCards.Contains(cardKey))
+                        {
+                            uniquePlayerCards.Add(cardKey);
+                            deduplicatedPlayerCards.Add(card);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"★★★★★ [UI] DUPLICATE player card detected and removed for {player.Name}: {card.Rank} of {card.Suit} ★★★★★");
+                        }
+                    }
+                    
+                    // Add each deduplicated card with proper visibility
+                    foreach (var card in deduplicatedPlayerCards)
                     {
                         bool cardVisible = playerViewModel.IsCurrentUser || gameOver || player.HasFolded;
                         playerViewModel.HoleCards.Add(new CardViewModel(card, cardVisible));
@@ -749,24 +769,33 @@ namespace PokerGame.Avalonia.ViewModels
                 _players.Add(playerViewModel);
             }
             
-            // Update community cards - avoid duplicating
+            // Better approach for updating community cards:
+            // 1. Clear the collection completely
             _communityCards.Clear();
-            // Ensure we don't add the same card multiple times
-            HashSet<string> addedCards = new HashSet<string>();
+            
+            // 2. Create a deduplicated list of cards from the engine
+            var uniqueCards = new HashSet<string>();
+            var deduplicatedCards = new List<Card>();
+            
             foreach (var card in gameEngine.CommunityCards)
             {
-                // Create unique key for this card to avoid duplicates
                 string cardKey = $"{card.Rank}-{card.Suit}";
-                if (!addedCards.Contains(cardKey))
+                if (!uniqueCards.Contains(cardKey))
                 {
-                    // Community cards are always visible
-                    _communityCards.Add(new CardViewModel(card, true));
-                    addedCards.Add(cardKey);
+                    uniqueCards.Add(cardKey);
+                    deduplicatedCards.Add(card);
                 }
                 else
                 {
-                    Console.WriteLine($"★★★★★ [UI] Prevented duplicate community card: {card.Rank} of {card.Suit} ★★★★★");
+                    Console.WriteLine($"★★★★★ [UI] DUPLICATE community card detected and removed: {card.Rank} of {card.Suit} ★★★★★");
                 }
+            }
+            
+            // 3. Add each deduplicated card to the view model collection
+            foreach (var card in deduplicatedCards)
+            {
+                _communityCards.Add(new CardViewModel(card, true));
+            }
             }
             
             // If the hand is complete, enable the start hand button
@@ -880,10 +909,21 @@ namespace PokerGame.Avalonia.ViewModels
             // Set current user flag, preferring the model's value if it's set
             _isCurrentUser = player.IsCurrentUser || isCurrentUser;
             
-            // Create view models for hole cards
+            // Create view models for hole cards with deduplication
+            var uniqueCards = new HashSet<string>();
+            
             foreach (var card in player.HoleCards)
             {
-                _holeCards.Add(new CardViewModel(card, true)); // Cards are visible by default
+                string cardKey = $"{card.Rank}-{card.Suit}";
+                if (!uniqueCards.Contains(cardKey))
+                {
+                    uniqueCards.Add(cardKey);
+                    _holeCards.Add(new CardViewModel(card, true)); // Cards are visible by default
+                }
+                else
+                {
+                    Console.WriteLine($"★★★★★ [UI] Prevented duplicate card for {player.Name} in constructor: {card.Rank} of {card.Suit} ★★★★★");
+                }
             }
             
             // If this isn't the current user, hide the cards (show backs) unless the game is over

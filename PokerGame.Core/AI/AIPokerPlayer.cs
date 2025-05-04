@@ -25,17 +25,29 @@ namespace PokerGame.Core.AI
             Console.WriteLine($"★★★★★ [AI] DetermineAction for {player.Name} - Current game state: {gameEngine.State} ★★★★★");
             Console.WriteLine($"★★★★★ [AI] Player state: HasActed={player.HasActed}, IsActive={player.IsActive}, HasFolded={player.HasFolded}, Chips={player.Chips} ★★★★★");
             
-            // Manually reset this player's state if it appears to be stuck
-            if (player.HasActed && gameEngine.CurrentPlayer?.Name == player.Name)
+            // CRITICAL FIX: Make sure the AI is active when it's the current player
+            // This ensures the AI can respond to raises even if it has already acted this round
+            if (gameEngine.CurrentPlayer?.Name == player.Name)
             {
-                Console.WriteLine($"★★★★★ [AI] FORCED RESET of {player.Name} HasActed flag - was stuck! ★★★★★");
-                player.HasActed = false;
+                // If the AI is the current player but somehow not active, reactivate it
+                if (!player.IsActive && !player.HasFolded)
+                {
+                    Console.WriteLine($"★★★★★ [AI] FORCING {player.Name} to be active since they are the current player ★★★★★");
+                    player.IsActive = true;
+                }
+                
+                // If needed, reset HasActed flag to handle the situation where AI needs to respond to a raise
+                if (player.HasActed && player.CurrentBet < gameEngine.CurrentBet)
+                {
+                    Console.WriteLine($"★★★★★ [AI] {player.Name} needs to respond to a raise - resetting HasActed flag ★★★★★");
+                    player.HasActed = false;
+                }
             }
             
-            // Player can't act if they're not active or have no chips
-            if (!player.IsActive || player.Chips <= 0)
+            // Player can only act if they have chips
+            if (player.Chips <= 0)
             {
-                Console.WriteLine($"★★★★★ [AI] {player.Name} cannot act: IsActive={player.IsActive}, Chips={player.Chips} ★★★★★");
+                Console.WriteLine($"★★★★★ [AI] {player.Name} cannot act: No chips left (Chips={player.Chips}) ★★★★★");
                 return ("fold", 0); // Default to fold if can't act
             }
             
