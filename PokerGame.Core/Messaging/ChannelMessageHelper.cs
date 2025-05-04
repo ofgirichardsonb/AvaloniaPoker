@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MSA.Foundation.Messaging;
 using MSA.Foundation.ServiceManagement;
+using PokerGame.Core.ServiceManagement;
 
 namespace PokerGame.Core.Messaging
 {
@@ -15,7 +16,7 @@ namespace PokerGame.Core.Messaging
         private static bool _initialized = false;
         private static readonly object _initLock = new object();
         private static IMessageTransport? _sharedTransport;
-        private static IMessageTransportConfiguration _defaultConfiguration = new MessageTransportConfiguration
+        private static MSA.Foundation.Messaging.MessageTransportConfiguration _defaultConfiguration = new MSA.Foundation.Messaging.MessageTransportConfiguration
         {
             ServiceId = "central-broker",
             AcknowledgementTimeoutMs = 5000
@@ -35,7 +36,7 @@ namespace PokerGame.Core.Messaging
         {
             EnsureInitialized();
             
-            var configuration = new MessageTransportConfiguration
+            var configuration = new MSA.Foundation.Messaging.MessageTransportConfiguration
             {
                 ServiceId = serviceId,
                 AcknowledgementTimeoutMs = 5000
@@ -80,11 +81,14 @@ namespace PokerGame.Core.Messaging
                     Console.WriteLine($"ChannelMessageHelper: Created shared transport for {_channelBrokerAddress}");
                     
                     // Register for application shutdown
-                    ShutdownCoordinator.Instance.RegisterForShutdown("ChannelMessageHelper", async (token) =>
-                    {
-                        Console.WriteLine("ChannelMessageHelper: Shutting down as part of application shutdown");
-                        await CleanupAsync(token);
-                    }, ShutdownPriority.Infrastructure);
+                    ShutdownCoordinator.Instance.RegisterParticipant(new ShutdownParticipant(
+                        "ChannelMessageHelper",
+                        300, // Infrastructure priority
+                        async (token) => {
+                            Console.WriteLine("ChannelMessageHelper: Shutting down as part of application shutdown");
+                            await CleanupAsync(token);
+                        }
+                    ));
                     
                     _initialized = true;
                 }

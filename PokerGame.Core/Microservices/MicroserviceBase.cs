@@ -16,9 +16,9 @@ namespace PokerGame.Core.Microservices
     /// </summary>
     public abstract class MicroserviceBase : IDisposable
     {
-        protected readonly string _serviceId;
-        protected readonly string _serviceName;
-        protected readonly string _serviceType;
+        protected string _serviceId = string.Empty;
+        protected string _serviceName = string.Empty;
+        protected string _serviceType = string.Empty;
         
         /// <summary>
         /// Gets the unique ID of this service
@@ -38,6 +38,7 @@ namespace PokerGame.Core.Microservices
         protected PublisherSocket? _publisherSocket;
         protected SubscriberSocket? _subscriberSocket;
         protected readonly ConcurrentQueue<Message> _messageQueue = new ConcurrentQueue<Message>();
+        protected MSA.Foundation.Messaging.IMessageTransport? _messageTransport;
         
         protected CancellationTokenSource? _cancellationTokenSource = new CancellationTokenSource();
         private Task? _processingTask;
@@ -46,9 +47,9 @@ namespace PokerGame.Core.Microservices
         private readonly ConcurrentDictionary<string, string> _serviceRegistry = new ConcurrentDictionary<string, string>();
         
         // Configuration options
-        private readonly int _heartbeatIntervalMs;
-        protected readonly int _publisherPort;
-        protected readonly int _subscriberPort;
+        private int _heartbeatIntervalMs;
+        protected int _publisherPort;
+        protected int _subscriberPort;
         
         /// <summary>
         /// Gets the service registry showing service ID to service type mappings
@@ -157,6 +158,11 @@ namespace PokerGame.Core.Microservices
             _publisherPort = publisherPort;
             _subscriberPort = subscriberPort;
             
+            InitializeChannelMessagingAsync().GetAwaiter().GetResult();
+        }
+
+        private async Task InitializeChannelMessagingAsync()
+        {
             // Initialize channel-based message transport
             try 
             {

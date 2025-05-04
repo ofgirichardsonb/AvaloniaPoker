@@ -10,17 +10,12 @@ namespace PokerGame.Core.Messaging
     public enum TransportType
     {
         /// <summary>
-        /// Uses NetMQ for messaging (legacy)
-        /// </summary>
-        NetMQ,
-        
-        /// <summary>
         /// Uses native .NET Channels for in-process messaging
         /// </summary>
         Channel,
         
         /// <summary>
-        /// Automatically selects the best transport based on the connection string
+        /// Automatically selects the best transport based on the connection string (currently defaults to Channel)
         /// </summary>
         Auto
     }
@@ -67,11 +62,43 @@ namespace PokerGame.Core.Messaging
             // Create the appropriate transport based on the type
             switch (transportType)
             {
-                case TransportType.NetMQ:
-                    return new NetMQMessageTransport(transportId);
-                    
                 case TransportType.Channel:
-                    return ChannelMessageHelper.CreateTransport(transportId);
+                    var config = new MSA.Foundation.Messaging.MessageTransportConfiguration { ServiceId = transportId };
+                    return new ChannelMessageTransport(config);
+                    
+                default:
+                    throw new ArgumentException($"Unsupported transport type: {transportType}", nameof(transportType));
+            }
+        }
+        
+        /// <summary>
+        /// Creates a message transport with the specified connection string and configuration
+        /// </summary>
+        /// <param name="transportType">The type of transport to create</param>
+        /// <param name="connectionString">The connection string to use</param>
+        /// <param name="configuration">Configuration options for the transport</param>
+        /// <returns>A new message transport instance</returns>
+        public static IMessageTransport Create(TransportType transportType, string connectionString, MSA.Foundation.Messaging.MessageTransportConfiguration configuration)
+        {
+            if (string.IsNullOrEmpty(connectionString))
+                throw new ArgumentException("Connection string cannot be null or empty", nameof(connectionString));
+                
+            if (configuration == null)
+                throw new ArgumentNullException(nameof(configuration));
+                
+            // If Auto is specified, use the default transport type
+            if (transportType == TransportType.Auto)
+            {
+                transportType = _defaultTransportType;
+            }
+            
+            Console.WriteLine($"MessageTransportFactory: Creating {transportType} transport for {configuration.ServiceId} with connection {connectionString}");
+            
+            // Create the appropriate transport based on the type
+            switch (transportType)
+            {
+                case TransportType.Channel:
+                    return new ChannelMessageTransport(configuration);
                     
                 default:
                     throw new ArgumentException($"Unsupported transport type: {transportType}", nameof(transportType));
@@ -96,12 +123,8 @@ namespace PokerGame.Core.Messaging
             
             switch (transportType)
             {
-                case TransportType.NetMQ:
-                    connectionString = Microservices.NetMQContextHelper.InProcessBrokerAddress;
-                    break;
-                    
                 case TransportType.Channel:
-                    connectionString = ChannelMessageHelper.InProcessAddress;
+                    connectionString = ChannelMessageHelper.ChannelBrokerAddress;
                     break;
                     
                 default:

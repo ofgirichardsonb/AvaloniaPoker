@@ -84,6 +84,38 @@ namespace PokerGame.Core.Messaging
         }
         
         /// <summary>
+        /// Initializes a new instance of the ChannelMessageTransport class with the specified configuration
+        /// </summary>
+        /// <param name="configuration">The transport configuration</param>
+        public ChannelMessageTransport(MessageTransportConfiguration configuration)
+        {
+            if (configuration == null)
+                throw new ArgumentNullException(nameof(configuration));
+                
+            if (string.IsNullOrEmpty(configuration.ServiceId))
+                throw new ArgumentException("ServiceId is required in the configuration", nameof(configuration));
+                
+            _transportId = configuration.ServiceId;
+            _configuration = configuration;
+            
+            // Register with the shutdown coordinator
+            ShutdownCoordinator.Instance.RegisterParticipant(this);
+            
+            // Create a channel for this service if it doesn't exist
+            _serviceChannel = _channels.GetOrAdd(_transportId, _ => 
+                Channel.CreateUnbounded<IMessage>(new UnboundedChannelOptions 
+                { 
+                    SingleReader = true, 
+                    SingleWriter = false 
+                }));
+                
+            Console.WriteLine($"ChannelMessageTransport {_transportId} created with configuration");
+            
+            // Automatically initialize
+            InitializeAsync(configuration).GetAwaiter().GetResult();
+        }
+        
+        /// <summary>
         /// Initializes the transport with the specified configuration
         /// </summary>
         /// <param name="configuration">The transport configuration</param>
