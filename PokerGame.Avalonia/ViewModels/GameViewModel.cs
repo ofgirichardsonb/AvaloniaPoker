@@ -290,6 +290,13 @@ namespace PokerGame.Avalonia.ViewModels
         /// </summary>
         private void ExecuteAddPlayer()
         {
+            // Check if we've reached the maximum number of players
+            if (_players.Count >= _gameEngine.MaxPlayers)
+            {
+                ShowMessage($"Cannot add more players. Maximum of {_gameEngine.MaxPlayers} players reached.");
+                return;
+            }
+            
             // In a real app, you would show a dialog to get the player name
             Random random = new Random();
             int playerNumber = _players.Count + 1;
@@ -297,7 +304,7 @@ namespace PokerGame.Avalonia.ViewModels
             
             // Add the player to our collection
             bool isCurrentUser = (_players.Count == 0); // First player added is the current user
-            var player = new Player(Guid.NewGuid().ToString(), playerName, 1000)
+            var player = new Player(Guid.NewGuid().ToString(), playerName, _gameEngine.MaxTableLimit)
             {
                 IsCurrentUser = isCurrentUser // Set the IsCurrentUser flag in the model
             };
@@ -336,13 +343,20 @@ namespace PokerGame.Avalonia.ViewModels
         /// </summary>
         private void ExecuteAddAIPlayer()
         {
+            // Check if we've reached the maximum number of players
+            if (_players.Count >= _gameEngine.MaxPlayers)
+            {
+                ShowMessage($"Cannot add more players. Maximum of {_gameEngine.MaxPlayers} players reached.");
+                return;
+            }
+            
             // In a real app, you would show a dialog to get the player name
             Random random = new Random();
             int playerNumber = _players.Count + 1;
             string playerName = $"AI Player {playerNumber}";
             
-            // Add the player to our collection
-            var player = new Player(Guid.NewGuid().ToString(), playerName, 1000)
+            // Add the player to our collection with table limit-enforced chips
+            var player = new Player(Guid.NewGuid().ToString(), playerName, _gameEngine.MaxTableLimit)
             {
                 IsCurrentUser = false // AI players are never the current user
             };

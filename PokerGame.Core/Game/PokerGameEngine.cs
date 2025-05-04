@@ -25,6 +25,9 @@ namespace PokerGame.Core.Game
         private int _bigBlind = 10;
         private int _pot = 0;
         private int _currentBet = 0;
+        private int _maxBet = 100; // Maximum bet per round
+        private int _maxTableLimit = 1000; // Maximum total chips in play for a player
+        private int _maxPlayers = 8; // Maximum number of players at the table
         
         /// <summary>
         /// Creates a new poker game engine
@@ -55,6 +58,21 @@ namespace PokerGame.Core.Game
         /// Gets the big blind amount
         /// </summary>
         public int BigBlind => _bigBlind;
+        
+        /// <summary>
+        /// Gets the maximum bet limit per round
+        /// </summary>
+        public int MaxBet => _maxBet;
+        
+        /// <summary>
+        /// Gets the maximum table limit (max chips per player)
+        /// </summary>
+        public int MaxTableLimit => _maxTableLimit;
+        
+        /// <summary>
+        /// Gets the maximum number of players allowed at the table
+        /// </summary>
+        public int MaxPlayers => _maxPlayers;
         
         /// <summary>
         /// Gets the community cards
@@ -159,10 +177,28 @@ namespace PokerGame.Core.Game
             if (playerNames.Length < 2)
                 throw new ArgumentException("At least 2 players are required", nameof(playerNames));
                 
+            // Enforce maximum player count
+            if (playerNames.Length > _maxPlayers)
+            {
+                _ui.ShowMessage($"Warning: Maximum number of players is {_maxPlayers}. Extra players will be ignored.");
+                Console.WriteLine($"★★★★★ Too many players: {playerNames.Length} > maximum {_maxPlayers}. Limiting to {_maxPlayers} players. ★★★★★");
+                
+                // Take only the allowed number of players
+                playerNames = playerNames.Take(_maxPlayers).ToArray();
+            }
+                
+            // Enforce maximum starting chips
+            int cappedStartingChips = Math.Min(startingChips, _maxTableLimit);
+            if (startingChips > cappedStartingChips)
+            {
+                _ui.ShowMessage($"Warning: Starting chips capped at table limit of {_maxTableLimit}.");
+                Console.WriteLine($"★★★★★ Starting chips too high: {startingChips} > table limit {_maxTableLimit}. Capping at {_maxTableLimit}. ★★★★★");
+            }
+            
             _players.Clear();
             foreach (var name in playerNames)
             {
-                _players.Add(new Player(Guid.NewGuid().ToString(), name, startingChips));
+                _players.Add(new Player(Guid.NewGuid().ToString(), name, cappedStartingChips));
             }
             
             _ui.ShowMessage("Game started! Let's play Texas Hold'em Poker.");
@@ -312,11 +348,21 @@ namespace PokerGame.Core.Game
                 case "raise":
                     {
                         int minRaise = _currentBet + _bigBlind;
+                        
+                        // Check for minimum raise amount
                         if (betAmount < minRaise)
                         {
                             _ui.ShowMessage($"Minimum raise is {minRaise}.");
                             Console.WriteLine($"★★★★★ Rejected raise action: {player.Name} cannot raise to {betAmount} < minimum {minRaise} ★★★★★");
                             return;
+                        }
+                        
+                        // Check for maximum bet limit
+                        if (betAmount > _maxBet)
+                        {
+                            _ui.ShowMessage($"Maximum bet is {_maxBet}. Your bet has been capped.");
+                            Console.WriteLine($"★★★★★ Capped raise action: {player.Name} wanted to raise to {betAmount} > maximum {_maxBet} ★★★★★");
+                            betAmount = _maxBet;
                         }
                         
                         int raiseAmount = betAmount - player.CurrentBet;

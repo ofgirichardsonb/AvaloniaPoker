@@ -39,7 +39,11 @@ namespace PokerGame.Core.AI
                 {
                     // Determine raise amount (between min raise and 1/3 of player's chips)
                     int minRaise = currentBet + gameEngine.BigBlind;
-                    int maxRaise = Math.Min(currentBet + player.Chips, currentBet + player.Chips / 3);
+                    // Respect the maximum bet limit for the table
+                    int maxRaise = Math.Min(
+                        gameEngine.MaxBet, // Table max bet
+                        Math.Min(currentBet + player.Chips, currentBet + player.Chips / 3) // Player's chip limit
+                    );
                     int raiseAmount = CalculateRaiseAmount(minRaise, maxRaise, player.HoleCards, communityCards, gameState);
                     
                     return ("raise", raiseAmount);
@@ -63,7 +67,11 @@ namespace PokerGame.Core.AI
                     if (_random.NextDouble() < 0.6)
                     {
                         int minRaise = currentBet + gameEngine.BigBlind;
-                        int maxRaise = Math.Min(currentBet + player.Chips, currentBet + player.Chips / 2);
+                        // Respect the maximum bet limit for the table
+                        int maxRaise = Math.Min(
+                            gameEngine.MaxBet, // Table max bet
+                            Math.Min(currentBet + player.Chips, currentBet + player.Chips / 2) // Player's chip limit
+                        );
                         int raiseAmount = CalculateRaiseAmount(minRaise, maxRaise, player.HoleCards, communityCards, gameState);
                         
                         return ("raise", raiseAmount);
@@ -109,7 +117,11 @@ namespace PokerGame.Core.AI
                         if (_random.NextDouble() < 0.15)
                         {
                             int minRaise = currentBet + gameEngine.BigBlind;
-                            int maxRaise = Math.Min(currentBet + player.Chips, currentBet + player.Chips / 3);
+                            // Respect the maximum bet limit for the table
+                            int maxRaise = Math.Min(
+                                gameEngine.MaxBet, // Table max bet
+                                Math.Min(currentBet + player.Chips, currentBet + player.Chips / 3) // Player's chip limit
+                            );
                             int raiseAmount = CalculateRaiseAmount(minRaise, maxRaise, player.HoleCards, communityCards, gameState);
                             
                             return ("raise", raiseAmount);
