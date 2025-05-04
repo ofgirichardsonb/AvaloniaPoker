@@ -497,33 +497,50 @@ namespace PokerGame.Core.Game
                 bool isAIPlayer = player.Name.Contains("AI");
                 
                 // Only reset active players who aren't all-in and have chips
-                if (player.Id != exceptPlayer.Id && player.IsActive && !player.IsAllIn && player.Chips > 0)
+                // IMPORTANT: We need to reset the HasActed flag for any player who hasn't 
+                // matched the current bet (regardless of whether they've acted already)
+                if (player.Id != exceptPlayer.Id && 
+                    player.IsActive && 
+                    !player.IsAllIn && 
+                    player.Chips > 0)
                 {
-                    // Log the before state for debugging
-                    Console.WriteLine($"★★★★★ [ENGINE] Player {player.Name} (AI={isAIPlayer}) HasActed reset from {player.HasActed} to false after raise by {exceptPlayer.Name} ★★★★★");
+                    bool needsToAct = player.CurrentBet < _currentBet;
                     
-                    // ALWAYS reset AI players HasActed flag to ensure they can respond
-                    player.HasActed = false;
-                    
-                    // For AI players, also ensure their state is fully valid
-                    if (isAIPlayer)
+                    // We should ALWAYS reset HasActed in these cases:
+                    // 1. The player needs to respond to the new bet (CurrentBet < _currentBet)
+                    // 2. The player is an AI player (extra safety)
+                    if (needsToAct || isAIPlayer)
                     {
-                        // Double verify other important flags for AI players
-                        if (!player.IsActive)
-                        {
-                            Console.WriteLine($"★★★★★ [ENGINE] FIXING inactive AI player: {player.Name} after raise ★★★★★");
-                            player.IsActive = true;
-                        }
+                        // Log the before state for debugging
+                        Console.WriteLine($"★★★★★ [ENGINE] Player {player.Name} (AI={isAIPlayer}) HasActed reset from {player.HasActed} to false after raise by {exceptPlayer.Name} ★★★★★");
                         
-                        if (player.HasFolded)
+                        // Reset HasActed to false
+                        player.HasActed = false;
+                        
+                        // For AI players, also ensure their state is fully valid
+                        if (isAIPlayer)
                         {
-                            // Only reset HasFolded if absolutely necessary - this shouldn't normally happen
-                            if (GetActivePlayers().Count <= 1)
+                            // Double verify other important flags for AI players
+                            if (!player.IsActive)
                             {
-                                Console.WriteLine($"★★★★★ [ENGINE] CRITICAL: Unfolding AI player {player.Name} to recover from stuck game state ★★★★★");
-                                player.HasFolded = false;
+                                Console.WriteLine($"★★★★★ [ENGINE] FIXING inactive AI player: {player.Name} after raise ★★★★★");
+                                player.IsActive = true;
+                            }
+                            
+                            if (player.HasFolded)
+                            {
+                                // Only reset HasFolded if absolutely necessary - this shouldn't normally happen
+                                if (GetActivePlayers().Count <= 1)
+                                {
+                                    Console.WriteLine($"★★★★★ [ENGINE] CRITICAL: Unfolding AI player {player.Name} to recover from stuck game state ★★★★★");
+                                    player.HasFolded = false;
+                                }
                             }
                         }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"★★★★★ [ENGINE] Player {player.Name} (AI={isAIPlayer}) doesn't need to respond to the raise (already matched bet) ★★★★★");
                     }
                 }
             }
@@ -797,11 +814,25 @@ namespace PokerGame.Core.Game
             
             // Check if all active players have acted
             var playersToAct = activePlayers.Where(p => !p.IsAllIn && p.Chips > 0).ToList();
-            bool allPlayersHaveActed = playersToAct.All(p => p.HasActed);
             
-            if (!allPlayersHaveActed)
+            // For each player who needs to act, check both HasActed flag AND if they've matched the current bet
+            var playersWhoHaveNotActed = new List<Player>();
+            foreach (var player in playersToAct)
             {
-                var playersWhoHaveNotActed = playersToAct.Where(p => !p.HasActed).ToList();
+                // A player needs to act in either of these cases:
+                // 1. HasActed is false (they haven't acted in this round yet)
+                // 2. Their current bet is less than the table bet (need to call/raise/fold)
+                bool needsToAct = !player.HasActed || player.CurrentBet < _currentBet;
+                
+                if (needsToAct)
+                {
+                    playersWhoHaveNotActed.Add(player);
+                    Console.WriteLine($"★★★★★ Player {player.Name} still needs to act: HasActed={player.HasActed}, CurrentBet={player.CurrentBet}, TableBet={_currentBet} ★★★★★");
+                }
+            }
+            
+            if (playersWhoHaveNotActed.Count > 0)
+            {
                 string playerNames = string.Join(", ", playersWhoHaveNotActed.Select(p => p.Name));
                 Console.WriteLine($"★★★★★ Betting round NOT complete: Not all players have acted. Waiting for: {playerNames} ★★★★★");
                 BettingRoundTelemetry.TrackBettingRoundCheck(this, false, $"Players who have not acted: {playerNames}");

@@ -128,12 +128,23 @@ namespace PokerGame.Core.AI
                 Console.WriteLine($"★★★★★ [AI] {player.Name} needs to call {callAmount} with hand strength {handStrength:F2}, pot odds {potOdds:F2} ★★★★★");
                 
                 // Detect if this is a counter-raise (someone raised after us)
-                bool isCounterRaise = player.HasActed && callAmount > 0;
+                // Enhanced detection - we consider it a counter-raise if:
+                // 1. We have already acted (HasActed=true) OR
+                // 2. We have already bet something (CurrentBet > 0) AND there's a higher bet to call
+                bool isCounterRaise = (player.HasActed || player.CurrentBet > 0) && callAmount > 0;
+                
                 if (isCounterRaise)
                 {
-                    Console.WriteLine($"★★★★★ [AI] COUNTER-RAISE DETECTED! {player.Name} already acted but needs to call {callAmount} more ★★★★★");
+                    Console.WriteLine($"★★★★★ [AI] COUNTER-RAISE DETECTED! {player.Name} has bet {player.CurrentBet} but needs to call {callAmount} more ★★★★★");
                     Console.WriteLine($"★★★★★ [AI] {player.Name} state: HasActed={player.HasActed}, IsActive={player.IsActive}, HasFolded={player.HasFolded}, CurrentBet={player.CurrentBet} ★★★★★");
                     Console.WriteLine($"★★★★★ [AI] Game state: {gameState}, Current bet: {currentBet}, Pot: {pot} ★★★★★");
+                    
+                    // CRITICAL - Reset HasActed to false explicitly when responding to a counter-raise
+                    if (player.HasActed)
+                    {
+                        Console.WriteLine($"★★★★★ [AI] Explicitly resetting HasActed for {player.Name} to respond to counter-raise ★★★★★");
+                        player.HasActed = false;
+                    }
                 }
                 
                 // NEVER fold pocket pairs on a counter-raise

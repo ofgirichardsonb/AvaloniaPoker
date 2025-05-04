@@ -528,8 +528,9 @@ namespace PokerGame.Avalonia.ViewModels
                 // First, check if the AI player has folded
                 if (player.HasFolded)
                 {
-                    Console.WriteLine($"[UI] AI player {player.Name} has already folded - skipping turn");
-                    _gameEngine.ProcessPlayerAction("fold", 0);
+                    Console.WriteLine($"★★★★★ [UI] AI player {player.Name} has already folded - skipping turn properly without extra fold action ★★★★★");
+                    // We shouldn't call ProcessPlayerAction with "fold" again - that creates duplicate actions
+                    // Instead, we should wait for the engine to move to the next player
                     return;
                 }
                 
@@ -540,14 +541,24 @@ namespace PokerGame.Avalonia.ViewModels
                     return;
                 }
                 
-                // Reset player state to ensure the AI can act
+                // Reset player state to ensure the AI can act - with detailed logging
                 if (!player.IsActive)
                 {
-                    Console.WriteLine($"[UI] Reactivating AI player {player.Name} before decision");
+                    Console.WriteLine($"★★★★★ [UI] Reactivating AI player {player.Name} before decision - was inactive ★★★★★");
                     player.IsActive = true;
                 }
                 
-                player.HasActed = false;
+                // Important: Only set HasActed to false if it's not already false
+                // This helps track action/response flow correctly
+                if (player.HasActed)
+                {
+                    Console.WriteLine($"★★★★★ [UI] Resetting AI player {player.Name} HasActed flag from TRUE to FALSE ★★★★★");
+                    player.HasActed = false;
+                }
+                else
+                {
+                    Console.WriteLine($"★★★★★ [UI] AI player {player.Name} HasActed flag already FALSE (responding to a raise) ★★★★★");
+                }
                 
                 // Make AI decision with improved error handling
                 string action;
