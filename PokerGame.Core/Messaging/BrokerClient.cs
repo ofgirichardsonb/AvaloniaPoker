@@ -182,11 +182,11 @@ namespace PokerGame.Core.Messaging
                 };
                 
                 // Initialize and start the transport
-                _messageTransport.Initialize(config);
-                _messageTransport.Start();
+                await _messageTransport.InitializeAsync(config);
+                await _messageTransport.StartAsync();
                 
                 // Subscribe to receive messages
-                _messageTransport.Subscribe(OnMessageReceived);
+                _subscriptionId = _messageTransport.SubscribeToAll(OnMessageReceived);
                 
                 // Track connection in telemetry
                 if (_telemetryEnabled)
@@ -313,7 +313,7 @@ namespace PokerGame.Core.Messaging
         {
             try
             {
-                _logger.Debug("BrokerClient", $"Received message: Type={message.Type}, ID={message.MessageId}");
+                _logger.Debug("BrokerClient", $"Received message: Type={message.MessageType}, ID={message.MessageId}");
                 
                 // Convert IMessage to BrokerMessage
                 var brokerMessage = ConvertFromTransportMessage(message);
@@ -387,17 +387,23 @@ namespace PokerGame.Core.Messaging
                 MessageId = message.MessageId,
                 SenderId = message.SenderId,
                 ReceiverId = message.ReceiverId,
-                Type = ConvertMessageType(message.Type),
+                MessageType = ConvertMessageType(message.Type),
                 RequireAcknowledgement = message.RequiresAcknowledgment,
-                InResponseTo = message.InResponseTo,
-                Topic = message.Topic,
+                CorrelationId = message.InResponseTo ?? string.Empty,
                 Timestamp = message.Timestamp
             };
             
-            // Set payload if any
-            if (message.HasPayload)
+            // Set topic as a header if present
+            if (!string.IsNullOrEmpty(message.Topic))
             {
-                serviceMessage.Payload = message.GetPayloadJson();
+                serviceMessage.SetHeader("Topic", message.Topic);
+            }
+            
+            // Set payload if any
+            if (!string.IsNullOrEmpty(message.SerializedPayload))
+            {
+                byte[] contentBytes = System.Text.Encoding.UTF8.GetBytes(message.SerializedPayload);
+                serviceMessage.Content = contentBytes;
             }
             
             return serviceMessage;
@@ -777,10 +783,13 @@ namespace PokerGame.Core.Messaging
                     try
                     {
                         // Unsubscribe from message transport
-                        _messageTransport.Unsubscribe();
+                        if (!string.IsNullOrEmpty(_subscriptionId))
+                        {
+                            _messageTransport.Unsubscribe(_subscriptionId);
+                        }
                         
                         // Stop the transport
-                        _messageTransport.Stop();
+                        _messageTransport.StopAsync().GetAwaiter().GetResult();
                         
                         // Dispose if it's disposable
                         if (_messageTransport is IDisposable disposable)
