@@ -306,6 +306,34 @@ namespace MSA.Foundation.ServiceManagement
         }
         
         /// <summary>
+        /// Triggers a coordinated shutdown with the specified token
+        /// </summary>
+        /// <param name="token">Cancellation token to cancel the operation</param>
+        /// <returns>A task representing the asynchronous shutdown operation</returns>
+        public async Task TriggerShutdownAsync(CancellationToken token)
+        {
+            // Start the shutdown process
+            var shutdownTask = InitiateShutdownAsync("Application shutdown triggered", TimeSpan.FromSeconds(5));
+            
+            try
+            {
+                // Wait for shutdown to complete or token to be canceled
+                await shutdownTask.WaitAsync(token);
+                Console.WriteLine("Shutdown completed successfully");
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("Shutdown was canceled or timed out");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during shutdown: {ex.Message}");
+                throw;
+            }
+        }
+        
+        /// <summary>
         /// Disposes resources used by the ShutdownCoordinator
         /// </summary>
         public void Dispose()
