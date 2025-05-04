@@ -25,7 +25,7 @@ namespace PokerGame.Core.Messaging
         
         private IMessageTransport? _messageTransport;
         private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
-        private Task? _receiveTask;
+        private string? _subscriptionId;
         
         private readonly ConcurrentDictionary<string, TaskCompletionSource<BrokerMessage>> _pendingRequests = new ConcurrentDictionary<string, TaskCompletionSource<BrokerMessage>>();
         private readonly ConcurrentDictionary<string, ServiceRegistrationPayload> _knownServices = new ConcurrentDictionary<string, ServiceRegistrationPayload>();
@@ -159,7 +159,7 @@ namespace PokerGame.Core.Messaging
         /// </summary>
         /// <param name="enableTelemetry">Whether to enable telemetry</param>
         /// <param name="instrumentationKey">The Application Insights instrumentation key (or null to use environment variable)</param>
-        public void Connect(bool enableTelemetry = false, string? instrumentationKey = null)
+        public async Task ConnectAsync(bool enableTelemetry = false, string? instrumentationKey = null)
         {
             try
             {
@@ -201,7 +201,7 @@ namespace PokerGame.Core.Messaging
                 }
                 
                 // Register with the broker
-                RegisterWithBroker();
+                await RegisterWithBrokerAsync();
                 
                 _logger.Info("BrokerClient", "Connected to broker successfully using channel-based messaging");
                 
@@ -228,15 +228,15 @@ namespace PokerGame.Core.Messaging
         /// <summary>
         /// Connects to the broker
         /// </summary>
-        public void Connect()
+        public async Task ConnectAsync()
         {
-            Connect(false);
+            await ConnectAsync(false);
         }
         
         /// <summary>
         /// Registers this client with the broker
         /// </summary>
-        private void RegisterWithBroker()
+        private async Task RegisterWithBrokerAsync()
         {
             try
             {
@@ -253,7 +253,7 @@ namespace PokerGame.Core.Messaging
                 message.RequiresAcknowledgment = true;
                 
                 _logger.Info("BrokerClient", $"Registering with broker as {_clientId} ({_clientName}, {_clientType})");
-                SendMessageAsync(message).GetAwaiter().GetResult();
+                await SendMessageAsync(message);
             }
             catch (Exception ex)
             {
