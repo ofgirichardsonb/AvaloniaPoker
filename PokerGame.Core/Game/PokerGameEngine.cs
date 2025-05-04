@@ -52,6 +52,11 @@ namespace PokerGame.Core.Game
         public int CurrentBet => _currentBet;
         
         /// <summary>
+        /// Gets the big blind amount
+        /// </summary>
+        public int BigBlind => _bigBlind;
+        
+        /// <summary>
         /// Gets the community cards
         /// </summary>
         public IReadOnlyList<Card> CommunityCards => _communityCards.AsReadOnly();

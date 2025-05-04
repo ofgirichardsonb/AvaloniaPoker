@@ -39,44 +39,7 @@ dotnet build PokerGame.Avalonia/PokerGame.Avalonia.csproj --configuration Debug
 # Run in regular mode - no headless configuration
 # (previously had headless mode configuration here, removed as requested)
 
-# Setup a simple status file for Replit to show we're running
-mkdir -p /tmp/poker-ui
-cat > /tmp/poker-ui/index.html << EOT
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Poker Game Running</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        h1 { color: #333; margin-top: 0; }
-        .status { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 10px 15px; margin: 20px 0; }
-        .command { background: #f5f5f5; padding: 10px; border-radius: 4px; font-family: monospace; margin: 10px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Poker Game UI Status</h1>
-        <div class="status">
-            <p><strong>Status:</strong> The Poker Game desktop application is currently running.</p>
-            <p>This is a desktop application built with Avalonia UI for Windows and macOS.</p>
-        </div>
-        <p>The services architecture is running in the background with the following components:</p>
-        <ul>
-            <li>Central Message Broker</li>
-            <li>Game Engine Service</li>
-            <li>Card Deck Service</li>
-            <li>Lobby Service</li>
-        </ul>
-        <p>Check the console output for application logs and events.</p>
-        <h2>Deployment</h2>
-        <p>To create a standalone executable for distribution:</p>
-        <div class="command">./build-standalone.sh</div>
-        <p>This will create a self-contained executable in the ./publish directory that can be run without the dotnet runtime.</p>
-    </div>
-</body>
-</html>
-EOT
+# This is a desktop application - no web server needed
 
 # Start the Avalonia UI in the background
 dotnet run --project PokerGame.Avalonia/PokerGame.Avalonia.csproj --configuration Debug &

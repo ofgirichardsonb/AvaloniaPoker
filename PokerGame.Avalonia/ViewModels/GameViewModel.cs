@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
+using PokerGame.Core.AI;
 using PokerGame.Core.Game;
 using PokerGame.Core.Interfaces;
 using PokerGame.Core.Models;
@@ -34,6 +35,10 @@ namespace PokerGame.Avalonia.ViewModels
         private int _raiseAmount = 20;
         private string _logMessages = "";
         
+        // AI Player stuff
+        private AIPokerPlayer _aiPlayer = new AIPokerPlayer();
+        private Dictionary<string, bool> _aiPlayers = new Dictionary<string, bool>();
+        
         public GameViewModel()
         {
             // Create commands
@@ -43,12 +48,13 @@ namespace PokerGame.Avalonia.ViewModels
             RaiseCommand = ReactiveCommand.Create(ExecuteRaise);
             StartHandCommand = ReactiveCommand.Create(ExecuteStartHand);
             AddPlayerCommand = ReactiveCommand.Create(ExecuteAddPlayer);
+            AddAIPlayerCommand = ReactiveCommand.Create(ExecuteAddAIPlayer);
             
             // Create game engine
             _gameEngine = new PokerGameEngine(this);
             
-            // Initialize with some players for testing
-            _gameEngine.StartGame(new[] { "Player 1", "Player 2", "Player 3", "Player 4" });
+            // Initialize with some players for testing - now just the human player
+            //_gameEngine.StartGame(new[] { "Player 1", "Player 2", "Player 3", "Player 4" });
             
             // Enable start hand button
             _canStartHand = true;
@@ -230,6 +236,11 @@ namespace PokerGame.Avalonia.ViewModels
         /// </summary>
         public ReactiveCommand<Unit, Unit> AddPlayerCommand { get; }
         
+        /// <summary>
+        /// Command to add a new AI player
+        /// </summary>
+        public ReactiveCommand<Unit, Unit> AddAIPlayerCommand { get; }
+        
         #endregion
         
         #region Command Handlers
@@ -320,6 +331,42 @@ namespace PokerGame.Avalonia.ViewModels
             }
         }
         
+        /// <summary>
+        /// Executes the add AI player command
+        /// </summary>
+        private void ExecuteAddAIPlayer()
+        {
+            // In a real app, you would show a dialog to get the player name
+            Random random = new Random();
+            int playerNumber = _players.Count + 1;
+            string playerName = $"AI Player {playerNumber}";
+            
+            // Add the player to our collection
+            var player = new Player(Guid.NewGuid().ToString(), playerName, 1000)
+            {
+                IsCurrentUser = false // AI players are never the current user
+            };
+            var playerViewModel = new PlayerViewModel(player);
+            _players.Add(playerViewModel);
+            
+            // Track this player as an AI player
+            _aiPlayers[playerName] = true;
+            
+            // Show a message that the AI player was added
+            string message = $"Added AI opponent {playerName} to the game.";
+            ShowMessage(message);
+            
+            // Only start the game when we have at least 2 players
+            if (_players.Count >= 2)
+            {
+                // Get all player names
+                List<string> playerNames = _players.Select(p => p.Name).ToList();
+                
+                // Start the game with all current players
+                _gameEngine.StartGame(playerNames.ToArray());
+            }
+        }
+        
         #endregion
         
         #region IPokerGameUI Implementation
@@ -343,63 +390,87 @@ namespace PokerGame.Avalonia.ViewModels
             // Find the corresponding player view model
             PlayerViewModel? playerViewModel = _players.FirstOrDefault(p => p.Name == player.Name);
             
-            if (playerViewModel != null)
+            if (playerViewModel == null) return;
+            
+            // Check if this is an AI player
+            bool isAIPlayer = _aiPlayers.ContainsKey(player.Name) && _aiPlayers[player.Name];
+            
+            CurrentPlayer = playerViewModel;
+            
+            // Update available actions with detailed logging and enhanced state management
+            bool shouldCheck = player.CurrentBet == gameEngine.CurrentBet;
+            bool shouldCall = player.CurrentBet < gameEngine.CurrentBet && player.Chips > 0;
+            
+            // Fix for the issue where Call button is disabled when it should be enabled
+            // If current bet is higher than player's bet, they MUST call or fold
+            bool mustCallOrFold = gameEngine.CurrentBet > player.CurrentBet && player.Chips > 0;
+            
+            // Enable raising only if player has enough chips and it's not a forced call situation
+            bool shouldRaise = player.Chips > 0;
+            
+            Console.WriteLine($"★★★★★ UI Action Evaluation for {player.Name} ★★★★★");
+            Console.WriteLine($"★★★★★ Player CurrentBet: {player.CurrentBet}, GameEngine CurrentBet: {gameEngine.CurrentBet}, Player Chips: {player.Chips} ★★★★★");
+            Console.WriteLine($"★★★★★ Should Check: {shouldCheck} (CurrentBet == GameEngine.CurrentBet: {player.CurrentBet == gameEngine.CurrentBet}) ★★★★★");
+            Console.WriteLine($"★★★★★ Should Call: {shouldCall} (CurrentBet < GameEngine.CurrentBet: {player.CurrentBet < gameEngine.CurrentBet} AND Chips > 0: {player.Chips > 0}) ★★★★★");
+            Console.WriteLine($"★★★★★ Must Call Or Fold: {mustCallOrFold} ★★★★★");
+            Console.WriteLine($"★★★★★ Should Raise: {shouldRaise} (Chips > 0: {player.Chips > 0}) ★★★★★");
+            
+            // If this is an AI player, make the decision and execute it
+            if (isAIPlayer)
             {
-                CurrentPlayer = playerViewModel;
+                // Make AI decision
+                var (action, betAmount) = _aiPlayer.DetermineAction(player, gameEngine);
                 
-                // Update available actions with detailed logging and enhanced state management
-                bool shouldCheck = player.CurrentBet == gameEngine.CurrentBet;
-                bool shouldCall = player.CurrentBet < gameEngine.CurrentBet && player.Chips > 0;
-                
-                // Fix for the issue where Call button is disabled when it should be enabled
-                // If current bet is higher than player's bet, they MUST call or fold
-                bool mustCallOrFold = gameEngine.CurrentBet > player.CurrentBet && player.Chips > 0;
-                
-                // Enable raising only if player has enough chips and it's not a forced call situation
-                bool shouldRaise = player.Chips > 0;
-                
-                Console.WriteLine($"★★★★★ UI Action Evaluation for {player.Name} ★★★★★");
-                Console.WriteLine($"★★★★★ Player CurrentBet: {player.CurrentBet}, GameEngine CurrentBet: {gameEngine.CurrentBet}, Player Chips: {player.Chips} ★★★★★");
-                Console.WriteLine($"★★★★★ Should Check: {shouldCheck} (CurrentBet == GameEngine.CurrentBet: {player.CurrentBet == gameEngine.CurrentBet}) ★★★★★");
-                Console.WriteLine($"★★★★★ Should Call: {shouldCall} (CurrentBet < GameEngine.CurrentBet: {player.CurrentBet < gameEngine.CurrentBet} AND Chips > 0: {player.Chips > 0}) ★★★★★");
-                Console.WriteLine($"★★★★★ Must Call Or Fold: {mustCallOrFold} ★★★★★");
-                Console.WriteLine($"★★★★★ Should Raise: {shouldRaise} (Chips > 0: {player.Chips > 0}) ★★★★★");
-                
-                // Set the UI button states based on game rules:
-                
-                // Only enable check if player's bet equals the current bet
-                CanCheck = shouldCheck;
-                
-                // Enable call if player needs to match a higher bet
-                CanCall = shouldCall; 
-                
-                // Force-enable call button if the player must call (can't check)
-                if (mustCallOrFold)
+                // Add a small delay to make it look like the AI is thinking
+                Task.Delay(1000).ContinueWith(_ =>
                 {
-                    Console.WriteLine($"★★★★★ FORCE ENABLING CALL BUTTON for {player.Name} - Must call {gameEngine.CurrentBet - player.CurrentBet} or fold ★★★★★");
-                    CanCall = true;
-                    CanCheck = false; // Can't check when call is required
-                }
+                    // Log the AI action
+                    ShowMessage($"AI {player.Name} decides to {action}" + 
+                                (action == "raise" ? $" with {betAmount}" : ""));
+                    
+                    // Execute the action
+                    _gameEngine.ProcessPlayerAction(action, betAmount);
+                });
                 
-                CanRaise = shouldRaise;
-                CanFold = true;
-                
-                // Update minimum raise amount
-                MinRaiseAmount = gameEngine.CurrentBet + 10;
-                RaiseAmount = MinRaiseAmount;
-                
-                // Disable start hand button during gameplay
-                CanStartHand = false;
-                
-                // Update game status based on whether this is the current user or another player
-                if (playerViewModel.IsCurrentUser)
-                {
-                    GameStatus = "Your turn - make your move";
-                }
-                else
-                {
-                    GameStatus = $"Waiting for {player.Name} to make a move";
-                }
+                // Update game status
+                GameStatus = $"{player.Name} is thinking...";
+                return; // Don't update UI controls for AI player
+            }
+            
+            // Only for human players - Set the UI button states based on game rules:
+            
+            // Only enable check if player's bet equals the current bet
+            CanCheck = shouldCheck;
+            
+            // Enable call if player needs to match a higher bet
+            CanCall = shouldCall; 
+            
+            // Force-enable call button if the player must call (can't check)
+            if (mustCallOrFold)
+            {
+                Console.WriteLine($"★★★★★ FORCE ENABLING CALL BUTTON for {player.Name} - Must call {gameEngine.CurrentBet - player.CurrentBet} or fold ★★★★★");
+                CanCall = true;
+                CanCheck = false; // Can't check when call is required
+            }
+            
+            CanRaise = shouldRaise;
+            CanFold = true;
+            
+            // Update minimum raise amount
+            MinRaiseAmount = gameEngine.CurrentBet + 10;
+            RaiseAmount = MinRaiseAmount;
+            
+            // Disable start hand button during gameplay
+            CanStartHand = false;
+            
+            // Update game status based on whether this is the current user or another player
+            if (playerViewModel.IsCurrentUser)
+            {
+                GameStatus = "Your turn - make your move";
+            }
+            else
+            {
+                GameStatus = $"Waiting for {player.Name} to make a move";
             }
         }
         
@@ -418,7 +489,8 @@ namespace PokerGame.Avalonia.ViewModels
             // Update game status
             GameStatus = $"Game State: {gameEngine.State}";
             
-            // Update players
+            // Update players - save AI player status before clearing
+            var aiPlayers = new Dictionary<string, bool>(_aiPlayers);
             _players.Clear();
             
             // In a multiplayer game, each player might already have their IsCurrentUser flag set
@@ -431,6 +503,9 @@ namespace PokerGame.Avalonia.ViewModels
                 // For demonstration, set the first player as current user
                 gameEngine.Players[0].IsCurrentUser = true;
             }
+            
+            // Restore AI player tracking
+            _aiPlayers = aiPlayers;
             
             // Get the current player from the game engine
             Player? currentPlayerFromEngine = gameEngine.CurrentPlayer;

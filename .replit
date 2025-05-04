@@ -46,7 +46,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && ./run-avalonia-ui.sh"
+args = "cd /home/runner/workspace && bash ./run-avalonia-ui.sh"
 
 [[workflows.workflow]]
 name = "rebuild-foundation"
