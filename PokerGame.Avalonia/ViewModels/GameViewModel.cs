@@ -471,34 +471,32 @@ namespace PokerGame.Avalonia.ViewModels
             // If this is an AI player, make the decision and execute it
             if (isAIPlayer)
             {
-                // Skip AI actions if the player has already acted or is not active
-                // This is a safeguard for cases where AI state wasn't properly reset
-                if (player.HasActed)
+                // RESET HasActed flag to ensure AI can make a decision
+                // This ensures the AI doesn't get stuck
+                player.HasActed = false;
+                
+                // Ensure the player is active
+                if (!player.IsActive && !player.HasFolded)
                 {
-                    Console.WriteLine($"★★★★★ SKIPPING AI ACTION FOR {player.Name} - HasActed is already TRUE ★★★★★");
-                    
-                    // Force the player's HasActed flag to false to prevent getting stuck
-                    player.HasActed = false;
-                    
-                    // Move to the next player
-                    _gameEngine.ProcessPlayerAction("check", 0);
-                    return;
+                    player.IsActive = true;
                 }
                 
-                if (!player.IsActive)
+                // Skip AI action if the player has folded
+                if (player.HasFolded)
                 {
-                    Console.WriteLine($"★★★★★ SKIPPING AI ACTION FOR {player.Name} - Player is not active ★★★★★");
-                    
-                    // Force the player's IsActive flag to true to prevent getting stuck
-                    player.IsActive = true;
-                    
                     // Move to the next player
-                    _gameEngine.ProcessPlayerAction("check", 0);
+                    _gameEngine.ProcessPlayerAction("fold", 0);
                     return;
                 }
                 
                 // Make AI decision
                 var (action, betAmount) = _aiPlayer.DetermineAction(player, gameEngine);
+                
+                // Apply table limits to bet amounts
+                if (action == "raise" && betAmount > 100)
+                {
+                    betAmount = 100; // Maximum bet size
+                }
                 
                 // Add a small delay to make it look like the AI is thinking
                 Task.Delay(1000).ContinueWith(_ =>
@@ -563,12 +561,10 @@ namespace PokerGame.Avalonia.ViewModels
             Pot = gameEngine.Pot;
             CurrentBet = gameEngine.CurrentBet.ToString();
             
-            Console.WriteLine($"★★★★★ [UI] UpdateGameState - CurrentBet: {gameEngine.CurrentBet}, Pot: {gameEngine.Pot}, State: {gameEngine.State} ★★★★★");
-            
             // Update game status
             GameStatus = $"Game State: {gameEngine.State}";
             
-            // Update players - but track existing view models and reuse them to prevent duplications
+            // First save the existing view models before clearing
             var aiPlayers = new Dictionary<string, bool>(_aiPlayers);
             var existingPlayers = new Dictionary<string, PlayerViewModel>();
             
@@ -578,6 +574,7 @@ namespace PokerGame.Avalonia.ViewModels
                 existingPlayers[player.Name] = player;
             }
             
+            // Clear the collection
             _players.Clear();
             
             // In a multiplayer game, each player might already have their IsCurrentUser flag set
@@ -598,23 +595,35 @@ namespace PokerGame.Avalonia.ViewModels
             Player? currentPlayerFromEngine = gameEngine.CurrentPlayer;
             PlayerViewModel? currentPlayerViewModel = null;
             
-            // Track player names to avoid duplicates
-            HashSet<string> addedPlayers = new HashSet<string>();
-            
+            // Create a unique dictionary of players to avoid duplicates
+            Dictionary<string, Player> uniquePlayers = new Dictionary<string, Player>();
             foreach (var player in gameEngine.Players)
             {
-                // Skip if we've already added this player in this update cycle
-                if (addedPlayers.Contains(player.Name))
+                if (!uniquePlayers.ContainsKey(player.Name))
                 {
-                    Console.WriteLine($"★★★★★ [UI] Prevented duplicate player: {player.Name} ★★★★★");
-                    continue;
+                    uniquePlayers[player.Name] = player;
                 }
+            }
+            
+            // Now add each unique player to the view model
+            foreach (var playerEntry in uniquePlayers)
+            {
+                Player player = playerEntry.Value;
                 
                 // Try to reuse existing player view model to maintain state
                 PlayerViewModel playerViewModel;
                 if (existingPlayers.ContainsKey(player.Name))
                 {
                     playerViewModel = existingPlayers[player.Name];
+                    
+                    // Clear hole cards and rebuild from scratch if the player has cards
+                    playerViewModel.HoleCards.Clear();
+                    foreach (var card in player.HoleCards)
+                    {
+                        bool cardVisible = playerViewModel.IsCurrentUser || gameOver || player.HasFolded;
+                        playerViewModel.HoleCards.Add(new CardViewModel(card, cardVisible));
+                    }
+                    
                     // Update card visibility based on game state
                     playerViewModel.UpdateCardVisibility(gameOver);
                 }
@@ -637,9 +646,6 @@ namespace PokerGame.Avalonia.ViewModels
                 }
                 
                 _players.Add(playerViewModel);
-                addedPlayers.Add(player.Name);
-                
-                Console.WriteLine($"★★★★★ [UI] Player {player.Name} - CurrentBet: {player.CurrentBet}, Chips: {player.Chips}, HasActed: {player.HasActed} ★★★★★");
             }
             
             // Update community cards - avoid duplicating
@@ -952,6 +958,9 @@ namespace PokerGame.Avalonia.ViewModels
         /// <summary>
         /// Gets the display text for the card
         /// </summary>
-        public string Display => IsVisible ? $"{Rank}{Suit}" : "🂠";
+        public string Display 
+        { 
+            get => IsVisible ? $"{Rank}{Suit}" : "🂠";
+        }
     }
 }
