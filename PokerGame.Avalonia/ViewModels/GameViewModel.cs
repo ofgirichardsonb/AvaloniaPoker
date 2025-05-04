@@ -650,6 +650,10 @@ namespace PokerGame.Avalonia.ViewModels
             CurrentBet = gameEngine.CurrentBet.ToString();
             bool gameOver = gameEngine.State == GameState.HandComplete;
             
+            // Save the current player from the engine for later AI action check
+            var currentPlayerInEngine = gameEngine.CurrentPlayer;
+            bool isCurrentPlayerAI = currentPlayerInEngine?.Name?.Contains("AI") ?? false;
+            
             // STEP 2: COMPLETE RESET - Clear all collections
             _players.Clear();
             _communityCards.Clear();
@@ -714,6 +718,28 @@ namespace PokerGame.Avalonia.ViewModels
             
             // STEP 6: Update game state status and controls
             UpdateGameStatus(gameEngine, currentPlayerViewModel, gameOver);
+            
+            // STEP 7: AUTOMATIC AI ACTION TRIGGER - Critical fix for AI response to raises
+            // If current player is an AI player and the game is active, automatically trigger their action
+            if (!gameOver && 
+                gameEngine.State != GameState.WaitingToStart && 
+                gameEngine.State != GameState.HandComplete && 
+                isCurrentPlayerAI && 
+                currentPlayerInEngine != null)
+            {
+                Console.WriteLine($"★★★★★ [UI] AUTO-TRIGGERING AI ACTION for {currentPlayerInEngine.Name} after UI update ★★★★★");
+                Console.WriteLine($"★★★★★ [UI] AI state: HasActed={currentPlayerInEngine.HasActed}, CurrentBet={currentPlayerInEngine.CurrentBet}, GameBet={gameEngine.CurrentBet} ★★★★★");
+                
+                // Small delay to allow UI update to complete
+                Task.Delay(100).ContinueWith(_ => 
+                {
+                    // Make sure it's still the AI player's turn
+                    if (gameEngine.CurrentPlayer?.Name == currentPlayerInEngine.Name)
+                    {
+                        GetAIAction(currentPlayerInEngine, gameEngine);
+                    }
+                });
+            }
         }
         
         /// <summary>
