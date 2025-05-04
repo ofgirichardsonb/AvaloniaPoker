@@ -258,6 +258,71 @@ namespace PokerGame.Core.Messaging
         }
         
         /// <summary>
+        /// Publishes a ServiceMessage to all subscribers
+        /// </summary>
+        /// <param name="message">The ServiceMessage to publish</param>
+        public void PublishServiceMessage(MSA.Foundation.Messaging.ServiceMessage message)
+        {
+            if (_isDisposed)
+                throw new ObjectDisposedException(nameof(CentralMessageBroker));
+                
+            if (message == null)
+                throw new ArgumentNullException(nameof(message));
+            
+            try
+            {
+                // Convert ServiceMessage to NetworkMessage
+                // We can't use MessageExtensions.ToNetworkMessage directly as it expects Core.Microservices.Message
+                var networkMessage = new NetworkMessage
+                {
+                    MessageId = message.MessageId,
+                    SenderId = message.SenderId,
+                    ReceiverId = message.ReceiverId,
+                    Timestamp = message.Timestamp,
+                    Type = MessageType.Debug // Default type
+                };
+                
+                // Try to parse the message type if possible
+                if (Enum.TryParse<MessageType>(message.MessageType, out var messageType))
+                {
+                    networkMessage.Type = messageType;
+                }
+                
+                // Add any content as a string payload
+                if (message.Content != null && message.Content.Length > 0)
+                {
+                    networkMessage.Payload = System.Text.Encoding.UTF8.GetString(message.Content);
+                }
+                
+                // Copy headers
+                foreach (var header in message.Headers)
+                {
+                    networkMessage.Headers[header.Key] = header.Value;
+                }
+                
+                // Use standard publish method
+                Publish(networkMessage);
+                
+                _logger.Log($"Published ServiceMessage of type {message.MessageType} from {message.SenderId} to {message.ReceiverId ?? "all"}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log($"ERROR in PublishServiceMessage: {ex.Message}");
+                // Create minimal NetworkMessage as fallback
+                var fallbackMessage = new NetworkMessage
+                {
+                    MessageId = message.MessageId,
+                    Type = MessageType.Debug,
+                    SenderId = message.SenderId,
+                    ReceiverId = message.ReceiverId,
+                    Timestamp = DateTime.UtcNow,
+                    Payload = $"Failed to convert ServiceMessage: {ex.Message}"
+                };
+                Publish(fallbackMessage);
+            }
+        }
+        
+        /// <summary>
         /// Registers a service with the broker
         /// </summary>
         /// <param name="serviceId">The unique ID of the service</param>

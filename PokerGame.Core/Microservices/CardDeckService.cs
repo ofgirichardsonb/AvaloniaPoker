@@ -418,12 +418,22 @@ namespace PokerGame.Core.Microservices
                         Console.WriteLine($"===> ERROR in approach 2: {ex.Message}");
                     }
                     
-                    // APPROACH 3: Use central broker directly
+                    // APPROACH 3: Use central broker directly with ServiceMessage
                     try
                     {
                         Console.WriteLine($"===> APPROACH 3: Using central broker for ACK");
-                        var networkAck = ackMessage.ToNetworkMessage();
-                        BrokerManager.Instance.CentralBroker?.Publish(networkAck);
+                        // Create a ServiceMessage instead of NetworkMessage
+                        var serviceMessage = MSA.Foundation.Messaging.ServiceMessage.Create("Acknowledgment");
+                        serviceMessage.FromSender(_serviceId);
+                        
+                        // Set message properties from ackMessage
+                        serviceMessage.SetHeader("OriginalMessageId", ackMessage.InResponseTo);
+                        serviceMessage.SetHeader("AcknowledgementTime", DateTime.UtcNow.ToString("o"));
+                        if (!string.IsNullOrEmpty(ackMessage.ReceiverId))
+                            serviceMessage.ToReceiver(ackMessage.ReceiverId);
+                        
+                        // Use the broker to publish the message
+                        BrokerManager.Instance.CentralBroker?.PublishServiceMessage(serviceMessage);
                         Console.WriteLine($"===> APPROACH 3: Central broker message sent");
                     }
                     catch (Exception ex)

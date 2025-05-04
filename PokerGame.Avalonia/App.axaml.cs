@@ -3,9 +3,9 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using MSA.Foundation.ServiceManagement;
-using NetMQ;
 using PokerGame.Avalonia.ViewModels;
 using PokerGame.Avalonia.Views;
+using PokerGame.Core.Messaging;
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -126,26 +126,27 @@ namespace PokerGame.Avalonia
                 {
                     Console.WriteLine($"Error initiating coordinated shutdown: {ex.Message}");
                     
-                    // Attempt direct NetMQ cleanup as a fallback
+                    // Attempt direct channel cleanup as a fallback
                     try
                     {
-                        var shutdownHandler = PokerGame.Core.Microservices.NetMQShutdownHandler.Instance;
-                        Console.WriteLine("Attempting direct NetMQ cleanup via shutdown handler...");
+                        Console.WriteLine("Attempting direct Channel context cleanup...");
                         
-                        // Give the system 2 seconds to complete cleanup
-                        var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(2));
-                        await shutdownHandler.ShutdownAsync(cts.Token);
+                        // Perform Channel cleanup
+                        ChannelContextHelper.ScheduleCleanup(0);
+                        
+                        // Allow time for cleanup to complete
+                        await System.Threading.Tasks.Task.Delay(1000);
                     }
                     catch (Exception innerEx)
                     {
-                        Console.WriteLine($"Error during direct NetMQ cleanup: {innerEx.Message}");
+                        Console.WriteLine($"Error during direct Channel cleanup: {innerEx.Message}");
                     }
                 }
                 
                 // After coordinated shutdown completes, exit the application
                 Console.WriteLine("Avalonia application cleanup completed");
                 
-                // Give NetMQ a chance to clean up on its own
+                // Proceed with application shutdown
                 if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
                 {
                     try 

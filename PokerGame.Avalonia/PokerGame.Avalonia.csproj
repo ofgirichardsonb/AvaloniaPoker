@@ -51,7 +51,6 @@
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.8" />
     <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.8" />
     <PackageReference Include="Avalonia.Native" Version="11.2.8" />
-    <PackageReference Include="NetMQ" Version="4.0.1.14" />
   </ItemGroup>
   
   <!-- Explicitly exclude SkiaSharp reference when running on Linux systems -->

@@ -192,14 +192,16 @@ namespace PokerGame.Core.Microservices
                     service.Dispose();
                 }
                 
-                // Explicitly clean up NetMQ to ensure ports are released
+                // Clean up channel context
                 try
                 {
-                    NetMQ.NetMQConfig.Cleanup(false);
+                    // Use our ChannelContextHelper to clean up
+                    ChannelContextHelper.ScheduleCleanup(0);
+                    Console.WriteLine("Channel context cleanup scheduled");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"NetMQ cleanup error: {ex.Message}");
+                    Console.WriteLine($"Channel context cleanup error: {ex.Message}");
                 }
                 
                 Console.WriteLine("All microservices stopped");

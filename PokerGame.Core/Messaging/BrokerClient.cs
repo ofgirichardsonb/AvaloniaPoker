@@ -4,8 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using NetMQ;
-using NetMQ.Sockets;
+using MSA.Foundation.Messaging;
 
 namespace PokerGame.Core.Messaging
 {
@@ -24,7 +23,7 @@ namespace PokerGame.Core.Messaging
         private readonly int _brokerPort;
         private bool _telemetryEnabled = false;
         
-        private DealerSocket? _socket;
+        private IMessageTransport? _messageTransport;
         private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         private Task? _receiveTask;
         
@@ -76,7 +75,7 @@ namespace PokerGame.Core.Messaging
         /// <summary>
         /// Gets a value indicating whether this client is connected to the broker
         /// </summary>
-        public bool IsConnected => _socket != null && !_socket.IsDisposed;
+        public bool IsConnected => _messageTransport != null && _messageTransport.IsRunning;
         
         /// <summary>
         /// Creates a new instance of the broker client
@@ -164,7 +163,7 @@ namespace PokerGame.Core.Messaging
         {
             try
             {
-                _logger.Info("BrokerClient", $"Connecting to broker at {_brokerAddress}:{_brokerPort}");
+                _logger.Info("BrokerClient", $"Connecting to broker using channel-based messaging");
                 
                 // Initialize telemetry if enabled
                 if (enableTelemetry)
@@ -172,30 +171,39 @@ namespace PokerGame.Core.Messaging
                     InitializeTelemetry(instrumentationKey);
                 }
                 
-                // Create and configure socket
-                _socket = new DealerSocket();
-                _socket.Options.Identity = System.Text.Encoding.UTF8.GetBytes(_clientId);
-                _socket.Connect($"tcp://{_brokerAddress}:{_brokerPort}");
+                // Create message transport using channel-based communication
+                _messageTransport = ChannelMessageHelper.CreateServiceTransport(_clientId);
+                
+                // Configure the transport
+                var config = new MSA.Foundation.Messaging.MessageTransportConfiguration
+                {
+                    ServiceId = _clientId,
+                    AcknowledgementTimeoutMs = 5000
+                };
+                
+                // Initialize and start the transport
+                _messageTransport.Initialize(config);
+                _messageTransport.Start();
+                
+                // Subscribe to receive messages
+                _messageTransport.Subscribe(OnMessageReceived);
                 
                 // Track connection in telemetry
                 if (_telemetryEnabled)
                 {
                     var props = new Dictionary<string, string>
                     {
-                        { "BrokerAddress", _brokerAddress },
-                        { "BrokerPort", _brokerPort.ToString() }
+                        { "TransportType", "Channel" },
+                        { "ClientId", _clientId }
                     };
                     
                     _telemetry.TrackClientEvent(_clientId, "ClientConnecting", props);
                 }
                 
-                // Start receiving messages
-                _receiveTask = Task.Run(ReceiveMessagesAsync);
-                
                 // Register with the broker
                 RegisterWithBroker();
                 
-                _logger.Info("BrokerClient", "Connected to broker successfully");
+                _logger.Info("BrokerClient", "Connected to broker successfully using channel-based messaging");
                 
                 // Track successful connection in telemetry
                 if (_telemetryEnabled)
@@ -254,51 +262,145 @@ namespace PokerGame.Core.Messaging
         }
         
         /// <summary>
-        /// Receives messages from the broker asynchronously
+        /// Converts between message type systems
         /// </summary>
-        private async Task ReceiveMessagesAsync()
+        /// <param name="messageType">The Foundation message type</param>
+        /// <returns>The equivalent BrokerMessageType</returns>
+        private BrokerMessageType ConvertMessageType(string messageType)
+        {
+            // Convert from Foundation MessageType to BrokerMessageType
+            switch (messageType)
+            {
+                case "Heartbeat": return BrokerMessageType.Heartbeat;
+                case "ServiceRegistration": return BrokerMessageType.ServiceRegistration;
+                case "ServiceDiscovery": return BrokerMessageType.ServiceDiscovery;
+                case "Acknowledgment": return BrokerMessageType.Acknowledgment;
+                case "Error": return BrokerMessageType.Error;
+                case "Ping": return BrokerMessageType.Ping;
+                case "Request": return BrokerMessageType.Request;
+                case "Response": return BrokerMessageType.Response;
+                default: return BrokerMessageType.Custom;
+            }
+        }
+        
+        /// <summary>
+        /// Converts BrokerMessageType to Foundation message type string
+        /// </summary>
+        /// <param name="messageType">The BrokerMessageType to convert</param>
+        /// <returns>The equivalent Foundation message type string</returns>
+        private string ConvertMessageType(BrokerMessageType messageType)
+        {
+            // Convert from BrokerMessageType to Foundation MessageType
+            switch (messageType)
+            {
+                case BrokerMessageType.Heartbeat: return "Heartbeat";
+                case BrokerMessageType.ServiceRegistration: return "ServiceRegistration";
+                case BrokerMessageType.ServiceDiscovery: return "ServiceDiscovery";
+                case BrokerMessageType.Acknowledgment: return "Acknowledgment";
+                case BrokerMessageType.Error: return "Error";
+                case BrokerMessageType.Ping: return "Ping";
+                case BrokerMessageType.Request: return "Request";
+                case BrokerMessageType.Response: return "Response";
+                default: return "Custom";
+            }
+        }
+        
+        /// <summary>
+        /// Handles messages received from the transport
+        /// </summary>
+        /// <param name="message">The message to handle</param>
+        private async Task OnMessageReceived(MSA.Foundation.Messaging.IMessage message)
         {
             try
             {
-                _logger.Debug("BrokerClient", "Starting message receive loop");
+                _logger.Debug("BrokerClient", $"Received message: Type={message.Type}, ID={message.MessageId}");
                 
-                while (!_cancellationTokenSource.Token.IsCancellationRequested && _socket != null && !_socket.IsDisposed)
+                // Convert IMessage to BrokerMessage
+                var brokerMessage = ConvertFromTransportMessage(message);
+                if (brokerMessage != null)
                 {
-                    try
-                    {
-                        // Try to receive a message with a short timeout
-                        if (_socket.TryReceiveFrameString(TimeSpan.FromMilliseconds(100), out string? messageJson))
-                        {
-                            if (!string.IsNullOrEmpty(messageJson))
-                            {
-                                var message = BrokerMessage.FromJson(messageJson);
-                                if (message != null)
-                                {
-                                    ProcessReceivedMessage(message);
-                                }
-                            }
-                        }
-                    }
-                    catch (NetMQException ex)
-                    {
-                        _logger.Error("BrokerClient", "Error receiving message", ex);
-                        await Task.Delay(1000, _cancellationTokenSource.Token);
-                    }
-                    
-                    // Small delay to prevent CPU overuse
-                    await Task.Delay(5, _cancellationTokenSource.Token);
+                    // Process the broker message
+                    ProcessReceivedMessage(brokerMessage);
                 }
-                
-                _logger.Debug("BrokerClient", "Message receive loop terminated");
-            }
-            catch (TaskCanceledException)
-            {
-                // Normal during shutdown
             }
             catch (Exception ex)
             {
-                _logger.Error("BrokerClient", "Error in receive loop", ex);
+                _logger.Error("BrokerClient", "Error handling received message", ex);
             }
+            
+            await Task.CompletedTask;
+        }
+        
+        /// <summary>
+        /// Converts an IMessage to a BrokerMessage
+        /// </summary>
+        /// <param name="message">The IMessage to convert</param>
+        /// <returns>The converted BrokerMessage, or null if conversion failed</returns>
+        private BrokerMessage? ConvertFromTransportMessage(MSA.Foundation.Messaging.IMessage message)
+        {
+            try
+            {
+                // Create a new broker message
+                var brokerMessage = new BrokerMessage
+                {
+                    MessageId = message.MessageId,
+                    SenderId = message.SenderId,
+                    ReceiverId = message.ReceiverId,
+                    Type = ConvertMessageType(message.MessageType),
+                    RequiresAcknowledgment = message.RequireAcknowledgement,
+                    InResponseTo = message.CorrelationId,
+                    Timestamp = message.Timestamp
+                };
+                
+                // Set topic from headers if available
+                string topic = message.GetHeader("Topic");
+                if (!string.IsNullOrEmpty(topic))
+                {
+                    brokerMessage.Topic = topic;
+                }
+                
+                // Set payload if any content exists
+                if (message.Content != null && message.Content.Length > 0)
+                {
+                    brokerMessage.SerializedPayload = System.Text.Encoding.UTF8.GetString(message.Content);
+                }
+                
+                return brokerMessage;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("BrokerClient", "Error converting message", ex);
+                return null;
+            }
+        }
+        
+        /// <summary>
+        /// Converts a BrokerMessage to an IMessage for transport
+        /// </summary>
+        /// <param name="message">The BrokerMessage to convert</param>
+        /// <returns>The converted IMessage</returns>
+        private MSA.Foundation.Messaging.IMessage ConvertToTransportMessage(BrokerMessage message)
+        {
+            // Create a new service message
+            var serviceMessage = new MSA.Foundation.Messaging.ServiceMessage
+            {
+                MessageId = message.MessageId,
+                SenderId = message.SenderId,
+                ReceiverId = message.ReceiverId,
+                Type = ConvertMessageType(message.Type),
+                RequireAcknowledgement = message.RequiresAcknowledgment,
+                InResponseTo = message.InResponseTo,
+                Topic = message.Topic,
+                Timestamp = message.Timestamp
+            };
+            
+            // Set payload if any
+            if (message.HasPayload)
+            {
+                serviceMessage.Payload = message.GetPayloadJson();
+            }
+            
+            return serviceMessage;
         }
         
         /// <summary>
@@ -448,7 +550,7 @@ namespace PokerGame.Core.Messaging
             
             try
             {
-                if (_socket == null || _socket.IsDisposed)
+                if (_messageTransport == null || !_messageTransport.IsRunning)
                 {
                     throw new InvalidOperationException("Not connected to broker");
                 }
@@ -458,8 +560,6 @@ namespace PokerGame.Core.Messaging
                 {
                     message.SenderId = _clientId;
                 }
-                
-                var messageJson = message.ToJson();
                 
                 _logger.Debug("BrokerClient", $"Sending message: Type={message.Type}, ID={message.MessageId}, To={message.ReceiverId}");
                 
@@ -488,8 +588,12 @@ namespace PokerGame.Core.Messaging
                     Interlocked.Increment(ref _messagesSent);
                 }
                 
+                // Convert BrokerMessage to Foundation IMessage
+                var transportMessage = ConvertToTransportMessage(message);
+                
                 // Send the message
-                _socket.SendFrame(messageJson);
+                string destination = string.IsNullOrEmpty(message.ReceiverId) ? "" : message.ReceiverId;
+                bool success = await _messageTransport.SendAsync(destination, transportMessage);
                 
                 // Track successful message send in telemetry
                 if (_telemetryEnabled)
@@ -667,21 +771,30 @@ namespace PokerGame.Core.Messaging
                 // Cancel the receive loop
                 _cancellationTokenSource.Cancel();
                 
-                // Wait for the receive loop to finish
-                if (_receiveTask != null && !_receiveTask.IsCompleted)
+                // Stop and dispose message transport
+                if (_messageTransport != null && _messageTransport.IsRunning)
                 {
                     try
                     {
-                        _receiveTask.Wait(1000);
+                        // Unsubscribe from message transport
+                        _messageTransport.Unsubscribe();
+                        
+                        // Stop the transport
+                        _messageTransport.Stop();
+                        
+                        // Dispose if it's disposable
+                        if (_messageTransport is IDisposable disposable)
+                        {
+                            disposable.Dispose();
+                        }
                     }
-                    catch (AggregateException)
+                    catch (Exception ex)
                     {
-                        // Ignore TaskCanceledException
+                        _logger.Error("BrokerClient", "Error stopping message transport", ex);
                     }
                 }
                 
                 // Clean up resources
-                _socket?.Dispose();
                 _cancellationTokenSource.Dispose();
                 
                 // Complete any pending requests with an error
