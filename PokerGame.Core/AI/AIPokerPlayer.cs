@@ -21,18 +21,44 @@ namespace PokerGame.Core.AI
         /// <returns>A tuple containing the action and bet amount (for raises)</returns>
         public (string Action, int BetAmount) DetermineAction(Player player, PokerGameEngine gameEngine)
         {
+            // Critical debug information for AI decision making
+            Console.WriteLine($"★★★★★ [AI] DetermineAction for {player.Name} - Current game state: {gameEngine.State} ★★★★★");
+            Console.WriteLine($"★★★★★ [AI] Player state: HasActed={player.HasActed}, IsActive={player.IsActive}, HasFolded={player.HasFolded}, Chips={player.Chips} ★★★★★");
+            
+            // Manually reset this player's state if it appears to be stuck
+            if (player.HasActed && gameEngine.CurrentPlayer?.Name == player.Name)
+            {
+                Console.WriteLine($"★★★★★ [AI] FORCED RESET of {player.Name} HasActed flag - was stuck! ★★★★★");
+                player.HasActed = false;
+            }
+            
+            // Player can't act if they're not active or have no chips
+            if (!player.IsActive || player.Chips <= 0)
+            {
+                Console.WriteLine($"★★★★★ [AI] {player.Name} cannot act: IsActive={player.IsActive}, Chips={player.Chips} ★★★★★");
+                return ("fold", 0); // Default to fold if can't act
+            }
+            
             // Get the current game state
             PokerGame.Core.Game.GameState gameState = gameEngine.State;
             var communityCards = gameEngine.CommunityCards;
             var currentBet = gameEngine.CurrentBet;
             var pot = gameEngine.Pot;
             
-            // If player can check (bet is matched), usually check
+            // If player can check (bet is matched), usually check but sometimes raise
             if (player.CurrentBet == currentBet)
             {
-                // 70% chance to check, 30% chance to raise
-                if (_random.NextDouble() < 0.7)
+                Console.WriteLine($"★★★★★ [AI] {player.Name} can check (CurrentBet={player.CurrentBet} matches table bet={currentBet}) ★★★★★");
+                
+                // Evaluate hand strength to determine whether to check or raise
+                double handStrength = EvaluateHandStrength(player.HoleCards, communityCards, gameState);
+                
+                // With very strong hands, raise more often
+                double checkProbability = handStrength < 0.7 ? 0.8 : 0.5;
+                
+                if (_random.NextDouble() < checkProbability)
                 {
+                    Console.WriteLine($"★★★★★ [AI] {player.Name} decides to check (hand strength = {handStrength:F2}) ★★★★★");
                     return ("check", 0);
                 }
                 else
@@ -46,6 +72,7 @@ namespace PokerGame.Core.AI
                     );
                     int raiseAmount = CalculateRaiseAmount(minRaise, maxRaise, player.HoleCards, communityCards, gameState);
                     
+                    Console.WriteLine($"★★★★★ [AI] {player.Name} decides to raise to {raiseAmount} (hand strength = {handStrength:F2}) ★★★★★");
                     return ("raise", raiseAmount);
                 }
             }
@@ -179,6 +206,16 @@ namespace PokerGame.Core.AI
             // Start with basic hand evaluation
             double strength = 0.0;
             
+            // Debug logging for hand evaluation
+            Console.WriteLine($"★★★★★ [AI] Evaluating hand strength for {holeCards.Count} hole cards and {communityCards.Count} community cards ★★★★★");
+            if (holeCards.Count > 0)
+            {
+                foreach (var card in holeCards)
+                {
+                    Console.WriteLine($"★★★★★ [AI] Hole card: {card.Rank} of {card.Suit} ★★★★★");
+                }
+            }
+            
             // Check for high cards and pairs in hole cards
             if (holeCards.Count == 2)
             {
@@ -190,20 +227,23 @@ namespace PokerGame.Core.AI
                     // Pocket pairs are strong starting hands
                     int rank = (int)holeCards[0].Rank;
                     
-                    // High pocket pairs are very strong
+                    // High pocket pairs are very strong - ALWAYS play these aggressively
                     if (rank >= 10) // Tens or higher
                     {
-                        strength = 0.9;
+                        strength = 0.95; // Increased to be more aggressive with high pairs
+                        Console.WriteLine($"★★★★★ [AI] Found high pocket pair of {holeCards[0].Rank}s, strength: {strength} ★★★★★");
                     }
-                    // Medium pocket pairs
+                    // Medium pocket pairs - NEVER fold these pre-flop
                     else if (rank >= 7)
                     {
-                        strength = 0.7;
+                        strength = 0.80; // Increased to avoid folding medium pairs
+                        Console.WriteLine($"★★★★★ [AI] Found medium pocket pair of {holeCards[0].Rank}s, strength: {strength} ★★★★★");
                     }
-                    // Low pocket pairs
+                    // Low pocket pairs - Still valuable
                     else
                     {
-                        strength = 0.5;
+                        strength = 0.65; // Increased to make low pairs more playable
+                        Console.WriteLine($"★★★★★ [AI] Found low pocket pair of {holeCards[0].Rank}s, strength: {strength} ★★★★★");
                     }
                 }
                 else

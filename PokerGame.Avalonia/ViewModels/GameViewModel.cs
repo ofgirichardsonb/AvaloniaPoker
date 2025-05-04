@@ -599,8 +599,26 @@ namespace PokerGame.Avalonia.ViewModels
                 existingPlayers[player.Name] = player;
             }
             
-            // Clear the collection
+            // Clear the collection and track what we're doing
+            Console.WriteLine($"★★★★★ [UI] Clearing player list before update. Had {_players.Count} players. ★★★★★");
             _players.Clear();
+            
+            // Also reset the duplicate tracking dictionary if it seems to be causing problems
+            if (aiPlayers.Count > _gameEngine.Players.Count)
+            {
+                Console.WriteLine($"★★★★★ [UI] AI player dictionary has {aiPlayers.Count} entries but engine has {_gameEngine.Players.Count} players - rebuilding ★★★★★");
+                aiPlayers.Clear();
+                
+                // Recreate from actual players
+                foreach (var player in _gameEngine.Players)
+                {
+                    // Mark as AI if name contains "AI"
+                    if (player.Name.Contains("AI"))
+                    {
+                        aiPlayers[player.Name] = true;
+                    }
+                }
+            }
             
             // In a multiplayer game, each player might already have their IsCurrentUser flag set
             // But for backwards compatibility, we'll default the first player as current user if none is set
