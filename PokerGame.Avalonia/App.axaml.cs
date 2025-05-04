@@ -64,7 +64,7 @@ namespace PokerGame.Avalonia
         private static bool _cleanupComplete = false;
         
         // Use a completely new approach with no reflection, focusing on reliable cleanup
-        private void PerformCleanup()
+        private async void PerformCleanup()
         {
             // Only run cleanup once
             if (_cleanupComplete)
@@ -76,10 +76,11 @@ namespace PokerGame.Avalonia
             {
                 Console.WriteLine("Avalonia application cleanup starting...");
                 
-                // Stop services first to reduce active sockets
+                // Stop services first via our centralized ShutdownCoordinator
                 try
                 {
-                    Console.WriteLine("Terminating all running microservices...");
+                    // Step 1: Send the EndGame message to all services
+                    Console.WriteLine("Terminating all running microservices via message broker...");
                     var broker = PokerGame.Core.Messaging.BrokerManager.Instance?.CentralBroker;
                     if (broker != null)
                     {
@@ -93,57 +94,55 @@ namespace PokerGame.Avalonia
                         broker.Publish(shutdownMessage);
                         Console.WriteLine("Shutdown signal sent to all services");
                     }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error stopping services: {ex.Message}");
-                }
-                
-                // Smaller delay to reduce hanging
-                System.Threading.Thread.Sleep(200);
-                
-                // Perform ExecutionContext cleanup
-                Console.WriteLine("Cleaning up all execution contexts...");
-                MSA.Foundation.ServiceManagement.ExecutionContext.CleanupAll();
-                
-                // Directly attempt cleanup with forced parameter (immediately terminates sockets)
-                try
-                {
-                    Console.WriteLine("Performing forced NetMQ cleanup...");
-                    NetMQ.NetMQConfig.Cleanup(true);
-                    Console.WriteLine("NetMQ forced cleanup completed");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error during NetMQ cleanup: {ex.Message}");
-                }
-                
-                // Terminate any lingering subprocesses
-                try
-                {
-                    var processes = System.Diagnostics.Process.GetProcessesByName("dotnet");
-                    foreach (var process in processes)
+                    
+                    // Step 2: Use the global ShutdownCoordinator to handle the rest
+                    Console.WriteLine("Initiating coordinated shutdown sequence...");
+                    var coordinator = MSA.Foundation.ServiceManagement.ShutdownCoordinator.Instance;
+                    
+                    // Allow a short time for services to process the EndGame message
+                    await System.Threading.Tasks.Task.Delay(300);
+                    
+                    // Instruct the ShutdownCoordinator to perform the shutdown
+                    try
                     {
-                        if (process.Id != System.Diagnostics.Process.GetCurrentProcess().Id)
-                        {
-                            try
-                            {
-                                process.Kill(true);
-                                Console.WriteLine($"Terminated process ID: {process.Id}");
-                            }
-                            catch
-                            {
-                                // Ignore errors killing processes
-                            }
-                        }
+                        var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
+                        await coordinator.TriggerShutdownAsync(cts.Token);
+                        Console.WriteLine("Coordinated shutdown completed successfully");
+                    }
+                    catch (System.Threading.Tasks.TaskCanceledException)
+                    {
+                        Console.WriteLine("Coordinated shutdown timed out - proceeding with forced cleanup");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error during coordinated shutdown: {ex.Message}");
+                    }
+                    
+                    // Execute context cleanup is used by service management
+                    Console.WriteLine("Cleaning up all execution contexts...");
+                    MSA.Foundation.ServiceManagement.ExecutionContext.CleanupAll();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error initiating coordinated shutdown: {ex.Message}");
+                    
+                    // Attempt direct NetMQ cleanup as a fallback
+                    try
+                    {
+                        var shutdownHandler = PokerGame.Core.Microservices.NetMQShutdownHandler.Instance;
+                        Console.WriteLine("Attempting direct NetMQ cleanup via shutdown handler...");
+                        
+                        // Give the system 2 seconds to complete cleanup
+                        var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(2));
+                        await shutdownHandler.ShutdownAsync(cts.Token);
+                    }
+                    catch (Exception innerEx)
+                    {
+                        Console.WriteLine($"Error during direct NetMQ cleanup: {innerEx.Message}");
                     }
                 }
-                catch
-                {
-                    // Ignore errors in process termination
-                }
                 
-                // Just use standard application exit - let NetMQContextHelper handle the cleanup
+                // After coordinated shutdown completes, exit the application
                 Console.WriteLine("Avalonia application cleanup completed");
                 
                 // Give NetMQ a chance to clean up on its own
@@ -151,13 +150,26 @@ namespace PokerGame.Avalonia
                 {
                     try 
                     {
+                        // Set a task to force exit if normal shutdown doesn't complete in time
+                        _ = System.Threading.Tasks.Task.Run(async () => {
+                            await System.Threading.Tasks.Task.Delay(2000);
+                            // If we're still running after 2 seconds, force exit
+                            Environment.Exit(0);
+                        });
+                        
                         // Normal shutdown
                         desktop.Shutdown(0);
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine($"Error shutting down: {ex.Message}");
+                        Environment.Exit(0);
                     }
+                }
+                else
+                {
+                    // Force exit if we can't use desktop shutdown
+                    Environment.Exit(0);
                 }
             }
             catch (Exception ex)

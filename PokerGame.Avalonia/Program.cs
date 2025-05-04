@@ -169,7 +169,7 @@ namespace PokerGame.Avalonia
         }
         
         /// <summary>
-        /// Performs thorough cleanup of all resources
+        /// Performs thorough cleanup of all resources using the ShutdownCoordinator
         /// </summary>
         private static void PerformCleanup()
         {
@@ -192,29 +192,34 @@ namespace PokerGame.Avalonia
                     Console.WriteLine("Final telemetry events sent");
                 }
                 
-                // Stop all services
+                // Stop all services through the service manager
                 if (_serviceManager != null)
                 {
                     Console.WriteLine("Stopping all services...");
                     _serviceManager.StopAllServices();
                 }
                 
-                // Allow some time for services to shut down gracefully
-                System.Threading.Thread.Sleep(500);
+                // Let ShutdownCoordinator handle the rest of cleanup
+                var coordinator = MSA.Foundation.ServiceManagement.ShutdownCoordinator.Instance;
                 
-                // Clean up execution contexts
-                Console.WriteLine("Cleaning up execution contexts...");
-                MSA.Foundation.ServiceManagement.ExecutionContext.CleanupAll();
-                
-                // Clean up NetMQ resources
-                Console.WriteLine("Cleaning up NetMQ resources...");
-                try 
+                // Start the coordinated shutdown, but don't await it (we're in a sync method)
+                // Instead, give it a short time to complete
+                try
                 {
-                    NetMQ.NetMQConfig.Cleanup(false);
+                    var cancellationToken = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    var task = coordinator.TriggerShutdownAsync(cancellationToken.Token);
+                    
+                    // Wait for up to 2 seconds for the shutdown to complete
+                    // This should be sufficient to handle basic cleanup, but not hang the application
+                    task.Wait(TimeSpan.FromSeconds(2));
                 }
-                catch (Exception ex)
+                catch (System.AggregateException ae)
                 {
-                    Console.WriteLine($"Error during NetMQ cleanup: {ex.Message}");
+                    // TaskCanceledException is expected if the timeout is reached
+                    if (!(ae.InnerException is System.Threading.Tasks.TaskCanceledException))
+                    {
+                        Console.WriteLine($"Error during coordinated shutdown: {ae.InnerException?.Message}");
+                    }
                 }
                 
                 // Final telemetry flush to ensure all data is sent
