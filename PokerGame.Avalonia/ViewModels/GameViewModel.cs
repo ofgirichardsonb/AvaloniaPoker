@@ -523,30 +523,53 @@ namespace PokerGame.Avalonia.ViewModels
             // If this is an AI player, make the decision and execute it
             if (isAIPlayer)
             {
-                // RESET HasActed flag to ensure AI can make a decision
-                // This ensures the AI doesn't get stuck
-                player.HasActed = false;
+                Console.WriteLine($"[UI] Processing AI action for {player.Name} (Game State: {gameEngine.State})");
                 
-                // Ensure the player is active
-                if (!player.IsActive && !player.HasFolded)
-                {
-                    player.IsActive = true;
-                }
-                
-                // Skip AI action if the player has folded
+                // First, check if the AI player has folded
                 if (player.HasFolded)
                 {
-                    // Move to the next player
+                    Console.WriteLine($"[UI] AI player {player.Name} has already folded - skipping turn");
                     _gameEngine.ProcessPlayerAction("fold", 0);
                     return;
                 }
                 
-                // Make AI decision
-                var (action, betAmount) = _aiPlayer.DetermineAction(player, gameEngine);
+                // Important: Check if we're in a valid game state for AI actions
+                if (gameEngine.State == GameState.HandComplete || gameEngine.State == GameState.WaitingToStart)
+                {
+                    Console.WriteLine($"[UI] Cannot get AI action in state {gameEngine.State} - waiting for hand to start");
+                    return;
+                }
+                
+                // Reset player state to ensure the AI can act
+                if (!player.IsActive)
+                {
+                    Console.WriteLine($"[UI] Reactivating AI player {player.Name} before decision");
+                    player.IsActive = true;
+                }
+                
+                player.HasActed = false;
+                
+                // Make AI decision with improved error handling
+                string action;
+                int betAmount;
+                
+                try
+                {
+                    (action, betAmount) = _aiPlayer.DetermineAction(player, gameEngine);
+                    Console.WriteLine($"[UI] AI player {player.Name} decided to {action} with amount {betAmount}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[UI] ERROR getting AI decision: {ex.Message}");
+                    // Default to safe action on error
+                    action = player.CurrentBet == gameEngine.CurrentBet ? "check" : "fold";
+                    betAmount = 0;
+                }
                 
                 // Apply table limits to bet amounts
                 if (action == "raise" && betAmount > 100)
                 {
+                    Console.WriteLine($"[UI] Capping AI bet from {betAmount} to maximum 100");
                     betAmount = 100; // Maximum bet size
                 }
                 

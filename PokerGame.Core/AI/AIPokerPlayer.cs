@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using PokerGame.Core.Models;
-using PokerGame.Core.Game;
+// Import Game namespace with an alias to avoid ambiguity
+using GameNS = PokerGame.Core.Game;
 
 namespace PokerGame.Core.AI
 {
@@ -19,28 +20,53 @@ namespace PokerGame.Core.AI
         /// <param name="player">The player model for the AI</param>
         /// <param name="gameEngine">The current game engine</param>
         /// <returns>A tuple containing the action and bet amount (for raises)</returns>
-        public (string Action, int BetAmount) DetermineAction(Player player, PokerGameEngine gameEngine)
+        public (string Action, int BetAmount) DetermineAction(Player player, GameNS.PokerGameEngine gameEngine)
         {
             // Critical debug information for AI decision making
             Console.WriteLine($"★★★★★ [AI] DetermineAction for {player.Name} - Current game state: {gameEngine.State} ★★★★★");
             Console.WriteLine($"★★★★★ [AI] Player state: HasActed={player.HasActed}, IsActive={player.IsActive}, HasFolded={player.HasFolded}, Chips={player.Chips} ★★★★★");
             
-            // CRITICAL FIX: Make sure the AI is active when it's the current player
-            // This ensures the AI can respond to raises even if it has already acted this round
-            if (gameEngine.CurrentPlayer?.Name == player.Name)
+            // ENHANCED PLAYER STATE MANAGEMENT
+            // This ensures proper AI player state in all game phases
+            
+            // First, perform comprehensive check for current player
+            bool isCurrentPlayer = gameEngine.CurrentPlayer?.Name == player.Name;
+            Console.WriteLine($"[AI] {player.Name} is{(isCurrentPlayer ? "" : " not")} the current player (Game State: {gameEngine.State})");
+            
+            // Always reactivate AI at start of new hands
+            if (gameEngine.State == GameNS.GameState.PreFlop || 
+                gameEngine.State == GameNS.GameState.WaitingToStart)
             {
-                // If the AI is the current player but somehow not active, reactivate it
                 if (!player.IsActive && !player.HasFolded)
                 {
-                    Console.WriteLine($"★★★★★ [AI] FORCING {player.Name} to be active since they are the current player ★★★★★");
+                    Console.WriteLine($"[AI] Reactivating {player.Name} at start of new hand");
+                    player.IsActive = true;
+                    player.HasActed = false;
+                }
+            }
+            
+            // If AI is current player but not active, reactivate
+            if (isCurrentPlayer)
+            {
+                if (!player.IsActive && !player.HasFolded)
+                {
+                    Console.WriteLine($"[AI] FORCING {player.Name} to be active since they are the current player");
                     player.IsActive = true;
                 }
                 
-                // If needed, reset HasActed flag to handle the situation where AI needs to respond to a raise
-                if (player.HasActed && player.CurrentBet < gameEngine.CurrentBet)
+                // Always reset HasActed when it's the AI's turn
+                if (player.HasActed)
                 {
-                    Console.WriteLine($"★★★★★ [AI] {player.Name} needs to respond to a raise - resetting HasActed flag ★★★★★");
+                    Console.WriteLine($"[AI] Resetting HasActed for {player.Name} since it's their turn");
                     player.HasActed = false;
+                }
+                
+                // If AI needs to respond to a raise, ensure correct state
+                if (player.CurrentBet < gameEngine.CurrentBet)
+                {
+                    Console.WriteLine($"[AI] {player.Name} needs to respond to a raise - ensuring proper state");
+                    player.HasActed = false;
+                    player.IsActive = true;
                 }
             }
             
@@ -52,7 +78,7 @@ namespace PokerGame.Core.AI
             }
             
             // Get the current game state
-            PokerGame.Core.Game.GameState gameState = gameEngine.State;
+            GameNS.GameState gameState = gameEngine.State;
             var communityCards = gameEngine.CommunityCards;
             var currentBet = gameEngine.CurrentBet;
             var pot = gameEngine.Pot;
@@ -224,7 +250,7 @@ namespace PokerGame.Core.AI
         /// <param name="communityCards">The community cards</param>
         /// <param name="gameState">The current game state</param>
         /// <returns>The calculated raise amount</returns>
-        private int CalculateRaiseAmount(int minRaise, int maxRaise, IReadOnlyList<Card> holeCards, IReadOnlyList<Card> communityCards, PokerGame.Core.Game.GameState gameState)
+        private int CalculateRaiseAmount(int minRaise, int maxRaise, IReadOnlyList<Card> holeCards, IReadOnlyList<Card> communityCards, GameNS.GameState gameState)
         {
             // Evaluate hand strength to determine raise amount
             double handStrength = EvaluateHandStrength(holeCards, communityCards, gameState);
@@ -250,7 +276,7 @@ namespace PokerGame.Core.AI
         /// <param name="communityCards">The community cards</param>
         /// <param name="gameState">The current game state</param>
         /// <returns>A value between 0 and 1 representing hand strength</returns>
-        private double EvaluateHandStrength(IReadOnlyList<Card> holeCards, IReadOnlyList<Card> communityCards, PokerGame.Core.Game.GameState gameState)
+        private double EvaluateHandStrength(IReadOnlyList<Card> holeCards, IReadOnlyList<Card> communityCards, GameNS.GameState gameState)
         {
             // Start with basic hand evaluation
             double strength = 0.0;
