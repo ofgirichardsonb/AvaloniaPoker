@@ -365,9 +365,13 @@ namespace PokerGame.Avalonia.ViewModels
                 Console.WriteLine($"★★★★★ Must Call Or Fold: {mustCallOrFold} ★★★★★");
                 Console.WriteLine($"★★★★★ Should Raise: {shouldRaise} (Chips > 0: {player.Chips > 0}) ★★★★★");
                 
-                // Set the UI button states
+                // Set the UI button states based on game rules:
+                
+                // Only enable check if player's bet equals the current bet
                 CanCheck = shouldCheck;
-                CanCall = shouldCall; // This MUST be true when CurrentBet < GameEngine.CurrentBet
+                
+                // Enable call if player needs to match a higher bet
+                CanCall = shouldCall; 
                 
                 // Force-enable call button if the player must call (can't check)
                 if (mustCallOrFold)
@@ -515,8 +519,12 @@ namespace PokerGame.Avalonia.ViewModels
                     Console.WriteLine($"★★★★★ [UI] Must Call Or Fold: {mustCallOrFold} ★★★★★");
                     Console.WriteLine($"★★★★★ [UI] Should Raise: {shouldRaise} (Chips > 0: {playerModel.Chips > 0}) ★★★★★");
                     
-                    // Set the UI button states
+                    // Set the UI button states based on game rules:
+                    
+                    // Only enable check if player's bet equals the current bet
                     CanCheck = shouldCheck;
+                    
+                    // Enable call if player needs to match a higher bet
                     CanCall = shouldCall; 
                     
                     // Force-enable call button if the player must call (can't check)

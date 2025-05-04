@@ -320,6 +320,22 @@ namespace PokerGame.Core.Game
                         _ui.ShowMessage($"{player.Name} raises to {player.CurrentBet}.");
                         actionType = ActionType.Raise;
                         amount = player.CurrentBet;
+                        
+                        // When a player raises, we need to explicitly reset HasActed flags for all other active players
+                        // so they can respond to the raise
+                        foreach (var otherPlayer in _players)
+                        {
+                            if (otherPlayer.Id != player.Id && otherPlayer.IsActive && !otherPlayer.IsAllIn && otherPlayer.Chips > 0)
+                            {
+                                // Reset the flag
+                                otherPlayer.HasActed = false;
+                                Console.WriteLine($"★★★★★ Player {otherPlayer.Name} HasActed reset from TRUE to FALSE after {player.Name}'s raise ★★★★★");
+                            }
+                        }
+                        
+                        // Track this reset in telemetry
+                        BettingRoundTelemetry.TrackHasActedReset(this, $"AfterRaiseBy{player.Name}");
+                        Console.WriteLine($"★★★★★ Reset HasActed flags for other players after {player.Name}'s raise ★★★★★");
                     }
                     break;
                     
@@ -404,6 +420,31 @@ namespace PokerGame.Core.Game
             
             // Track this reset in telemetry
             BettingRoundTelemetry.TrackHasActedReset(this, context);
+        }
+        
+        /// <summary>
+        /// Resets the HasActed flag for all players except the specified player
+        /// Used when a player raises, so others can respond
+        /// </summary>
+        /// <param name="exceptPlayer">The player whose flag should not be reset</param>
+        private void ResetOtherPlayersHasActedFlags(Player exceptPlayer)
+        {
+            Console.WriteLine($"★★★★★ Resetting HasActed flags for all players except {exceptPlayer.Name}, state: {_gameState} ★★★★★");
+            
+            foreach (var player in _players)
+            {
+                if (player.Id != exceptPlayer.Id && player.IsActive && !player.IsAllIn && player.Chips > 0)
+                {
+                    // Log the before state for debugging
+                    Console.WriteLine($"★★★★★ Player {player.Name} HasActed reset from {player.HasActed} to false after raise ★★★★★");
+                    
+                    // Reset the flag
+                    player.HasActed = false;
+                }
+            }
+            
+            // Track this reset in telemetry
+            BettingRoundTelemetry.TrackHasActedReset(this, $"AfterRaiseBy{exceptPlayer.Name}");
         }
         
         /// <summary>
