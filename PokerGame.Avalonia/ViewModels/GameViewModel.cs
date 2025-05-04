@@ -796,7 +796,6 @@ namespace PokerGame.Avalonia.ViewModels
             {
                 _communityCards.Add(new CardViewModel(card, true));
             }
-            }
             
             // If the hand is complete, enable the start hand button
             if (gameEngine.State == GameState.HandComplete || gameEngine.State == GameState.WaitingToStart)

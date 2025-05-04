@@ -270,16 +270,19 @@ namespace PokerGame.Avalonia
             }
             else 
             {
-                // Linux is not supported in this application
-                Console.WriteLine("ERROR: This application only supports Windows and macOS platforms.");
-                Console.WriteLine("Please run on a supported platform. Exiting...");
-                
-                // Exit the application immediately to prevent SkiaSharp initialization
-                Environment.Exit(1);
-                
-                // This code will never be reached but is required for compilation
+                // Temporarily enable Linux support for testing in Replit
+                Console.WriteLine("Linux platform detected - enabling for Replit testing");
                 return AppBuilder.Configure<App>()
+                    .UsePlatformDetect()
+                    .UseReactiveUI()
+                    .WithInterFont()
                     .LogToTrace();
+                
+                // Linux is normally not supported in this application (uncomment for production)
+                // Console.WriteLine("ERROR: This application only supports Windows and macOS platforms.");
+                // Console.WriteLine("Please run on a supported platform. Exiting...");
+                // Environment.Exit(1);
+                // return AppBuilder.Configure<App>().LogToTrace();
             }
         }
     }
