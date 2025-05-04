@@ -736,7 +736,7 @@ namespace PokerGame.Avalonia.ViewModels
                     // Make sure it's still the AI player's turn
                     if (gameEngine.CurrentPlayer?.Name == currentPlayerInEngine.Name)
                     {
-                        GetAIAction(currentPlayerInEngine, gameEngine);
+                        GetPlayerAction(currentPlayerInEngine, gameEngine);
                     }
                 });
             }
