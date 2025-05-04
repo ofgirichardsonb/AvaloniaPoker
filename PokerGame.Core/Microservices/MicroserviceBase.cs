@@ -157,19 +157,19 @@ namespace PokerGame.Core.Microservices
             _publisherPort = publisherPort;
             _subscriberPort = subscriberPort;
             
-            // Initialize in-process sockets
+            // Initialize channel-based message transport
             try 
             {
-                // Initialize publisher and subscriber sockets using in-process communication
-                _publisherSocket = NetMQContextHelper.CreateServicePublisher();
-                _subscriberSocket = NetMQContextHelper.CreateServiceSubscriber();
+                // Initialize message transport using channel-based communication
+                _messageTransport = ChannelMessageHelper.CreateServiceTransport(_serviceId);
+                await _messageTransport.StartAsync();
                 
-                Console.WriteLine($"[{_serviceType} {_serviceId}] Using in-process communication via {NetMQContextHelper.InProcessBrokerAddress}");
-                Console.WriteLine($"[{_serviceType} {_serviceId}] Port parameters ignored in favor of in-process communication");
+                Console.WriteLine($"[{_serviceType} {_serviceId}] Using channel-based communication via {ChannelMessageHelper.ChannelBrokerAddress}");
+                Console.WriteLine($"[{_serviceType} {_serviceId}] Port parameters ignored in favor of channel-based communication");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[{_serviceType} {_serviceId}] Error initializing in-process sockets: {ex.Message}");
+                Console.WriteLine($"[{_serviceType} {_serviceId}] Error initializing channel-based transport: {ex.Message}");
                 throw;
             }
             

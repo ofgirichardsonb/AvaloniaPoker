@@ -1,127 +1,128 @@
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using MSA.Foundation.Messaging;
 using MSA.Foundation.ServiceManagement;
 
 namespace PokerGame.Core.Messaging
 {
     /// <summary>
-    /// Helper class for managing channel-based messaging components
+    /// Helper class for creating and managing channel-based message transport
     /// </summary>
     public static class ChannelMessageHelper
     {
-        private static readonly ConcurrentDictionary<string, object> _resources = 
-            new ConcurrentDictionary<string, object>();
+        private static readonly string _channelBrokerAddress = "channel://central-broker";
+        private static bool _initialized = false;
+        private static readonly object _initLock = new object();
+        private static IMessageTransport? _sharedTransport;
+        private static IMessageTransportConfiguration _defaultConfiguration = new MessageTransportConfiguration
+        {
+            ServiceId = "central-broker",
+            AcknowledgementTimeoutMs = 5000
+        };
+        
+        /// <summary>
+        /// Gets the in-process broker address
+        /// </summary>
+        public static string ChannelBrokerAddress => _channelBrokerAddress;
+        
+        /// <summary>
+        /// Creates a message transport for a service using shared channel communication
+        /// </summary>
+        /// <param name="serviceId">The identifier of the service</param>
+        /// <returns>A message transport configured for the service</returns>
+        public static IMessageTransport CreateServiceTransport(string serviceId)
+        {
+            EnsureInitialized();
             
-        /// <summary>
-        /// Gets the in-process address for channel-based messaging
-        /// </summary>
-        public static string InProcessAddress => ChannelMessageTransport.InProcessAddress;
-        
-        /// <summary>
-        /// Registers a resource to be tracked
-        /// </summary>
-        /// <param name="resourceId">A unique identifier for the resource</param>
-        /// <param name="resource">The resource object</param>
-        public static void RegisterResource(string resourceId, object resource)
-        {
-            if (string.IsNullOrEmpty(resourceId))
-                throw new ArgumentException("Resource ID cannot be null or empty", nameof(resourceId));
-                
-            if (resource == null)
-                throw new ArgumentNullException(nameof(resource));
-                
-            _resources.TryAdd(resourceId, resource);
-            Console.WriteLine($"ChannelMessageHelper: Registered resource {resourceId}");
-        }
-        
-        /// <summary>
-        /// Unregisters a tracked resource
-        /// </summary>
-        /// <param name="resourceId">The ID of the resource to unregister</param>
-        /// <returns>True if the resource was found and unregistered; otherwise, false</returns>
-        public static bool UnregisterResource(string resourceId)
-        {
-            if (string.IsNullOrEmpty(resourceId))
-                return false;
-                
-            if (_resources.TryRemove(resourceId, out _))
+            var configuration = new MessageTransportConfiguration
             {
-                Console.WriteLine($"ChannelMessageHelper: Unregistered resource {resourceId}");
-                return true;
-            }
+                ServiceId = serviceId,
+                AcknowledgementTimeoutMs = 5000
+            };
             
-            return false;
+            return MessageTransportFactory.Create(TransportType.Channel, _channelBrokerAddress, configuration);
         }
         
         /// <summary>
-        /// Creates a new ChannelMessageTransport for a service
+        /// Creates a transport for the central broker
         /// </summary>
-        /// <param name="serviceId">The ID of the service</param>
-        /// <returns>A new message transport</returns>
-        public static ChannelMessageTransport CreateTransport(string serviceId)
+        /// <returns>A message transport for the central broker</returns>
+        public static IMessageTransport CreateBrokerTransport()
         {
-            if (string.IsNullOrEmpty(serviceId))
-                throw new ArgumentException("Service ID cannot be null or empty", nameof(serviceId));
+            EnsureInitialized();
+            return _sharedTransport ?? MessageTransportFactory.Create(TransportType.Channel, _channelBrokerAddress, _defaultConfiguration);
+        }
+        
+        /// <summary>
+        /// Ensures the helper is initialized
+        /// </summary>
+        private static void EnsureInitialized()
+        {
+            if (_initialized)
+                return;
                 
-            var transport = new ChannelMessageTransport(serviceId);
-            RegisterResource($"transport:{serviceId}", transport);
-            return transport;
-        }
-        
-        /// <summary>
-        /// Schedules cleanup of channel resources
-        /// </summary>
-        public static Task CleanupAsync()
-        {
-            Console.WriteLine("ChannelMessageHelper: Cleaning up channel messaging resources");
-            
-            // Create a list of cleanup tasks
-            var cleanupTasks = new List<Task>();
-            
-            // Clean up each resource that implements IDisposable
-            foreach (var resource in _resources.Values)
+            lock (_initLock)
             {
-                if (resource is IDisposable disposable)
+                if (_initialized)
+                    return;
+                    
+                Console.WriteLine("Initializing ChannelMessageHelper");
+                
+                try
                 {
-                    try
+                    // Create shared transport for the central broker
+                    _sharedTransport = MessageTransportFactory.Create(TransportType.Channel, _channelBrokerAddress, _defaultConfiguration);
+                    
+                    // Start the transport
+                    _sharedTransport.StartAsync().Wait();
+                    
+                    Console.WriteLine($"ChannelMessageHelper: Created shared transport for {_channelBrokerAddress}");
+                    
+                    // Register for application shutdown
+                    ShutdownCoordinator.Instance.RegisterForShutdown("ChannelMessageHelper", async (token) =>
                     {
-                        disposable.Dispose();
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"ChannelMessageHelper: Error disposing resource: {ex.Message}");
-                    }
+                        Console.WriteLine("ChannelMessageHelper: Shutting down as part of application shutdown");
+                        await CleanupAsync(token);
+                    }, ShutdownPriority.Infrastructure);
+                    
+                    _initialized = true;
                 }
-                else if (resource is IAsyncDisposable asyncDisposable)
+                catch (Exception ex)
                 {
-                    // Handle async disposable resources
-                    cleanupTasks.Add(Task.Run(async () => 
-                    {
-                        try
-                        {
-                            await asyncDisposable.DisposeAsync();
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"ChannelMessageHelper: Error async disposing resource: {ex.Message}");
-                        }
-                    }));
+                    Console.WriteLine($"ChannelMessageHelper: Error during initialization: {ex.Message}");
+                    throw;
                 }
             }
+        }
+        
+        /// <summary>
+        /// Performs cleanup during application shutdown
+        /// </summary>
+        /// <param name="token">A token to monitor for cancellation requests</param>
+        /// <returns>A task representing the asynchronous operation</returns>
+        public static async Task CleanupAsync(CancellationToken token = default)
+        {
+            Console.WriteLine("ChannelMessageHelper: Performing cleanup");
             
-            // Clear the resources dictionary
-            _resources.Clear();
-            
-            // Wait for all async cleanup tasks to complete
-            if (cleanupTasks.Count > 0)
+            if (_sharedTransport != null)
             {
-                return Task.WhenAll(cleanupTasks);
+                Console.WriteLine("ChannelMessageHelper: Stopping shared transport");
+                
+                try
+                {
+                    await _sharedTransport.StopAsync();
+                    (_sharedTransport as IDisposable)?.Dispose();
+                    _sharedTransport = null;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"ChannelMessageHelper: Error during shared transport cleanup: {ex.Message}");
+                }
             }
             
-            return Task.CompletedTask;
+            _initialized = false;
+            Console.WriteLine("ChannelMessageHelper: Cleanup completed");
         }
     }
 }
