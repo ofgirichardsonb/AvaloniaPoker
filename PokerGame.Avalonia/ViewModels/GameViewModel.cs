@@ -282,7 +282,45 @@ namespace PokerGame.Avalonia.ViewModels
         /// </summary>
         private void ExecuteStartHand()
         {
+            if (_players.Count < 2)
+            {
+                ShowMessage("You need at least 2 players to start a hand. Please add another player.");
+                return;
+            }
+            
+            // Extra validation to ensure all players have proper state before starting a new hand
+            Console.WriteLine("★★★★★ VALIDATING PLAYER STATES BEFORE STARTING NEW HAND ★★★★★");
+            foreach (var player in _gameEngine.Players)
+            {
+                // Check if this is an AI player
+                bool isAIPlayer = _aiPlayers.ContainsKey(player.Name) && _aiPlayers[player.Name];
+                
+                // Log player state for debugging
+                Console.WriteLine($"★★★★★ Player {player.Name} (AI: {isAIPlayer}) - HasActed: {player.HasActed}, IsActive: {player.IsActive}, HasFolded: {player.HasFolded} ★★★★★");
+                
+                // Ensure player states are correctly reset
+                if (!player.IsActive)
+                {
+                    Console.WriteLine($"★★★★★ FIXING INACTIVE PLAYER: {player.Name} ★★★★★");
+                    player.IsActive = true;
+                }
+                
+                if (player.HasActed)
+                {
+                    Console.WriteLine($"★★★★★ FIXING HASACTED FLAG FOR: {player.Name} ★★★★★");
+                    player.HasActed = false;
+                }
+            }
+            
+            // Start the hand in the game engine
             _gameEngine.StartHand();
+            
+            // Log AI player tracking after hand start
+            Console.WriteLine("★★★★★ AI PLAYER TRACKING AFTER HAND START ★★★★★");
+            foreach (var kvp in _aiPlayers)
+            {
+                Console.WriteLine($"★★★★★ AI PLAYER: {kvp.Key}, Tracked: {kvp.Value} ★★★★★");
+            }
         }
         
         /// <summary>
@@ -428,10 +466,37 @@ namespace PokerGame.Avalonia.ViewModels
             Console.WriteLine($"★★★★★ Should Call: {shouldCall} (CurrentBet < GameEngine.CurrentBet: {player.CurrentBet < gameEngine.CurrentBet} AND Chips > 0: {player.Chips > 0}) ★★★★★");
             Console.WriteLine($"★★★★★ Must Call Or Fold: {mustCallOrFold} ★★★★★");
             Console.WriteLine($"★★★★★ Should Raise: {shouldRaise} (Chips > 0: {player.Chips > 0}) ★★★★★");
+            Console.WriteLine($"★★★★★ Is AI Player: {isAIPlayer}, Player.HasActed: {player.HasActed}, Player.IsActive: {player.IsActive} ★★★★★");
             
             // If this is an AI player, make the decision and execute it
             if (isAIPlayer)
             {
+                // Skip AI actions if the player has already acted or is not active
+                // This is a safeguard for cases where AI state wasn't properly reset
+                if (player.HasActed)
+                {
+                    Console.WriteLine($"★★★★★ SKIPPING AI ACTION FOR {player.Name} - HasActed is already TRUE ★★★★★");
+                    
+                    // Force the player's HasActed flag to false to prevent getting stuck
+                    player.HasActed = false;
+                    
+                    // Move to the next player
+                    _gameEngine.ProcessPlayerAction("check", 0);
+                    return;
+                }
+                
+                if (!player.IsActive)
+                {
+                    Console.WriteLine($"★★★★★ SKIPPING AI ACTION FOR {player.Name} - Player is not active ★★★★★");
+                    
+                    // Force the player's IsActive flag to true to prevent getting stuck
+                    player.IsActive = true;
+                    
+                    // Move to the next player
+                    _gameEngine.ProcessPlayerAction("check", 0);
+                    return;
+                }
+                
                 // Make AI decision
                 var (action, betAmount) = _aiPlayer.DetermineAction(player, gameEngine);
                 
