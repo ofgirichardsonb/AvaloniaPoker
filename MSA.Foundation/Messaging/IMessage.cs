@@ -85,47 +85,47 @@ namespace MSA.Foundation.Messaging
         /// <summary>
         /// Gets or sets the unique identifier for the message
         /// </summary>
-        public string MessageId { get; internal set; }
+        public string MessageId { get; set; }
         
         /// <summary>
         /// Gets or sets the type of the message
         /// </summary>
-        public string MessageType { get; internal set; }
+        public string MessageType { get; set; }
         
         /// <summary>
         /// Gets or sets the timestamp when the message was created
         /// </summary>
-        public DateTime Timestamp { get; internal set; }
+        public DateTime Timestamp { get; set; }
         
         /// <summary>
         /// Gets or sets the sender's identifier
         /// </summary>
-        public string SenderId { get; internal set; }
+        public string SenderId { get; set; }
         
         /// <summary>
         /// Gets or sets the correlation identifier for related messages
         /// </summary>
-        public string CorrelationId { get; internal set; }
+        public string CorrelationId { get; set; }
         
         /// <summary>
         /// Gets or sets the reply-to address for response messages
         /// </summary>
-        public string ReplyTo { get; internal set; }
+        public string ReplyTo { get; set; }
         
         /// <summary>
         /// Gets or sets whether acknowledgement is required for this message
         /// </summary>
-        public bool RequireAcknowledgement { get; internal set; }
+        public bool RequireAcknowledgement { get; set; }
         
         /// <summary>
         /// Gets or sets the content type of the message
         /// </summary>
-        public string ContentType { get; internal set; }
+        public string ContentType { get; set; }
         
         /// <summary>
         /// Gets or sets the message content as a byte array
         /// </summary>
-        public byte[] Content { get; internal set; }
+        public byte[] Content { get; set; }
         
         /// <summary>
         /// Gets the message headers
