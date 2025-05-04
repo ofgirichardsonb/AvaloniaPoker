@@ -494,17 +494,48 @@ namespace PokerGame.Core.Game
         /// <param name="exceptPlayer">The player whose flag should not be reset</param>
         private void ResetOtherPlayersHasActedFlags(Player exceptPlayer)
         {
-            Console.WriteLine($"★★★★★ Resetting HasActed flags for all players except {exceptPlayer.Name}, state: {_gameState} ★★★★★");
+            Console.WriteLine($"★★★★★ [ENGINE] Resetting HasActed flags for all players except {exceptPlayer.Name}, state: {_gameState} ★★★★★");
+            
+            // Detect AI players for special handling
+            var aiPlayerNames = _players.Where(p => p.Name.Contains("AI")).Select(p => p.Name).ToList();
+            if (aiPlayerNames.Count > 0)
+            {
+                Console.WriteLine($"★★★★★ [ENGINE] Detected {aiPlayerNames.Count} AI players that need special handling ★★★★★");
+            }
             
             foreach (var player in _players)
             {
+                bool isAIPlayer = player.Name.Contains("AI");
+                
+                // Only reset active players who aren't all-in and have chips
                 if (player.Id != exceptPlayer.Id && player.IsActive && !player.IsAllIn && player.Chips > 0)
                 {
                     // Log the before state for debugging
-                    Console.WriteLine($"★★★★★ Player {player.Name} HasActed reset from {player.HasActed} to false after raise ★★★★★");
+                    Console.WriteLine($"★★★★★ [ENGINE] Player {player.Name} (AI={isAIPlayer}) HasActed reset from {player.HasActed} to false after raise by {exceptPlayer.Name} ★★★★★");
                     
-                    // Reset the flag
+                    // ALWAYS reset AI players HasActed flag to ensure they can respond
                     player.HasActed = false;
+                    
+                    // For AI players, also ensure their state is fully valid
+                    if (isAIPlayer)
+                    {
+                        // Double verify other important flags for AI players
+                        if (!player.IsActive)
+                        {
+                            Console.WriteLine($"★★★★★ [ENGINE] FIXING inactive AI player: {player.Name} after raise ★★★★★");
+                            player.IsActive = true;
+                        }
+                        
+                        if (player.HasFolded)
+                        {
+                            // Only reset HasFolded if absolutely necessary - this shouldn't normally happen
+                            if (GetActivePlayers().Count <= 1)
+                            {
+                                Console.WriteLine($"★★★★★ [ENGINE] CRITICAL: Unfolding AI player {player.Name} to recover from stuck game state ★★★★★");
+                                player.HasFolded = false;
+                            }
+                        }
+                    }
                 }
             }
             

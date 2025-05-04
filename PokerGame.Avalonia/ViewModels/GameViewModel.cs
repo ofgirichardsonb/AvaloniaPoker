@@ -274,6 +274,33 @@ namespace PokerGame.Avalonia.ViewModels
         /// </summary>
         private void ExecuteRaise()
         {
+            // If the player is trying to "raise" to the exact amount they need to call,
+            // then they're actually just calling, not raising
+            if (CurrentPlayer != null && RaiseAmount <= int.Parse(CurrentBet))
+            {
+                // Just call instead
+                Console.WriteLine($"★★★★★ [UI] User clicked 'Raise' with {RaiseAmount} which is not a valid raise, treating as Call ★★★★★");
+                ExecuteCall();
+                return;
+            }
+            
+            // Get how much additional the player needs to call
+            int callAmount = 0;
+            if (CurrentPlayer != null)
+            {
+                callAmount = int.Parse(CurrentBet) - CurrentPlayer.CurrentBet;
+            }
+            
+            // If the raise amount is less than current bet + minimum raise (usually big blind), it's invalid
+            if (RaiseAmount < int.Parse(CurrentBet) + _gameEngine.BigBlind)
+            {
+                Console.WriteLine($"★★★★★ [UI] Invalid raise amount: {RaiseAmount}, minimum is {int.Parse(CurrentBet) + _gameEngine.BigBlind} ★★★★★");
+                // Show an error message
+                ShowMessage($"Invalid raise amount. Minimum raise is {int.Parse(CurrentBet) + _gameEngine.BigBlind}.");
+                return;
+            }
+            
+            Console.WriteLine($"★★★★★ [UI] User raised to {RaiseAmount} (current bet was {CurrentBet}) ★★★★★");
             _gameEngine.ProcessPlayerAction("raise", RaiseAmount);
         }
         

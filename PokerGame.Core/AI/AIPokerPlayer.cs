@@ -87,11 +87,26 @@ namespace PokerGame.Core.AI
                 // Calculate pot odds (the ratio of the pot size to the cost of the call)
                 double potOdds = (double)callAmount / (pot + callAmount);
                 
-                // If hand is strong
-                if (handStrength > 0.7)
+                Console.WriteLine($"★★★★★ [AI] {player.Name} needs to call {callAmount} with hand strength {handStrength:F2}, pot odds {potOdds:F2} ★★★★★");
+                
+                // Detect if this is a counter-raise (someone raised after us)
+                bool isCounterRaise = player.HasActed && callAmount > 0;
+                if (isCounterRaise)
                 {
-                    // 60% chance to raise with a strong hand
-                    if (_random.NextDouble() < 0.6)
+                    Console.WriteLine($"★★★★★ [AI] COUNTER-RAISE DETECTED! {player.Name} already acted but needs to call {callAmount} more ★★★★★");
+                }
+                
+                // NEVER fold pocket pairs on a counter-raise
+                bool hasPocketPair = player.HoleCards.Count == 2 && player.HoleCards[0].Rank == player.HoleCards[1].Rank;
+                
+                // If hand is strong
+                if (handStrength > 0.7 || (hasPocketPair && handStrength > 0.5))
+                {
+                    // With a strong hand, be more aggressive when someone has re-raised us
+                    double raiseChance = isCounterRaise ? 0.75 : 0.6;
+                    
+                    // Higher chance to raise with a strong hand
+                    if (_random.NextDouble() < raiseChance)
                     {
                         int minRaise = currentBet + gameEngine.BigBlind;
                         // Respect the maximum bet limit for the table
@@ -101,30 +116,47 @@ namespace PokerGame.Core.AI
                         );
                         int raiseAmount = CalculateRaiseAmount(minRaise, maxRaise, player.HoleCards, communityCards, gameState);
                         
+                        Console.WriteLine($"★★★★★ [AI] {player.Name} decides to RAISE to {raiseAmount} with strong hand (strength={handStrength:F2}) ★★★★★");
                         return ("raise", raiseAmount);
                     }
                     else
                     {
+                        Console.WriteLine($"★★★★★ [AI] {player.Name} decides to CALL with strong hand (strength={handStrength:F2}) ★★★★★");
                         return ("call", 0);
                     }
                 }
                 // If hand is medium strength
-                else if (handStrength > 0.4)
+                else if (handStrength > 0.4 || hasPocketPair)
                 {
+                    // With pocket pairs, be more likely to call
+                    if (hasPocketPair)
+                    {
+                        Console.WriteLine($"★★★★★ [AI] {player.Name} has pocket pair, more likely to call ★★★★★");
+                        // 80% chance to call with any pocket pair
+                        if (_random.NextDouble() < 0.8)
+                        {
+                            Console.WriteLine($"★★★★★ [AI] {player.Name} decides to CALL with pocket pair ★★★★★");
+                            return ("call", 0);
+                        }
+                    }
+                    
                     // Call if the pot odds are favorable
                     if (handStrength > potOdds)
                     {
+                        Console.WriteLine($"★★★★★ [AI] {player.Name} decides to CALL with medium hand (strength={handStrength:F2} > pot odds={potOdds:F2}) ★★★★★");
                         return ("call", 0);
                     }
                     else
                     {
-                        // 20% chance to bluff and call anyway
-                        if (_random.NextDouble() < 0.2)
+                        // 30% chance to bluff and call anyway (increased from 20%)
+                        if (_random.NextDouble() < 0.3)
                         {
+                            Console.WriteLine($"★★★★★ [AI] {player.Name} decides to CALL as a BLUFF with medium hand ★★★★★");
                             return ("call", 0);
                         }
                         else
                         {
+                            Console.WriteLine($"★★★★★ [AI] {player.Name} decides to FOLD medium hand (strength={handStrength:F2} < pot odds={potOdds:F2}) ★★★★★");
                             return ("fold", 0);
                         }
                     }
@@ -132,9 +164,12 @@ namespace PokerGame.Core.AI
                 // If hand is weak
                 else
                 {
-                    // Fold most of the time
-                    if (_random.NextDouble() < 0.8)
+                    // Fold most of the time with weak hands
+                    double foldChance = isCounterRaise ? 0.9 : 0.8; // More likely to fold on a counter-raise with weak hand
+                    
+                    if (_random.NextDouble() < foldChance)
                     {
+                        Console.WriteLine($"★★★★★ [AI] {player.Name} decides to FOLD weak hand (strength={handStrength:F2}) ★★★★★");
                         return ("fold", 0);
                     }
                     // Sometimes bluff
@@ -151,11 +186,13 @@ namespace PokerGame.Core.AI
                             );
                             int raiseAmount = CalculateRaiseAmount(minRaise, maxRaise, player.HoleCards, communityCards, gameState);
                             
+                            Console.WriteLine($"★★★★★ [AI] {player.Name} decides to RAISE to {raiseAmount} as a BLUFF! ★★★★★");
                             return ("raise", raiseAmount);
                         }
                         // 85% chance to just call as a bluff
                         else
                         {
+                            Console.WriteLine($"★★★★★ [AI] {player.Name} decides to CALL as a BLUFF with weak hand ★★★★★");
                             return ("call", 0);
                         }
                     }

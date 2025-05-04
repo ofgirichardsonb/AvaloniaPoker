@@ -25,51 +25,152 @@
     
         <!-- Main Game Area -->
         <Grid Grid.Row="1" RowDefinitions="*,Auto,*">
-            <!-- Players Area - Using UniformGrid with fixed columns to prevent duplicates -->
-            <ItemsControl Grid.Row="0" ItemsSource="{Binding Players}" Margin="10">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <!-- Set max rows and columns to prevent duplicates -->
-                        <UniformGrid Columns="2" Rows="2" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border BorderBrush="{Binding IsCurrent, Converter={StaticResource BoolToColorConverter}, ConverterParameter=Gold:Gray}" 
-                                BorderThickness="2" CornerRadius="5" Margin="5" Padding="10" 
-                                Background="#0A422F" Width="300">
-                            <Grid RowDefinitions="Auto,Auto">
-                                <StackPanel Grid.Row="0" Orientation="Horizontal">
-                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" Foreground="White" />
-                                    <TextBlock Text=" (" VerticalAlignment="Center" Foreground="White" />
-                                    <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Foreground="LightGreen" />
-                                    <TextBlock Text=")" VerticalAlignment="Center" Foreground="White" />
-                                    <TextBlock Text=" - " VerticalAlignment="Center" Foreground="White" />
-                                    <TextBlock Text="{Binding Chips}" VerticalAlignment="Center" Foreground="Gold" />
-                                    <TextBlock Text=" chips" VerticalAlignment="Center" Foreground="White" />
-                                    <TextBlock Text=" (Bet: " VerticalAlignment="Center" Margin="10,0,0,0" Foreground="White" />
-                                    <TextBlock Text="{Binding CurrentBet}" VerticalAlignment="Center" Foreground="Gold" />
-                                    <TextBlock Text=")" VerticalAlignment="Center" Foreground="White" />
-                                </StackPanel>
-                                <ItemsControl Grid.Row="1" ItemsSource="{Binding HoleCards}" Margin="0,10,0,0">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <StackPanel Orientation="Horizontal" />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Classes="card" Classes.card-red="{Binding IsRed}" Classes.card-black="{Binding !IsRed}">
-                                                <TextBlock Text="{Binding Display}" Classes="card" />
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+            <!-- Players Area - Fixed positions with Grid to prevent duplicates -->
+            <Grid Grid.Row="0" Margin="10" RowDefinitions="*,*" ColumnDefinitions="*,*">
+                <!-- Player 1 (You) - top left -->
+                <Border Grid.Row="0" Grid.Column="0" 
+                        BorderBrush="{Binding Players[0].IsCurrent, Converter={StaticResource BoolToColorConverter}, ConverterParameter=Gold:Gray}" 
+                        BorderThickness="2" CornerRadius="5" Margin="5" Padding="10" 
+                        Background="#0A422F" 
+                        IsVisible="{Binding Players.Count, Converter={StaticResource IntGreaterThanConverter}, ConverterParameter=0}">
+                    <Grid RowDefinitions="Auto,Auto" DataContext="{Binding Players[0]}">
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text=" (" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Foreground="LightGreen" />
+                            <TextBlock Text=")" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text=" - " VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text="{Binding Chips}" VerticalAlignment="Center" Foreground="Gold" />
+                            <TextBlock Text=" chips" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text=" (Bet: " VerticalAlignment="Center" Margin="10,0,0,0" Foreground="White" />
+                            <TextBlock Text="{Binding CurrentBet}" VerticalAlignment="Center" Foreground="Gold" />
+                            <TextBlock Text=")" VerticalAlignment="Center" Foreground="White" />
+                        </StackPanel>
+                        <ItemsControl Grid.Row="1" ItemsSource="{Binding HoleCards}" Margin="0,10,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Classes="card" Classes.card-red="{Binding IsRed}" Classes.card-black="{Binding !IsRed}">
+                                        <TextBlock Text="{Binding Display}" Classes="card" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Border>
+                
+                <!-- AI Player - top right -->
+                <Border Grid.Row="0" Grid.Column="1" 
+                        BorderBrush="{Binding Players[1].IsCurrent, Converter={StaticResource BoolToColorConverter}, ConverterParameter=Gold:Gray}" 
+                        BorderThickness="2" CornerRadius="5" Margin="5" Padding="10" 
+                        Background="#0A422F" 
+                        IsVisible="{Binding Players.Count, Converter={StaticResource IntGreaterThanConverter}, ConverterParameter=1}">
+                    <Grid RowDefinitions="Auto,Auto" DataContext="{Binding Players[1]}">
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text=" (" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Foreground="LightGreen" />
+                            <TextBlock Text=")" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text=" - " VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text="{Binding Chips}" VerticalAlignment="Center" Foreground="Gold" />
+                            <TextBlock Text=" chips" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text=" (Bet: " VerticalAlignment="Center" Margin="10,0,0,0" Foreground="White" />
+                            <TextBlock Text="{Binding CurrentBet}" VerticalAlignment="Center" Foreground="Gold" />
+                            <TextBlock Text=")" VerticalAlignment="Center" Foreground="White" />
+                        </StackPanel>
+                        <ItemsControl Grid.Row="1" ItemsSource="{Binding HoleCards}" Margin="0,10,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Classes="card" Classes.card-red="{Binding IsRed}" Classes.card-black="{Binding !IsRed}">
+                                        <TextBlock Text="{Binding Display}" Classes="card" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Border>
+                
+                <!-- Player 3 - bottom left (reserved for future) -->
+                <Border Grid.Row="1" Grid.Column="0" 
+                        BorderBrush="{Binding Players[2].IsCurrent, Converter={StaticResource BoolToColorConverter}, ConverterParameter=Gold:Gray}" 
+                        BorderThickness="2" CornerRadius="5" Margin="5" Padding="10" 
+                        Background="#0A422F" 
+                        IsVisible="{Binding Players.Count, Converter={StaticResource IntGreaterThanConverter}, ConverterParameter=2}">
+                    <Grid RowDefinitions="Auto,Auto" DataContext="{Binding Players[2]}">
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text=" (" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Foreground="LightGreen" />
+                            <TextBlock Text=")" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text=" - " VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text="{Binding Chips}" VerticalAlignment="Center" Foreground="Gold" />
+                            <TextBlock Text=" chips" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text=" (Bet: " VerticalAlignment="Center" Margin="10,0,0,0" Foreground="White" />
+                            <TextBlock Text="{Binding CurrentBet}" VerticalAlignment="Center" Foreground="Gold" />
+                            <TextBlock Text=")" VerticalAlignment="Center" Foreground="White" />
+                        </StackPanel>
+                        <ItemsControl Grid.Row="1" ItemsSource="{Binding HoleCards}" Margin="0,10,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Classes="card" Classes.card-red="{Binding IsRed}" Classes.card-black="{Binding !IsRed}">
+                                        <TextBlock Text="{Binding Display}" Classes="card" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Border>
+                
+                <!-- Player 4 - bottom right (reserved for future) -->
+                <Border Grid.Row="1" Grid.Column="1" 
+                        BorderBrush="{Binding Players[3].IsCurrent, Converter={StaticResource BoolToColorConverter}, ConverterParameter=Gold:Gray}" 
+                        BorderThickness="2" CornerRadius="5" Margin="5" Padding="10" 
+                        Background="#0A422F" 
+                        IsVisible="{Binding Players.Count, Converter={StaticResource IntGreaterThanConverter}, ConverterParameter=3}">
+                    <Grid RowDefinitions="Auto,Auto" DataContext="{Binding Players[3]}">
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text=" (" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Foreground="LightGreen" />
+                            <TextBlock Text=")" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text=" - " VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text="{Binding Chips}" VerticalAlignment="Center" Foreground="Gold" />
+                            <TextBlock Text=" chips" VerticalAlignment="Center" Foreground="White" />
+                            <TextBlock Text=" (Bet: " VerticalAlignment="Center" Margin="10,0,0,0" Foreground="White" />
+                            <TextBlock Text="{Binding CurrentBet}" VerticalAlignment="Center" Foreground="Gold" />
+                            <TextBlock Text=")" VerticalAlignment="Center" Foreground="White" />
+                        </StackPanel>
+                        <ItemsControl Grid.Row="1" ItemsSource="{Binding HoleCards}" Margin="0,10,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Classes="card" Classes.card-red="{Binding IsRed}" Classes.card-black="{Binding !IsRed}">
+                                        <TextBlock Text="{Binding Display}" Classes="card" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Border>
+            </Grid>
             
             <!-- Community Cards -->
             <Border Grid.Row="1" Background="#0C4A35" CornerRadius="10" Margin="20" Padding="10">
