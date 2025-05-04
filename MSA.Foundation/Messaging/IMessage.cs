@@ -78,7 +78,7 @@ namespace MSA.Foundation.Messaging
     /// <summary>
     /// Base implementation of IMessage with common functionality
     /// </summary>
-    public class Message : IMessage
+    public class ServiceMessage : IMessage
     {
         private readonly Dictionary<string, string> _headers = new Dictionary<string, string>();
         
@@ -135,7 +135,7 @@ namespace MSA.Foundation.Messaging
         /// <summary>
         /// Creates a new message
         /// </summary>
-        public Message()
+        public ServiceMessage()
         {
             MessageId = Guid.NewGuid().ToString();
             MessageType = GetType().Name;
@@ -154,9 +154,9 @@ namespace MSA.Foundation.Messaging
         /// <param name="content">The content to include in the message</param>
         /// <typeparam name="T">The type of the content</typeparam>
         /// <returns>A new message with the specified content</returns>
-        public static Message Create<T>(T content)
+        public static ServiceMessage Create<T>(T content)
         {
-            var message = new Message
+            var message = new ServiceMessage
             {
                 MessageType = typeof(T).Name,
                 ContentType = "application/json"
@@ -171,9 +171,9 @@ namespace MSA.Foundation.Messaging
         /// </summary>
         /// <param name="messageType">The type of the message</param>
         /// <returns>A new message of the specified type</returns>
-        public static Message Create(string messageType)
+        public static ServiceMessage Create(string messageType)
         {
-            return new Message
+            return new ServiceMessage
             {
                 MessageType = messageType
             };
@@ -185,9 +185,9 @@ namespace MSA.Foundation.Messaging
         /// <param name="senderId">The sender's identifier</param>
         /// <param name="messageType">The type of the message</param>
         /// <returns>A new message from the specified sender</returns>
-        public static Message CreateFrom(string senderId, string messageType)
+        public static ServiceMessage CreateFrom(string senderId, string messageType)
         {
-            return new Message
+            return new ServiceMessage
             {
                 SenderId = senderId,
                 MessageType = messageType
@@ -200,9 +200,9 @@ namespace MSA.Foundation.Messaging
         /// <param name="originalMessage">The message to reply to</param>
         /// <param name="replyMessageType">The type of the reply message</param>
         /// <returns>A new reply message</returns>
-        public static Message CreateReply(IMessage originalMessage, string replyMessageType)
+        public static ServiceMessage CreateReply(IMessage originalMessage, string replyMessageType)
         {
-            return new Message
+            return new ServiceMessage
             {
                 MessageType = replyMessageType,
                 CorrelationId = originalMessage.MessageId,
@@ -281,7 +281,7 @@ namespace MSA.Foundation.Messaging
         /// </summary>
         /// <param name="requireAcknowledgement">Whether acknowledgement is required</param>
         /// <returns>This message instance for fluent chaining</returns>
-        public Message WithAcknowledgement(bool requireAcknowledgement = true)
+        public ServiceMessage WithAcknowledgement(bool requireAcknowledgement = true)
         {
             RequireAcknowledgement = requireAcknowledgement;
             return this;
@@ -292,7 +292,7 @@ namespace MSA.Foundation.Messaging
         /// </summary>
         /// <param name="correlationId">The correlation identifier</param>
         /// <returns>This message instance for fluent chaining</returns>
-        public Message WithCorrelationId(string correlationId)
+        public ServiceMessage WithCorrelationId(string correlationId)
         {
             CorrelationId = correlationId;
             return this;
@@ -303,7 +303,7 @@ namespace MSA.Foundation.Messaging
         /// </summary>
         /// <param name="senderId">The sender's identifier</param>
         /// <returns>This message instance for fluent chaining</returns>
-        public Message FromSender(string senderId)
+        public ServiceMessage FromSender(string senderId)
         {
             SenderId = senderId;
             return this;
@@ -314,7 +314,7 @@ namespace MSA.Foundation.Messaging
         /// </summary>
         /// <param name="replyTo">The reply-to address</param>
         /// <returns>This message instance for fluent chaining</returns>
-        public Message WithReplyTo(string replyTo)
+        public ServiceMessage WithReplyTo(string replyTo)
         {
             ReplyTo = replyTo;
             return this;
