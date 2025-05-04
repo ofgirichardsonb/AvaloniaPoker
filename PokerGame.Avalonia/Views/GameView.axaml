@@ -25,7 +25,7 @@
     
         <!-- Main Game Area -->
         <Grid Grid.Row="1" RowDefinitions="*,Auto,*">
-            <!-- Players Area - Changed from fixed UniformGrid to flexible WrapPanel -->
+            <!-- Players Area - Using UniformGrid with fixed columns to prevent duplicates -->
             <ItemsControl Grid.Row="0" ItemsSource="{Binding Players}" Margin="10">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>

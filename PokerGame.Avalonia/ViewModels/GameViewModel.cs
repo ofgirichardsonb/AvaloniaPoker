@@ -442,10 +442,35 @@ namespace PokerGame.Avalonia.ViewModels
             // Find the corresponding player view model
             PlayerViewModel? playerViewModel = _players.FirstOrDefault(p => p.Name == player.Name);
             
-            if (playerViewModel == null) return;
+            if (playerViewModel == null)
+            {
+                Console.WriteLine($"★★★★★ [CRITICAL ERROR] Player {player.Name} not found in UI view models! ★★★★★");
+                
+                // Debug player collection to diagnose issues
+                Console.WriteLine("Available players in UI:");
+                foreach (var p in _players)
+                {
+                    Console.WriteLine($"  - {p.Name} (CurrentUser: {p.IsCurrentUser})");
+                }
+                
+                // Update UI with player list from game engine to recover
+                UpdateGameState(gameEngine);
+                
+                // Try again with updated player list
+                playerViewModel = _players.FirstOrDefault(p => p.Name == player.Name);
+                
+                if (playerViewModel == null)
+                {
+                    Console.WriteLine($"★★★★★ [UNRECOVERABLE ERROR] Still can't find player {player.Name} after UI update! ★★★★★");
+                    return;
+                }
+                
+                Console.WriteLine($"★★★★★ [RECOVERED] Found player {player.Name} after UI update ★★★★★");
+            }
             
-            // Check if this is an AI player
+            // Check if this is an AI player (with debugging)
             bool isAIPlayer = _aiPlayers.ContainsKey(player.Name) && _aiPlayers[player.Name];
+            Console.WriteLine($"★★★★★ GetPlayerAction for {player.Name} - IsAIPlayer: {isAIPlayer}, State: {gameEngine.State}, HasActed: {player.HasActed} ★★★★★");
             
             CurrentPlayer = playerViewModel;
             
@@ -595,20 +620,28 @@ namespace PokerGame.Avalonia.ViewModels
             Player? currentPlayerFromEngine = gameEngine.CurrentPlayer;
             PlayerViewModel? currentPlayerViewModel = null;
             
-            // Create a unique dictionary of players to avoid duplicates
-            Dictionary<string, Player> uniquePlayers = new Dictionary<string, Player>();
+            // Clear out any existing players with the same names first
+            Dictionary<string, Player> playersByName = new Dictionary<string, Player>();
+            
+            // First pass: collect all players by name
             foreach (var player in gameEngine.Players)
             {
-                if (!uniquePlayers.ContainsKey(player.Name))
+                // Always use the first player we encounter with each name
+                if (!playersByName.ContainsKey(player.Name))
                 {
-                    uniquePlayers[player.Name] = player;
+                    playersByName[player.Name] = player;
+                }
+                else
+                {
+                    Console.WriteLine($"WARNING: Duplicate player found: {player.Name} - using the first instance only");
                 }
             }
             
-            // Now add each unique player to the view model
-            foreach (var playerEntry in uniquePlayers)
+            // Now process only unique players
+            foreach (var playerEntry in playersByName)
             {
                 Player player = playerEntry.Value;
+                Console.WriteLine($"Processing player {player.Name} - HasActed: {player.HasActed}, IsActive: {player.IsActive}, HasFolded: {player.HasFolded}");
                 
                 // Try to reuse existing player view model to maintain state
                 PlayerViewModel playerViewModel;
@@ -629,9 +662,18 @@ namespace PokerGame.Avalonia.ViewModels
                 }
                 else
                 {
-                    // Create new player view model - it will use the Player.IsCurrentUser value
-                    playerViewModel = new PlayerViewModel(player);
-                    playerViewModel.UpdateCardVisibility(gameOver);
+                    // Create new player view model with explicit visibility rules
+                    bool isCurrentUser = player.IsCurrentUser;
+                    playerViewModel = new PlayerViewModel(player, isCurrentUser);
+                    
+                    // Force update card visibility with explicit debug
+                    foreach (var card in playerViewModel.HoleCards)
+                    {
+                        // Cards are only visible to current user or when game is over
+                        bool shouldBeVisible = isCurrentUser || gameOver || player.HasFolded;
+                        Console.WriteLine($"Card visibility: {player.Name}'s card setting to {shouldBeVisible} (IsCurrentUser={isCurrentUser}, GameOver={gameOver})");
+                        card.IsVisible = shouldBeVisible;
+                    }
                 }
                 
                 // Mark this player as current if it matches the engine's current player
@@ -891,6 +933,9 @@ namespace PokerGame.Avalonia.ViewModels
         {
             _card = card;
             _isVisible = isVisible;
+            
+            // Debug initialization
+            Console.WriteLine($"Created card {card.Rank} of {card.Suit} with visibility: {isVisible}");
         }
         
         /// <summary>
@@ -960,7 +1005,11 @@ namespace PokerGame.Avalonia.ViewModels
         /// </summary>
         public string Display 
         { 
-            get => IsVisible ? $"{Rank}{Suit}" : "🂠";
+            get 
+            {
+                Console.WriteLine($"Card display requested: {_card.Rank} of {_card.Suit}, IsVisible={IsVisible}");
+                return IsVisible ? $"{Rank}{Suit}" : "🂠"; 
+            }
         }
     }
 }
