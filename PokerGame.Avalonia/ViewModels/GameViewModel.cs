@@ -604,202 +604,98 @@ namespace PokerGame.Avalonia.ViewModels
         }
         
         /// <summary>
-        /// Updates the UI with the current game state
+        /// Updates the UI with the current game state using a simplified approach
         /// </summary>
         /// <param name="gameEngine">The current game engine instance</param>
         public void UpdateGameState(PokerGameEngine gameEngine)
         {
-            // Update pot and current bet
+            Console.WriteLine($"[UI] Updating game state: Game={gameEngine.State}, Players={gameEngine.Players.Count}");
+            
+            // STEP 1: Update simple properties first
             Pot = gameEngine.Pot;
             CurrentBet = gameEngine.CurrentBet.ToString();
-            
-            // Update game status
-            GameStatus = $"Game State: {gameEngine.State}";
-            
-            // Extensive diagnostic logging for player management
-            Console.WriteLine($"★★★★★ [UI] UPDATING GAME STATE: Game={gameEngine.State}, Engine Player Count={gameEngine.Players.Count}, UI Player Count={_players.Count} ★★★★★");
-            Console.WriteLine($"★★★★★ [UI] ENGINE PLAYERS: ★★★★★");
-            foreach (var p in gameEngine.Players)
-            {
-                Console.WriteLine($"★★★★★ [UI] ENGINE PLAYER: {p.Name}, ID={p.Id}, IsActive={p.IsActive}, HasFolded={p.HasFolded} ★★★★★");
-            }
-            
-            Console.WriteLine($"★★★★★ [UI] CURRENT UI PLAYERS: ★★★★★");
-            foreach (var p in _players)
-            {
-                Console.WriteLine($"★★★★★ [UI] UI PLAYER: {p.Name}, IsCurrentUser={p.IsCurrentUser}, IsCurrent={p.IsCurrent} ★★★★★");
-            }
-            
-            // Safely preserve important state
-            var aiPlayers = new Dictionary<string, bool>(_aiPlayers);
-            var existingPlayers = new Dictionary<string, PlayerViewModel>();
-            
-            // Save references to existing player view models before clearing
-            foreach (var player in _players)
-            {
-                existingPlayers[player.Name] = player;
-            }
-            
-            // Clear the collection and track what we're doing
-            Console.WriteLine($"★★★★★ [UI] Clearing player list before update. Had {_players.Count} players. ★★★★★");
-            _players.Clear();
-            
-            // Also reset the duplicate tracking dictionary if it seems to be causing problems
-            if (aiPlayers.Count > _gameEngine.Players.Count)
-            {
-                Console.WriteLine($"★★★★★ [UI] AI player dictionary has {aiPlayers.Count} entries but engine has {_gameEngine.Players.Count} players - rebuilding ★★★★★");
-                aiPlayers.Clear();
-                
-                // Recreate from actual players
-                foreach (var player in _gameEngine.Players)
-                {
-                    // Mark as AI if name contains "AI"
-                    if (player.Name.Contains("AI"))
-                    {
-                        aiPlayers[player.Name] = true;
-                    }
-                }
-            }
-            
-            // In a multiplayer game, each player might already have their IsCurrentUser flag set
-            // But for backwards compatibility, we'll default the first player as current user if none is set
-            bool anyCurrentUser = gameEngine.Players.Any(p => p.IsCurrentUser);
             bool gameOver = gameEngine.State == GameState.HandComplete;
             
+            // STEP 2: COMPLETE RESET - Clear all collections
+            _players.Clear();
+            _communityCards.Clear();
+            _aiPlayers.Clear();
+            
+            // STEP 3: Set current user if none is set
+            bool anyCurrentUser = gameEngine.Players.Any(p => p.IsCurrentUser);
             if (!anyCurrentUser && gameEngine.Players.Count > 0)
             {
-                // For demonstration, set the first player as current user
-                gameEngine.Players[0].IsCurrentUser = true;
+                // Find first non-AI player if available
+                var humanPlayer = gameEngine.Players.FirstOrDefault(p => !p.Name.Contains("AI"));
+                if (humanPlayer != null)
+                {
+                    humanPlayer.IsCurrentUser = true;
+                }
+                else if (gameEngine.Players.Count > 0)
+                {
+                    // If all players are AI, set the first one as current user
+                    gameEngine.Players[0].IsCurrentUser = true;
+                }
             }
             
-            // Restore AI player tracking
-            _aiPlayers = aiPlayers;
-            
-            // Get the current player from the game engine
-            Player? currentPlayerFromEngine = gameEngine.CurrentPlayer;
+            // STEP 4: Process players with deduplication
             PlayerViewModel? currentPlayerViewModel = null;
+            var deduplicatedPlayers = DeduplicatePlayers(gameEngine.Players);
             
-            // Clear out any existing players with the same names first
-            Dictionary<string, Player> playersByName = new Dictionary<string, Player>();
-            
-            // First pass: collect all players by name
-            foreach (var player in gameEngine.Players)
+            // Create view models for unique players
+            foreach (var player in deduplicatedPlayers)
             {
-                // Always use the first player we encounter with each name
-                if (!playersByName.ContainsKey(player.Name))
+                // Mark AI players
+                if (player.Name.Contains("AI"))
                 {
-                    playersByName[player.Name] = player;
-                }
-                else
-                {
-                    Console.WriteLine($"WARNING: Duplicate player found: {player.Name} - using the first instance only");
-                }
-            }
-            
-            // Now process only unique players
-            foreach (var playerEntry in playersByName)
-            {
-                Player player = playerEntry.Value;
-                Console.WriteLine($"Processing player {player.Name} - HasActed: {player.HasActed}, IsActive: {player.IsActive}, HasFolded: {player.HasFolded}");
-                
-                // Try to reuse existing player view model to maintain state
-                PlayerViewModel playerViewModel;
-                if (existingPlayers.ContainsKey(player.Name))
-                {
-                    playerViewModel = existingPlayers[player.Name];
-                    
-                    // Completely rebuild hole cards to avoid duplications
-                    playerViewModel.HoleCards.Clear();
-                    
-                    // Create a deduplicated list of cards for this player
-                    var uniquePlayerCards = new HashSet<string>();
-                    var deduplicatedPlayerCards = new List<Card>();
-                    
-                    foreach (var card in player.HoleCards)
-                    {
-                        string cardKey = $"{card.Rank}-{card.Suit}";
-                        if (!uniquePlayerCards.Contains(cardKey))
-                        {
-                            uniquePlayerCards.Add(cardKey);
-                            deduplicatedPlayerCards.Add(card);
-                        }
-                        else
-                        {
-                            Console.WriteLine($"★★★★★ [UI] DUPLICATE player card detected and removed for {player.Name}: {card.Rank} of {card.Suit} ★★★★★");
-                        }
-                    }
-                    
-                    // Add each deduplicated card with proper visibility
-                    foreach (var card in deduplicatedPlayerCards)
-                    {
-                        bool cardVisible = playerViewModel.IsCurrentUser || gameOver || player.HasFolded;
-                        playerViewModel.HoleCards.Add(new CardViewModel(card, cardVisible));
-                    }
-                    
-                    // Update card visibility based on game state
-                    playerViewModel.UpdateCardVisibility(gameOver);
-                }
-                else
-                {
-                    // Create new player view model with explicit visibility rules
-                    bool isCurrentUser = player.IsCurrentUser;
-                    playerViewModel = new PlayerViewModel(player, isCurrentUser);
-                    
-                    // Force update card visibility with explicit debug
-                    foreach (var card in playerViewModel.HoleCards)
-                    {
-                        // Cards are only visible to current user or when game is over
-                        bool shouldBeVisible = isCurrentUser || gameOver || player.HasFolded;
-                        Console.WriteLine($"Card visibility: {player.Name}'s card setting to {shouldBeVisible} (IsCurrentUser={isCurrentUser}, GameOver={gameOver})");
-                        card.IsVisible = shouldBeVisible;
-                    }
+                    _aiPlayers[player.Name] = true;
                 }
                 
-                // Mark this player as current if it matches the engine's current player
-                if (currentPlayerFromEngine != null && player.Name == currentPlayerFromEngine.Name)
+                // Deduplicate cards for this player
+                var deduplicatedCards = DeduplicateCards(player.HoleCards);
+                
+                // Create view model with pre-filtered cards
+                var playerViewModel = new PlayerViewModel(player, player.IsCurrentUser, deduplicatedCards);
+                
+                // Set if this is the current player
+                if (gameEngine.CurrentPlayer != null && player.Name == gameEngine.CurrentPlayer.Name)
                 {
                     playerViewModel.IsCurrent = true;
                     currentPlayerViewModel = playerViewModel;
                 }
-                else
-                {
-                    playerViewModel.IsCurrent = false;
-                }
                 
+                // Update card visibility based on game state
+                playerViewModel.UpdateCardVisibility(gameOver);
+                
+                // Add to collection
                 _players.Add(playerViewModel);
             }
             
-            // Better approach for updating community cards:
-            // 1. Clear the collection completely
-            _communityCards.Clear();
-            
-            // 2. Create a deduplicated list of cards from the engine
-            var uniqueCards = new HashSet<string>();
-            var deduplicatedCards = new List<Card>();
-            
-            foreach (var card in gameEngine.CommunityCards)
-            {
-                string cardKey = $"{card.Rank}-{card.Suit}";
-                if (!uniqueCards.Contains(cardKey))
-                {
-                    uniqueCards.Add(cardKey);
-                    deduplicatedCards.Add(card);
-                }
-                else
-                {
-                    Console.WriteLine($"★★★★★ [UI] DUPLICATE community card detected and removed: {card.Rank} of {card.Suit} ★★★★★");
-                }
-            }
-            
-            // 3. Add each deduplicated card to the view model collection
-            foreach (var card in deduplicatedCards)
+            // STEP 5: Add deduplicated community cards
+            var deduplicatedCommunityCards = DeduplicateCards(gameEngine.CommunityCards);
+            foreach (var card in deduplicatedCommunityCards)
             {
                 _communityCards.Add(new CardViewModel(card, true));
             }
             
-            // If the hand is complete, enable the start hand button
+            // STEP 6: Update game state status and controls
+            UpdateGameStatus(gameEngine, currentPlayerViewModel, gameOver);
+        }
+        
+        /// <summary>
+        /// Updates game status and UI button states based on game state
+        /// </summary>
+        private void UpdateGameStatus(PokerGameEngine gameEngine, PlayerViewModel? currentPlayerViewModel, bool gameOver)
+        {
+            // Handle end of hand or waiting to start
             if (gameEngine.State == GameState.HandComplete || gameEngine.State == GameState.WaitingToStart)
             {
+                // Update UI state
+                GameStatus = gameEngine.State == GameState.HandComplete 
+                    ? "Hand complete. Click 'Start Hand' to play again."
+                    : "Ready to start. Click 'Start Hand' to begin.";
+                
+                // Set button states
                 CanStartHand = true;
                 CanCheck = false;
                 CanCall = false;
@@ -807,86 +703,109 @@ namespace PokerGame.Avalonia.ViewModels
                 CanFold = false;
                 CurrentPlayer = null;
                 
-                // If the hand is complete, make all cards visible
-                if (gameEngine.State == GameState.HandComplete)
+                // Make all cards visible at end of hand
+                if (gameOver)
                 {
                     foreach (var player in _players)
                     {
                         player.UpdateCardVisibility(true);
                     }
                 }
-                return; // No need to process button states for end-of-hand
+                
+                return;
             }
             
-            // Always update the current player to match the game engine's current player
+            // Handle active gameplay
             if (currentPlayerViewModel != null)
             {
+                // Set current player
                 CurrentPlayer = currentPlayerViewModel;
                 
-                // Find the current player's data model
+                // Get player model from engine
                 var playerModel = gameEngine.Players.FirstOrDefault(p => p.Name == currentPlayerViewModel.Name);
+                if (playerModel == null) return;
                 
-                if (playerModel != null)
+                // Determine available actions
+                bool shouldCheck = playerModel.CurrentBet == gameEngine.CurrentBet;
+                bool shouldCall = playerModel.CurrentBet < gameEngine.CurrentBet && playerModel.Chips > 0;
+                bool mustCallOrFold = gameEngine.CurrentBet > playerModel.CurrentBet && playerModel.Chips > 0;
+                bool shouldRaise = playerModel.Chips > 0;
+                
+                // Set button states
+                CanCheck = shouldCheck;
+                CanCall = shouldCall;
+                CanRaise = shouldRaise;
+                CanFold = true;
+                
+                // Force-enable call button if player must call (can't check)
+                if (mustCallOrFold)
                 {
-                    Console.WriteLine($"★★★★★ [UI] Updating available actions for current player: {playerModel.Name} ★★★★★");
-                    
-                    // Update available actions with detailed logging and enhanced state management
-                    bool shouldCheck = playerModel.CurrentBet == gameEngine.CurrentBet;
-                    bool shouldCall = playerModel.CurrentBet < gameEngine.CurrentBet && playerModel.Chips > 0;
-                    
-                    // Fix for the issue where Call button is disabled when it should be enabled
-                    // If current bet is higher than player's bet, they MUST call or fold
-                    bool mustCallOrFold = gameEngine.CurrentBet > playerModel.CurrentBet && playerModel.Chips > 0;
-                    
-                    // Enable raising only if player has enough chips
-                    bool shouldRaise = playerModel.Chips > 0;
-                    
-                    Console.WriteLine($"★★★★★ [UI] Action Reevaluation for {playerModel.Name} ★★★★★");
-                    Console.WriteLine($"★★★★★ [UI] Player CurrentBet: {playerModel.CurrentBet}, GameEngine CurrentBet: {gameEngine.CurrentBet}, Player Chips: {playerModel.Chips} ★★★★★");
-                    Console.WriteLine($"★★★★★ [UI] Should Check: {shouldCheck} (CurrentBet == GameEngine.CurrentBet: {playerModel.CurrentBet == gameEngine.CurrentBet}) ★★★★★");
-                    Console.WriteLine($"★★★★★ [UI] Should Call: {shouldCall} (CurrentBet < GameEngine.CurrentBet: {playerModel.CurrentBet < gameEngine.CurrentBet} AND Chips > 0: {playerModel.Chips > 0}) ★★★★★");
-                    Console.WriteLine($"★★★★★ [UI] Must Call Or Fold: {mustCallOrFold} ★★★★★");
-                    Console.WriteLine($"★★★★★ [UI] Should Raise: {shouldRaise} (Chips > 0: {playerModel.Chips > 0}) ★★★★★");
-                    
-                    // Set the UI button states based on game rules:
-                    
-                    // Only enable check if player's bet equals the current bet
-                    CanCheck = shouldCheck;
-                    
-                    // Enable call if player needs to match a higher bet
-                    CanCall = shouldCall; 
-                    
-                    // Force-enable call button if the player must call (can't check)
-                    if (mustCallOrFold)
-                    {
-                        Console.WriteLine($"★★★★★ [UI] FORCE ENABLING CALL BUTTON for {playerModel.Name} - Must call {gameEngine.CurrentBet - playerModel.CurrentBet} or fold ★★★★★");
-                        CanCall = true;
-                        CanCheck = false; // Can't check when call is required
-                    }
-                    
-                    CanRaise = shouldRaise;
-                    CanFold = true;
-                    
-                    // Update minimum raise amount
-                    MinRaiseAmount = gameEngine.CurrentBet + 10;
-                    RaiseAmount = MinRaiseAmount;
-                    
-                    // Update game status based on whether this is the current user or another player
-                    if (currentPlayerViewModel.IsCurrentUser)
-                    {
-                        GameStatus = "Your turn - make your move";
-                    }
-                    else
-                    {
-                        GameStatus = $"Waiting for {playerModel.Name} to make a move";
-                    }
+                    CanCall = true;
+                    CanCheck = false;
                 }
+                
+                // Set minimum raise amount
+                MinRaiseAmount = gameEngine.CurrentBet + 10;
+                RaiseAmount = MinRaiseAmount;
+                
+                // Update game status message
+                GameStatus = currentPlayerViewModel.IsCurrentUser 
+                    ? "Your turn - make your move" 
+                    : $"Waiting for {playerModel.Name} to make a move";
             }
             else if (gameEngine.CurrentPlayer != null)
             {
-                // If we have a current player in the engine but not in our view model, log a warning
-                Console.WriteLine($"★★★★★ [UI] WARNING: Current player in engine ({gameEngine.CurrentPlayer.Name}) not found in UI model! ★★★★★");
+                // Log a warning if current player isn't in UI model
+                Console.WriteLine($"[UI] WARNING: Current player in engine ({gameEngine.CurrentPlayer.Name}) not found in UI model!");
+                GameStatus = "Waiting for player action...";
             }
+        }
+        
+        /// <summary>
+        /// Removes duplicate players with the same name, keeping the first instance
+        /// </summary>
+        private List<Player> DeduplicatePlayers(IEnumerable<Player> players)
+        {
+            var uniquePlayers = new Dictionary<string, Player>();
+            
+            foreach (var player in players)
+            {
+                if (!uniquePlayers.ContainsKey(player.Name))
+                {
+                    uniquePlayers[player.Name] = player;
+                }
+                else
+                {
+                    Console.WriteLine($"[UI] Duplicate player removed: {player.Name}");
+                }
+            }
+            
+            return uniquePlayers.Values.ToList();
+        }
+        
+        /// <summary>
+        /// Removes duplicate cards with the same rank and suit
+        /// </summary>
+        private List<Card> DeduplicateCards(IEnumerable<Card> cards)
+        {
+            var uniqueCards = new HashSet<string>();
+            var result = new List<Card>();
+            
+            foreach (var card in cards)
+            {
+                string cardKey = $"{card.Rank}-{card.Suit}";
+                if (!uniqueCards.Contains(cardKey))
+                {
+                    uniqueCards.Add(cardKey);
+                    result.Add(card);
+                }
+                else
+                {
+                    Console.WriteLine($"[UI] Duplicate card removed: {card.Rank} of {card.Suit}");
+                }
+            }
+            
+            return result;
         }
         
         #endregion
@@ -901,6 +820,9 @@ namespace PokerGame.Avalonia.ViewModels
         private ObservableCollection<CardViewModel> _holeCards = new ObservableCollection<CardViewModel>();
         private bool _isCurrentUser;
         
+        /// <summary>
+        /// Creates a new PlayerViewModel with automatic card deduplication
+        /// </summary>
         public PlayerViewModel(Player player, bool isCurrentUser = false)
         {
             _player = player;
@@ -910,6 +832,7 @@ namespace PokerGame.Avalonia.ViewModels
             
             // Create view models for hole cards with deduplication
             var uniqueCards = new HashSet<string>();
+            var deduplicatedCards = new List<Card>();
             
             foreach (var card in player.HoleCards)
             {
@@ -917,7 +840,7 @@ namespace PokerGame.Avalonia.ViewModels
                 if (!uniqueCards.Contains(cardKey))
                 {
                     uniqueCards.Add(cardKey);
-                    _holeCards.Add(new CardViewModel(card, true)); // Cards are visible by default
+                    deduplicatedCards.Add(card);
                 }
                 else
                 {
@@ -925,8 +848,43 @@ namespace PokerGame.Avalonia.ViewModels
                 }
             }
             
-            // If this isn't the current user, hide the cards (show backs) unless the game is over
-            UpdateCardVisibility();
+            // Initialize with the deduplicated cards
+            InitializeWithCards(deduplicatedCards);
+        }
+        
+        /// <summary>
+        /// Creates a new PlayerViewModel with pre-filtered cards for efficiency
+        /// </summary>
+        public PlayerViewModel(Player player, bool isCurrentUser, IEnumerable<Card> filteredCards)
+        {
+            _player = player;
+            
+            // Set current user flag, preferring the model's value if it's set
+            _isCurrentUser = player.IsCurrentUser || isCurrentUser;
+            
+            // Initialize with the pre-filtered cards (already deduplicated)
+            InitializeWithCards(filteredCards);
+        }
+        
+        /// <summary>
+        /// Common initialization method for both constructors
+        /// </summary>
+        private void InitializeWithCards(IEnumerable<Card> cards)
+        {
+            // Clear any existing cards
+            _holeCards.Clear();
+            
+            // Determine initial visibility based on player status
+            bool showCards = _isCurrentUser || _player.HasFolded;
+            
+            // Add each card with the determined visibility
+            foreach (var card in cards)
+            {
+                _holeCards.Add(new CardViewModel(card, showCards));
+            }
+            
+            // Log what we did
+            Console.WriteLine($"Created PlayerViewModel for {_player.Name} with {_holeCards.Count} cards, visibility={showCards}");
         }
         
         /// <summary>
