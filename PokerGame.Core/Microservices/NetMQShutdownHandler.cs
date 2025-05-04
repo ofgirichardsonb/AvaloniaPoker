@@ -249,27 +249,62 @@ namespace PokerGame.Core.Microservices
                 Console.WriteLine("Process exit - proceeding to NetMQ context cleanup");
                 await Task.Delay(100);
                 
-                Console.WriteLine("Process exit - performing graceful NetMQ context cleanup");
-                // Use the false parameter to avoid terminating the context (less aggressive)
-                NetMQConfig.Cleanup(false);
-                Console.WriteLine("Process exit - graceful NetMQ context cleanup successful");
+                // Use a timeout task for the cleanup to prevent hanging
+                var cleanupTask = Task.Run(() => {
+                    try {
+                        Console.WriteLine("Process exit - performing graceful NetMQ context cleanup");
+                        // Use the false parameter to avoid terminating the context (less aggressive)
+                        NetMQConfig.Cleanup(false);
+                        Console.WriteLine("Process exit - graceful NetMQ context cleanup successful");
+                    }
+                    catch (Exception ex) {
+                        Console.WriteLine($"Process exit - error during graceful NetMQ cleanup: {ex.Message}");
+                        
+                        try {
+                            Console.WriteLine("Process exit - attempting aggressive NetMQ cleanup");
+                            NetMQConfig.Cleanup(true);
+                            Console.WriteLine("Process exit - aggressive NetMQ cleanup completed");
+                        }
+                        catch (Exception forcedEx) {
+                            Console.WriteLine($"Process exit - aggressive cleanup also failed: {forcedEx.Message}");
+                            throw; // Re-throw to indicate failure
+                        }
+                    }
+                });
+                
+                // Wait for the cleanup with a timeout
+                var timeoutTask = Task.Delay(2000); // 2 second timeout
+                if (await Task.WhenAny(cleanupTask, timeoutTask) == timeoutTask)
+                {
+                    Console.WriteLine("Process exit - NetMQ cleanup timed out after 2 seconds");
+                    
+                    // Create a new task to force cleanup without waiting for it
+                    Task.Run(() => {
+                        try {
+                            Console.WriteLine("Process exit - forcing termination through alternative means");
+                            // This is a very aggressive approach that might cause crashes but will prevent hangs
+                            NetMQConfig.Cleanup(true);
+                        }
+                        catch {
+                            // Ignore any exceptions at this point
+                        }
+                    });
+                    
+                    // Don't wait for the aggressive cleanup, just let the application exit
+                    Console.WriteLine("Process exit - proceeding with application exit without waiting for NetMQ");
+                }
+                else if (cleanupTask.IsFaulted)
+                {
+                    Console.WriteLine("Process exit - NetMQ cleanup failed but process will continue with exit");
+                }
+                else
+                {
+                    Console.WriteLine("Process exit - NetMQ cleanup completed successfully");
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Process exit - error during NetMQ cleanup: {ex.Message}");
-                
-                try
-                {
-                    // If gentle cleanup failed, try a more aggressive approach as a last resort
-                    Console.WriteLine("Process exit - attempting aggressive NetMQ cleanup");
-                    await Task.Delay(200); // Give additional time
-                    NetMQConfig.Cleanup(true);
-                    Console.WriteLine("Process exit - aggressive NetMQ cleanup completed");
-                }
-                catch (Exception innerEx)
-                {
-                    Console.WriteLine($"Process exit - aggressive cleanup also failed: {innerEx.Message}");
-                }
+                Console.WriteLine($"Process exit - unexpected error during NetMQ cleanup: {ex.Message}");
             }
             
             Console.WriteLine("Process exit NetMQ cleanup sequence completed");
