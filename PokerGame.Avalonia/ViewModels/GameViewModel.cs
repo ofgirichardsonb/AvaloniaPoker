@@ -568,8 +568,16 @@ namespace PokerGame.Avalonia.ViewModels
             // Update game status
             GameStatus = $"Game State: {gameEngine.State}";
             
-            // Update players - save AI player status before clearing
+            // Update players - but track existing view models and reuse them to prevent duplications
             var aiPlayers = new Dictionary<string, bool>(_aiPlayers);
+            var existingPlayers = new Dictionary<string, PlayerViewModel>();
+            
+            // Save references to existing player view models before clearing
+            foreach (var player in _players)
+            {
+                existingPlayers[player.Name] = player;
+            }
+            
             _players.Clear();
             
             // In a multiplayer game, each player might already have their IsCurrentUser flag set
@@ -590,13 +598,32 @@ namespace PokerGame.Avalonia.ViewModels
             Player? currentPlayerFromEngine = gameEngine.CurrentPlayer;
             PlayerViewModel? currentPlayerViewModel = null;
             
+            // Track player names to avoid duplicates
+            HashSet<string> addedPlayers = new HashSet<string>();
+            
             foreach (var player in gameEngine.Players)
             {
-                // Create player view model - it will use the Player.IsCurrentUser value
-                var playerViewModel = new PlayerViewModel(player);
+                // Skip if we've already added this player in this update cycle
+                if (addedPlayers.Contains(player.Name))
+                {
+                    Console.WriteLine($"★★★★★ [UI] Prevented duplicate player: {player.Name} ★★★★★");
+                    continue;
+                }
                 
-                // Update card visibility based on game state
-                playerViewModel.UpdateCardVisibility(gameOver);
+                // Try to reuse existing player view model to maintain state
+                PlayerViewModel playerViewModel;
+                if (existingPlayers.ContainsKey(player.Name))
+                {
+                    playerViewModel = existingPlayers[player.Name];
+                    // Update card visibility based on game state
+                    playerViewModel.UpdateCardVisibility(gameOver);
+                }
+                else
+                {
+                    // Create new player view model - it will use the Player.IsCurrentUser value
+                    playerViewModel = new PlayerViewModel(player);
+                    playerViewModel.UpdateCardVisibility(gameOver);
+                }
                 
                 // Mark this player as current if it matches the engine's current player
                 if (currentPlayerFromEngine != null && player.Name == currentPlayerFromEngine.Name)
@@ -610,16 +637,29 @@ namespace PokerGame.Avalonia.ViewModels
                 }
                 
                 _players.Add(playerViewModel);
+                addedPlayers.Add(player.Name);
                 
                 Console.WriteLine($"★★★★★ [UI] Player {player.Name} - CurrentBet: {player.CurrentBet}, Chips: {player.Chips}, HasActed: {player.HasActed} ★★★★★");
             }
             
-            // Update community cards
+            // Update community cards - avoid duplicating
             _communityCards.Clear();
+            // Ensure we don't add the same card multiple times
+            HashSet<string> addedCards = new HashSet<string>();
             foreach (var card in gameEngine.CommunityCards)
             {
-                // Community cards are always visible
-                _communityCards.Add(new CardViewModel(card, true));
+                // Create unique key for this card to avoid duplicates
+                string cardKey = $"{card.Rank}-{card.Suit}";
+                if (!addedCards.Contains(cardKey))
+                {
+                    // Community cards are always visible
+                    _communityCards.Add(new CardViewModel(card, true));
+                    addedCards.Add(cardKey);
+                }
+                else
+                {
+                    Console.WriteLine($"★★★★★ [UI] Prevented duplicate community card: {card.Rank} of {card.Suit} ★★★★★");
+                }
             }
             
             // If the hand is complete, enable the start hand button
