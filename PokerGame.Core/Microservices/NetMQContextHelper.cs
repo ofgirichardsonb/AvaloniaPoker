@@ -13,6 +13,7 @@ namespace PokerGame.Core.Microservices
         private static readonly object _lockObject = new object();
         private static bool _cleanupScheduled = false;
         private static bool _cleanupComplete = false;
+        private static readonly ManualResetEvent _cleanupEvent = new ManualResetEvent(false);
         private static readonly Timer? _cleanupTimer;
         
         // Application-wide shared context info

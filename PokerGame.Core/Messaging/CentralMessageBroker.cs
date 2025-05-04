@@ -319,11 +319,20 @@ namespace PokerGame.Core.Messaging
             
             try
             {
+                // Use a better waiting strategy with CancellationToken
                 while (!cancellationToken.IsCancellationRequested && !_isDisposed)
                 {
-                    // Process all messages in the queue
+                    bool processedAnyMessage = false;
+                    
+                    // Process all messages currently in the queue
                     while (_messageQueue.TryDequeue(out var message))
                     {
+                        processedAnyMessage = true;
+                        
+                        // Check cancellation after each message
+                        if (cancellationToken.IsCancellationRequested || _isDisposed)
+                            break;
+                            
                         try
                         {
                             // Update the last seen timestamp for the sender
@@ -368,9 +377,14 @@ namespace PokerGame.Core.Messaging
                                 }
                             }
                             
-                            // Find all subscribers for this message type
-                            foreach (var subscriber in _subscribers)
+                            // Process subscribers with cancellation checks
+                            var subscriberList = new List<KeyValuePair<string, Action<NetworkMessage>>>(_subscribers);
+                            foreach (var subscriber in subscriberList)
                             {
+                                // Check cancellation frequently
+                                if (cancellationToken.IsCancellationRequested || _isDisposed)
+                                    break;
+                                
                                 // Parse the key to get the message type
                                 string[] parts = subscriber.Key.Split(':');
                                 if (parts.Length == 2 && Enum.TryParse<MessageType>(parts[0], out var type))
@@ -397,8 +411,30 @@ namespace PokerGame.Core.Messaging
                         }
                     }
                     
-                    // Sleep to avoid busy waiting
-                    Thread.Sleep(10);
+                    // If we're being canceled, exit immediately
+                    if (cancellationToken.IsCancellationRequested || _isDisposed)
+                        break;
+                        
+                    // Use a more efficient wait strategy - if we processed messages, continue immediately
+                    // Otherwise, wait efficiently using the cancellation token
+                    if (!processedAnyMessage)
+                    {
+                        try
+                        {
+                            // Wait with cancellation support, short delay to remain responsive
+                            cancellationToken.WaitHandle.WaitOne(20);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // Exit gracefully if canceled
+                            break;
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            // Exit gracefully if token disposed
+                            break;
+                        }
+                    }
                 }
             }
             catch (OperationCanceledException)

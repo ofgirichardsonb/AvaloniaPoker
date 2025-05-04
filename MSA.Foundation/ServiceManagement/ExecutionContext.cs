@@ -185,17 +185,38 @@ namespace MSA.Foundation.ServiceManagement
         }
         
         /// <summary>
-        /// Stops this execution context
+        /// Stops this execution context with improved cleanup
         /// </summary>
         public void Stop()
         {
-            if (!IsRunning)
+            lock (_lock)
             {
-                return;
+                if (!IsRunning)
+                {
+                    return;
+                }
+                
+                // First mark as not running, then cancel the token
+                IsRunning = false;
             }
             
-            IsRunning = false;
-            _cts.Cancel();
+            // Use try-catch to handle possible disposed token
+            try
+            {
+                Console.WriteLine($"Cancelling execution context {ServiceId}");
+                _cts.Cancel();
+                
+                // Give a moment for token signal to propagate
+                Thread.Sleep(50);
+            }
+            catch (ObjectDisposedException)
+            {
+                Console.WriteLine($"Warning: CancellationTokenSource was already disposed in context {ServiceId}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error cancelling context {ServiceId}: {ex.Message}");
+            }
         }
         
         /// <summary>
@@ -289,11 +310,22 @@ namespace MSA.Foundation.ServiceManagement
         }
         
         /// <summary>
-        /// Disposes resources used by the execution context
+        /// Disposes resources used by the execution context with enhanced cleanup
         /// </summary>
         public void Dispose()
         {
-            Stop();
+            // First stop the context if running
+            if (IsRunning)
+            {
+                try
+                {
+                    Stop();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error stopping context {ServiceId} during disposal: {ex.Message}");
+                }
+            }
             
             // Unregister event handlers to prevent memory leaks
             try
@@ -307,9 +339,37 @@ namespace MSA.Foundation.ServiceManagement
             }
             
             // Unregister from the active contexts list
-            UnregisterContext(this);
+            try
+            {
+                UnregisterContext(this);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error unregistering context {ServiceId}: {ex.Message}");
+            }
             
-            _cts.Dispose();
+            // Dispose the cancellation token source safely
+            try
+            {
+                if (_cts != null)
+                {
+                    _cts.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error disposing CancellationTokenSource in context {ServiceId}: {ex.Message}");
+            }
+            
+            // Clear any metadata
+            try
+            {
+                ClearMetadata();
+            }
+            catch (Exception) 
+            {
+                // Ignore errors in metadata cleanup
+            }
         }
         
         /// <summary>
