@@ -29,7 +29,8 @@
             <ItemsControl Grid.Row="0" ItemsSource="{Binding Players}" Margin="10">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <UniformGrid Columns="3" />
+                        <!-- Set max rows and columns to prevent duplicates -->
+                        <UniformGrid Columns="2" Rows="2" />
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>

@@ -458,15 +458,29 @@ namespace PokerGame.Core.Game
         /// <param name="context">Optional context string indicating where the reset occurred</param>
         private void ResetHasActedFlags(string context = "Default")
         {
-            Console.WriteLine($"★★★★★ Resetting HasActed flags for {_players.Count} players, context: {context}, state: {_gameState} ★★★★★");
+            Console.WriteLine($"★★★★★ [ENGINE] Resetting player states for {_players.Count} players, context: {context}, state: {_gameState} ★★★★★");
             
             foreach (var player in _players)
             {
                 // Log the before state for debugging
-                Console.WriteLine($"★★★★★ Player {player.Name} HasActed before reset: {player.HasActed} ★★★★★");
+                Console.WriteLine($"★★★★★ [ENGINE] Player {player.Name} before reset: HasActed={player.HasActed}, IsActive={player.IsActive}, HasFolded={player.HasFolded} ★★★★★");
                 
-                // Reset the flag
+                // Reset the HasActed flag for normal operation
                 player.HasActed = false;
+                
+                // Handle special context-specific resets
+                if (context == "StartHand")
+                {
+                    // At the start of a hand, perform a complete reset of all player state
+                    player.IsActive = true;
+                    player.HasFolded = false;
+                    player.CurrentBet = 0;
+                    
+                    Console.WriteLine($"★★★★★ [ENGINE] FULL RESET of {player.Name} for new hand ★★★★★");
+                }
+                
+                // Log the after state for debugging
+                Console.WriteLine($"★★★★★ [ENGINE] Player {player.Name} after reset: HasActed={player.HasActed}, IsActive={player.IsActive}, HasFolded={player.HasFolded} ★★★★★");
             }
             
             // Track this reset in telemetry

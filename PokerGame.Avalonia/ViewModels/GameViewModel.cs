@@ -589,7 +589,21 @@ namespace PokerGame.Avalonia.ViewModels
             // Update game status
             GameStatus = $"Game State: {gameEngine.State}";
             
-            // First save the existing view models before clearing
+            // Extensive diagnostic logging for player management
+            Console.WriteLine($"★★★★★ [UI] UPDATING GAME STATE: Game={gameEngine.State}, Engine Player Count={gameEngine.Players.Count}, UI Player Count={_players.Count} ★★★★★");
+            Console.WriteLine($"★★★★★ [UI] ENGINE PLAYERS: ★★★★★");
+            foreach (var p in gameEngine.Players)
+            {
+                Console.WriteLine($"★★★★★ [UI] ENGINE PLAYER: {p.Name}, ID={p.Id}, IsActive={p.IsActive}, HasFolded={p.HasFolded} ★★★★★");
+            }
+            
+            Console.WriteLine($"★★★★★ [UI] CURRENT UI PLAYERS: ★★★★★");
+            foreach (var p in _players)
+            {
+                Console.WriteLine($"★★★★★ [UI] UI PLAYER: {p.Name}, IsCurrentUser={p.IsCurrentUser}, IsCurrent={p.IsCurrent} ★★★★★");
+            }
+            
+            // Safely preserve important state
             var aiPlayers = new Dictionary<string, bool>(_aiPlayers);
             var existingPlayers = new Dictionary<string, PlayerViewModel>();
             
