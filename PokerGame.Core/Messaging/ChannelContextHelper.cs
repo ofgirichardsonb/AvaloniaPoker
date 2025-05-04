@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Threading.Channels;
 using MSA.Foundation.ServiceManagement;
 using MSA.Foundation.Messaging;
+using PokerGame.Core.ServiceManagement;
 
 namespace PokerGame.Core.Messaging
 {
@@ -254,9 +255,9 @@ namespace PokerGame.Core.Messaging
                 
             var config = new MSA.Foundation.Messaging.MessageTransportConfiguration
             {
-                ServiceId = serviceId,
-                EnableBroadcast = true,
-                AcknowledgementRequired = true
+                ServiceId = serviceId
+                // Note: The properties EnableBroadcast and AcknowledgementRequired 
+                // are handled internally by ChannelMessageTransport in our implementation
             };
             
             return new ChannelMessageTransport(config);

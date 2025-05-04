@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using PokerGame.Core.Models;
 using PokerGame.Core.ServiceManagement;
-using NetMQ;
-using NetMQ.Sockets;
+using PokerGame.Core.Messaging;
 
 namespace PokerGame.Core.Microservices
 {
@@ -118,7 +118,7 @@ namespace PokerGame.Core.Microservices
         {
             Console.WriteLine("===> CardDeckService: Verifying critical message handlers");
             
-            // Send a self-acknowledgement to confirm the publisher socket is working
+            // Send a self-acknowledgement to confirm the message transport is working
             try
             {
                 var testMessage = Message.Create(MessageType.Ping, "self-test");
@@ -126,7 +126,9 @@ namespace PokerGame.Core.Microservices
                 testMessage.ReceiverId = _serviceId;  
                 
                 Console.WriteLine("===> CardDeckService: Publishing self-test message");
-                _publisherSocket?.SendFrame(testMessage.ToJson());
+                
+                // Use Broadcast method from base class which uses the channel message transport
+                Broadcast(testMessage);
                 
                 Console.WriteLine("===> CardDeckService: Self-test message published successfully");
                 Console.WriteLine("===> CardDeckService: Critical message handlers verified!");
@@ -145,11 +147,11 @@ namespace PokerGame.Core.Microservices
         {
             Console.WriteLine("===> CardDeckService: Starting with enhanced critical message handling");
             
-            // Override message handling to implement direct low-level acknowledgment
-            SetupCriticalMessageHandler();
-            
             // Call the base implementation to set up the service
             base.Start();
+            
+            // Setup channel-based enhanced message handling (replacing the old socket-based handler)
+            SetupChannelMessageHandler();
             
             // Register for direct message handling
             Console.WriteLine("===> CardDeckService: Setting up direct acknowledgment handling");
@@ -172,22 +174,24 @@ namespace PokerGame.Core.Microservices
             var testMessage = Message.Create(MessageType.Ping, "self-test");
             testMessage.SenderId = _serviceId;
             testMessage.ReceiverId = _serviceId;
-            _publisherSocket?.SendFrame(testMessage.ToJson());
+            
+            // Use the broadcast method to send the test message
+            Broadcast(testMessage);
             
             Console.WriteLine("===> CardDeckService: Enhanced startup complete");
         }
         
         /// <summary>
-        /// Sets up a special critical message handler that ensures acknowledgments are sent properly
+        /// Sets up a special channel-based critical message handler that ensures acknowledgments are sent properly
         /// </summary>
-        private void SetupCriticalMessageHandler()
+        private void SetupChannelMessageHandler()
         {
-            Console.WriteLine("===> CardDeckService: Setting up OVERRIDE message handler for critical messages");
+            Console.WriteLine("===> CardDeckService: Setting up channel-based OVERRIDE message handler for critical messages");
             
             // Start a background task to continuously monitor the message queue and prioritize critical messages
             Task.Run(async () =>
             {
-                Console.WriteLine("===> CardDeckService: OVERRIDE message handler started");
+                Console.WriteLine("===> CardDeckService: Channel-based OVERRIDE message handler started");
                 
                 // Use a cancellation token to properly terminate the task
                 CancellationToken token = _cancellationTokenSource?.Token ?? CancellationToken.None;
@@ -196,22 +200,17 @@ namespace PokerGame.Core.Microservices
                 {
                     try
                     {
-                        // Listen for incoming messages directly from the socket
-                        if (_subscriberSocket != null)
+                        // Listen for incoming messages directly from channel transport
+                        var channelTransport = _messageTransport as ChannelMessageTransport;
+                        if (channelTransport != null)
                         {
                             try
                             {
-                                // Make sure the socket is still valid
-                                if (_subscriberSocket.IsDisposed)
-                                {
-                                    Console.WriteLine("Subscriber socket is disposed, stopping critical message handler");
-                                    break;
-                                }
-                                
                                 // Try to receive a message with a short timeout
-                                if (_subscriberSocket != null && _subscriberSocket.TryReceiveFrameString(TimeSpan.FromMilliseconds(50), out string? messageJson) && 
-                                    !string.IsNullOrEmpty(messageJson))
+                                var result = await channelTransport.TryReceiveMessageAsync(50);
+                                if (result.Success && !string.IsNullOrEmpty(result.MessageData))
                                 {
+                                    string messageJson = result.MessageData;
                                     try
                                     {
                                         // Parse the message
@@ -223,7 +222,7 @@ namespace PokerGame.Core.Microservices
                                             !string.IsNullOrEmpty(message.MessageId) &&
                                             !string.IsNullOrEmpty(message.SenderId))
                                         {
-                                            Console.WriteLine($"!!!! CRITICAL OVERRIDE: Received {message.Type} message {message.MessageId} from {message.SenderId}");
+                                            Console.WriteLine($"!!!! CHANNEL CRITICAL OVERRIDE: Received {message.Type} message {message.MessageId} from {message.SenderId}");
                                             
                                             // Create and send acknowledgment immediately
                                             var ackMessage = Message.Create(MessageType.Acknowledgment, DateTime.UtcNow.ToString("o"));
@@ -231,88 +230,77 @@ namespace PokerGame.Core.Microservices
                                             ackMessage.SenderId = _serviceId;
                                             ackMessage.ReceiverId = message.SenderId;
                                             
-                                            // Check if publisher socket is still valid 
-                                            if (_publisherSocket == null || _publisherSocket.IsDisposed)
-                                            {
-                                                Console.WriteLine("Publisher socket is disposed, unable to send acknowledgment");
-                                                continue;
-                                            }
-                                            
                                             // Send acknowledgment with multiple approaches for redundancy
-                                            string serializedAck = ackMessage.ToJson();
-                                            
-                                            try
-                                            {
-                                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Sending raw socket ACK for {message.MessageId}");
-                                                _publisherSocket.SendFrame(serializedAck);
-                                            }
-                                            catch (Exception ex)
-                                            {
-                                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Error sending raw socket ACK: {ex.Message}");
-                                            }
-                                            
                                             try 
                                             {
-                                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Broadcasting ACK for {message.MessageId}");
+                                                Console.WriteLine($"!!!! CHANNEL CRITICAL OVERRIDE: Broadcasting ACK for {message.MessageId}");
                                                 Broadcast(ackMessage);
                                             }
                                             catch (Exception ex)
                                             {
-                                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Error broadcasting ACK: {ex.Message}");
+                                                Console.WriteLine($"!!!! CHANNEL CRITICAL OVERRIDE: Error broadcasting ACK: {ex.Message}");
+                                            }
+                                            
+                                            try 
+                                            {
+                                                // Try using CentralBroker directly as a redundant acknowledgment path
+                                                Console.WriteLine($"!!!! CHANNEL CRITICAL OVERRIDE: Sending via central broker ACK for {message.MessageId}");
+                                                var networkAck = ackMessage.ToNetworkMessage();
+                                                BrokerManager.Instance.CentralBroker?.Publish(networkAck);
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                Console.WriteLine($"!!!! CHANNEL CRITICAL OVERRIDE: Error sending via central broker: {ex.Message}");
                                             }
                                             
                                             // Process the critical message accordingly
                                             if (message.Type == MessageType.Ping)
                                             {
-                                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Processing ping {message.MessageId}");
+                                                Console.WriteLine($"!!!! CHANNEL CRITICAL OVERRIDE: Processing ping {message.MessageId}");
                                                 // Additional ping processing if needed
                                             }
                                             else if (message.Type == MessageType.DeckCreate)
                                             {
-                                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Processing deck creation {message.MessageId}");
+                                                Console.WriteLine($"!!!! CHANNEL CRITICAL OVERRIDE: Processing deck creation {message.MessageId}");
                                                 // We'll still let the normal message processing handle the actual deck creation
                                             }
                                         }
                                     }
                                     catch (Exception ex)
                                     {
-                                        Console.WriteLine($"!!!! CRITICAL OVERRIDE: Error processing message: {ex.Message}");
+                                        Console.WriteLine($"!!!! CHANNEL CRITICAL OVERRIDE: Error processing message: {ex.Message}");
                                     }
                                 }
                             }
                             catch (ObjectDisposedException)
                             {
-                                Console.WriteLine("Subscriber socket was disposed during operation, stopping critical message handler");
+                                Console.WriteLine("Channel transport was disposed during operation, stopping critical message handler");
                                 break;
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"!!!! CRITICAL OVERRIDE: Error receiving message: {ex.Message}");
+                                Console.WriteLine($"!!!! CHANNEL CRITICAL OVERRIDE: Error receiving message: {ex.Message}");
                             }
                         }
                         else
                         {
-                            // If socket is null, attempt to recreate it instead of exiting
-                            Console.WriteLine("Subscriber socket is null, attempting to reconnect...");
+                            // If message transport is null or not a channel transport, attempt to recreate it
+                            Console.WriteLine("Channel message transport is null, attempting to recreate...");
                             try
                             {
-                                // Create a new subscriber socket
-                                _subscriberSocket = new NetMQ.Sockets.SubscriberSocket();
-                                _subscriberSocket.Options.ReceiveHighWatermark = 1000;
-                                // Access subscriberPort from base class
-                                int subscriberPort = _subscriberPort > 0 ? _subscriberPort : DefaultSubscriberPort;
-                                _subscriberSocket.Connect($"tcp://localhost:{subscriberPort}");
-                                _subscriberSocket.SubscribeToAnyTopic();
+                                // Reinitialize the channel-based message transport
+                                _messageTransport = ChannelMessageHelper.CreateServiceTransport(_serviceId);
+                                await _messageTransport.StartAsync();
                                 
-                                Console.WriteLine("Successfully recreated subscriber socket in critical message handler");
+                                Console.WriteLine("Successfully recreated channel message transport in critical message handler");
                                 
-                                // Add a small delay to ensure the socket is ready
+                                // Add a small delay to ensure the transport is ready
                                 await Task.Delay(100, token);
                                 continue;
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"Failed to recreate subscriber socket: {ex.Message}");
+                                Console.WriteLine($"Failed to recreate channel message transport: {ex.Message}");
                                 // Wait before trying again
                                 await Task.Delay(500, token);
                                 continue;
@@ -322,7 +310,7 @@ namespace PokerGame.Core.Microservices
                         // Check for cancellation
                         if (token.IsCancellationRequested)
                         {
-                            Console.WriteLine("Critical message handler cancellation requested");
+                            Console.WriteLine("Channel critical message handler cancellation requested");
                             break;
                         }
                         
@@ -332,12 +320,12 @@ namespace PokerGame.Core.Microservices
                     catch (TaskCanceledException)
                     {
                         // Normal cancellation, exit loop
-                        Console.WriteLine("Critical message handler cancelled");
+                        Console.WriteLine("Channel critical message handler cancelled");
                         break;
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"!!!! CRITICAL OVERRIDE: Unhandled error: {ex.Message}");
+                        Console.WriteLine($"!!!! CHANNEL CRITICAL OVERRIDE: Unhandled error: {ex.Message}");
                         
                         try
                         {
@@ -352,7 +340,7 @@ namespace PokerGame.Core.Microservices
                     }
                 }
                 
-                Console.WriteLine("Critical message handler terminated");
+                Console.WriteLine("Channel critical message handler terminated");
             });
         }
         
@@ -367,15 +355,18 @@ namespace PokerGame.Core.Microservices
             {
                 Console.WriteLine($"===> CRITICAL DIAGNOSTIC: CardDeckService handling message type {message.Type} with ID {message.MessageId}");
                 
-                // Debug - dump publisher socket status
-                Console.WriteLine($"===> SOCKET STATUS: Publisher Socket null? {_publisherSocket == null}");
+                // Debug - dump message transport status
+                Console.WriteLine($"===> TRANSPORT STATUS: Message Transport null? {_messageTransport == null}");
                 try
                 {
-                    Console.WriteLine($"===> SOCKET INFO: Publisher Socket info: {(_publisherSocket?.GetType()?.FullName ?? "null")}");
+                    Console.WriteLine($"===> TRANSPORT INFO: Message Transport info: {(_messageTransport?.GetType()?.FullName ?? "null")}");
+                    
+                    var channelTransport = _messageTransport as ChannelMessageTransport;
+                    Console.WriteLine($"===> CHANNEL STATUS: Channel Transport null? {channelTransport == null}");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"===> SOCKET ERROR: Failed to get publisher socket info: {ex.Message}");
+                    Console.WriteLine($"===> TRANSPORT ERROR: Failed to get message transport info: {ex.Message}");
                 }
                 
                 // SUPER CRITICAL: Handle acknowledgments immediately and with maximum redundancy
@@ -401,31 +392,39 @@ namespace PokerGame.Core.Microservices
                         Console.WriteLine($"===> ERROR in approach 1: {ex.Message}");
                     }
                     
-                    // APPROACH 2: Direct socket send
+                    // APPROACH 2: Direct channel send
                     try
                     {
-                        Console.WriteLine($"===> APPROACH 2: Direct socket ACK for {message.MessageId}");
-                        var serializedAck = ackMessage.ToJson();
-                        Console.WriteLine($"===> APPROACH 2: Serialized ACK: {serializedAck}");
-                        _publisherSocket?.SendFrame(serializedAck);
-                        Console.WriteLine($"===> APPROACH 2: SendFrame completed");
+                        Console.WriteLine($"===> APPROACH 2: Direct channel send ACK for {message.MessageId}");
+                        var channelTransport = _messageTransport as ChannelMessageTransport;
+                        if (channelTransport != null)
+                        {
+                            Console.WriteLine($"===> APPROACH 2: Preparing for channel send");
+                            // Convert our message to a JSON string and directly use that
+                            var serializedAck = ackMessage.ToJson();
+                            // Use central broker instead for reliable channel-based delivery
+                            var serviceMessage = MSA.Foundation.Messaging.ServiceMessage.Create("Acknowledgment");
+                            serviceMessage.SetContent(serializedAck);
+                            channelTransport.SendAsync("broadcast", serviceMessage).GetAwaiter().GetResult();
+                            Console.WriteLine($"===> APPROACH 2: Channel send completed");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"===> APPROACH 2: Channel transport not available");
+                        }
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine($"===> ERROR in approach 2: {ex.Message}");
                     }
                     
-                    // APPROACH 3: Create new socket just for this message
+                    // APPROACH 3: Use central broker directly
                     try
                     {
-                        Console.WriteLine($"===> APPROACH 3: Creating dedicated socket for ACK");
-                        using (var pubSocket = new PublisherSocket())
-                        {
-                            pubSocket.Bind($"tcp://127.0.0.1:{new Random().Next(6000, 7000)}");
-                            var serializedAck = ackMessage.ToJson();
-                            pubSocket.SendFrame(serializedAck);
-                            Console.WriteLine($"===> APPROACH 3: Dedicated socket ACK sent");
-                        }
+                        Console.WriteLine($"===> APPROACH 3: Using central broker for ACK");
+                        var networkAck = ackMessage.ToNetworkMessage();
+                        BrokerManager.Instance.CentralBroker?.Publish(networkAck);
+                        Console.WriteLine($"===> APPROACH 3: Central broker message sent");
                     }
                     catch (Exception ex)
                     {
@@ -821,10 +820,10 @@ namespace PokerGame.Core.Microservices
             {
                 Console.WriteLine($"===> CardDeckService: Broadcasting deck status for deck {deckId}");
                 
-                // Check if _publisherSocket is valid
-                if (_publisherSocket == null)
+                // Check if message transport is valid
+                if (_messageTransport == null)
                 {
-                    Console.WriteLine($"===> CardDeckService: ERROR in BroadcastDeckStatus - publisher socket is null");
+                    Console.WriteLine($"===> CardDeckService: ERROR in BroadcastDeckStatus - message transport is null");
                     return;
                 }
                 
@@ -875,9 +874,9 @@ namespace PokerGame.Core.Microservices
         {
             try
             {
-                if (_publisherSocket == null)
+                if (_messageTransport == null)
                 {
-                    Console.WriteLine($"===> CardDeckService: ERROR in SendDealResponse - publisher socket is null");
+                    Console.WriteLine($"===> CardDeckService: ERROR in SendDealResponse - message transport is null");
                     return;
                 }
                 
@@ -920,9 +919,9 @@ namespace PokerGame.Core.Microservices
         {
             try
             {
-                if (_publisherSocket == null)
+                if (_messageTransport == null)
                 {
-                    Console.WriteLine($"===> CardDeckService: ERROR in SendBurnResponse - publisher socket is null");
+                    Console.WriteLine($"===> CardDeckService: ERROR in SendBurnResponse - message transport is null");
                     return;
                 }
                 

@@ -3,11 +3,11 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using NetMQ;
-using NetMQ.Sockets;
 using CoreServiceConstants = PokerGame.Core.ServiceManagement.ServiceConstants;
 using PokerGame.Core.Messaging;
+using PokerGame.Core.ServiceManagement;
 using MSA.Foundation.ServiceManagement;
+using MSA.Foundation.Messaging;
 
 namespace PokerGame.Core.Microservices
 {
@@ -35,8 +35,7 @@ namespace PokerGame.Core.Microservices
         /// </summary>
         public string ServiceType => _serviceType;
         
-        protected PublisherSocket? _publisherSocket;
-        protected SubscriberSocket? _subscriberSocket;
+        // Replaced NetMQ sockets with a single message transport interface
         protected readonly ConcurrentQueue<Message> _messageQueue = new ConcurrentQueue<Message>();
         protected MSA.Foundation.Messaging.IMessageTransport? _messageTransport;
         
@@ -98,20 +97,18 @@ namespace PokerGame.Core.Microservices
             _subscriberPort = 0; // Not used in this constructor but initialized for completeness
             
             // Use the provided execution context to set up messaging
-            // Create sockets using in-process communication
             try 
             {
-                // Initialize publisher and subscriber sockets using in-process communication
-                _publisherSocket = NetMQContextHelper.CreateServicePublisher();
-                _subscriberSocket = NetMQContextHelper.CreateServiceSubscriber();
+                // Initialize channel-based message transport
+                InitializeChannelMessagingAsync().GetAwaiter().GetResult();
                 
                 Console.WriteLine($"Creating microservice {serviceName} ({serviceType}) with execution context");
                 Console.WriteLine($"Using STATIC SERVICE ID: {_serviceId}");
-                Console.WriteLine($"Using in-process communication via {NetMQContextHelper.InProcessBrokerAddress}");
+                Console.WriteLine($"Using channel-based communication via {ChannelContextHelper.ChannelBrokerAddress}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error initializing in-process sockets: {ex.Message}");
+                Console.WriteLine($"Error initializing channel-based messaging: {ex.Message}");
                 throw;
             }
         }
@@ -336,41 +333,32 @@ namespace PokerGame.Core.Microservices
         }
         
         /// <summary>
-        /// Initializes or reinitializes sockets to work with the central broker architecture
-        /// Uses in-process communication for improved reliability and simplicity
+        /// Initializes or reinitializes message transport to work with the central broker architecture
+        /// Uses channel-based communication for improved reliability and simplicity
         /// </summary>
         /// <param name="centralBroker">The central message broker to connect to</param>
         private void InitializeCentralBrokerSockets(CentralMessageBroker centralBroker)
         {
-            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Initializing sockets using in-process communication");
+            Console.WriteLine($"====> [{_serviceType} {_serviceId}] Initializing message transport using channel-based communication");
             
-            // Close and dispose existing sockets properly if they exist
-            if (_publisherSocket != null)
+            // Dispose existing message transport if it exists
+            if (_messageTransport != null)
             {
-                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Closing existing publisher socket...");
-                _publisherSocket.Close();
-                _publisherSocket.Dispose();
-                _publisherSocket = null;
-            }
-            
-            if (_subscriberSocket != null)
-            {
-                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Closing existing subscriber socket...");
-                _subscriberSocket.Close();
-                _subscriberSocket.Dispose();
-                _subscriberSocket = null;
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Disposing existing message transport...");
+                _messageTransport.Dispose();
+                _messageTransport = null;
             }
             
             try
             {
-                // Use the shared context helper to create service-specific in-process sockets
-                _publisherSocket = NetMQContextHelper.CreateServicePublisher();
-                _subscriberSocket = NetMQContextHelper.CreateServiceSubscriber();
+                // Use the channel context helper to create a new message transport
+                _messageTransport = ChannelContextHelper.CreateServiceTransport(_serviceId);
+                _messageTransport.StartAsync().GetAwaiter().GetResult();
                 
-                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Using in-process communication via {NetMQContextHelper.InProcessBrokerAddress}");
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Using channel-based communication via {ChannelContextHelper.ChannelBrokerAddress}");
                 
                 // Log the configuration
-                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Sockets successfully initialized using in-process communication");
+                Console.WriteLine($"====> [{_serviceType} {_serviceId}] Message transport successfully initialized using channel-based communication");
             }
             catch (Exception ex)
             {
@@ -411,29 +399,25 @@ namespace PokerGame.Core.Microservices
                     Console.WriteLine("Some tasks threw exceptions during cancellation (expected)");
                 }
 
-                // Close sockets properly before disposing
-                if (_publisherSocket != null)
+                // Dispose message transport
+                if (_messageTransport != null)
                 {
-                    Console.WriteLine("Closing publisher socket...");
-                    _publisherSocket.Close();
+                    Console.WriteLine("Disposing message transport...");
+                    
+                    try
+                    {
+                        _messageTransport.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error disposing message transport: {ex.Message}");
+                    }
+                    
+                    _messageTransport = null;
                 }
                 
-                if (_subscriberSocket != null)
-                {
-                    Console.WriteLine("Closing subscriber socket...");
-                    _subscriberSocket.Close();
-                }
-                
-                // Short pause to let sockets close cleanly
+                // Short pause to let cleanup occur
                 Thread.Sleep(100);
-                
-                // Now dispose resources
-                _publisherSocket?.Dispose();
-                _subscriberSocket?.Dispose();
-                
-                // Reset to null after disposal to prevent further use
-                _publisherSocket = null;
-                _subscriberSocket = null;
                 
                 _cancellationTokenSource?.Dispose();
                 _cancellationTokenSource = null;
@@ -442,9 +426,9 @@ namespace PokerGame.Core.Microservices
                 _messageQueue.Clear();
                 _serviceRegistry.Clear();
                 
-                // Schedule NetMQ cleanup instead of doing it directly
-                Console.WriteLine("Scheduling NetMQ cleanup...");
-                NetMQContextHelper.ScheduleCleanup(200);
+                // Schedule Channel cleanup
+                Console.WriteLine("Scheduling Channel cleanup...");
+                ChannelContextHelper.ScheduleCleanup(200);
                 
                 Console.WriteLine("Microservice disposed successfully");
             }
@@ -456,7 +440,7 @@ namespace PokerGame.Core.Microservices
                 // Last resort cleanup
                 try {
                     // Schedule cleanup rather than doing it directly
-                    NetMQContextHelper.ScheduleCleanup(100);
+                    ChannelContextHelper.ScheduleCleanup(100);
                 } catch {}
             }
         }
@@ -667,7 +651,7 @@ namespace PokerGame.Core.Microservices
                 ServiceId = _serviceId,
                 ServiceName = _serviceName,
                 ServiceType = _serviceType,
-                Endpoint = NetMQContextHelper.InProcessBrokerAddress, // Using in-process endpoint for better reliability
+                Endpoint = ChannelContextHelper.ChannelBrokerAddress, // Using channel-based endpoint for better reliability
                 Capabilities = GetServiceCapabilities()
             };
             
@@ -708,7 +692,7 @@ namespace PokerGame.Core.Microservices
                     ServiceId = _serviceId,
                     ServiceName = _serviceName,
                     ServiceType = _serviceType,
-                    Endpoint = NetMQContextHelper.InProcessBrokerAddress, // Using in-process endpoint for better reliability
+                    Endpoint = ChannelContextHelper.ChannelBrokerAddress, // Using channel-based endpoint for better reliability
                     Capabilities = GetServiceCapabilities()
                 };
                 
@@ -786,49 +770,39 @@ namespace PokerGame.Core.Microservices
                         break;
                     }
                     
-                    // Make sure we still have valid sockets before trying to use them - attempt to reconnect if needed
-                    if (_subscriberSocket == null || _publisherSocket == null)
+                    // Make sure we still have a valid message transport - attempt to reconnect if needed
+                    if (_messageTransport == null)
                     {
-                        Console.WriteLine("Socket(s) no longer available, attempting to reconnect with in-process communication...");
+                        Console.WriteLine("Message transport no longer available, attempting to reconnect with channel-based communication...");
                         try
                         {
                             // Get broker from BrokerManager
                             var centralBroker = BrokerManager.Instance.CentralBroker;
                             if (centralBroker == null)
                             {
-                                Console.WriteLine("Cannot recreate sockets: CentralMessageBroker not available");
+                                Console.WriteLine("Cannot recreate message transport: CentralMessageBroker not available");
                                 await Task.Delay(500, token);
                                 continue;
                             }
                             
-                            Console.WriteLine($"Using in-process communication via {NetMQContextHelper.InProcessBrokerAddress}");
+                            Console.WriteLine($"Using channel-based communication via {ChannelContextHelper.ChannelBrokerAddress}");
                             
-                            // Create new in-process sockets using the shared context
-                            if (_subscriberSocket == null)
-                            {
-                                Console.WriteLine($"Creating new subscriber socket with in-process communication...");
-                                _subscriberSocket = NetMQContextHelper.CreateServiceSubscriber();
-                                Console.WriteLine($"Subscriber socket connected successfully with in-process communication");
-                            }
+                            // Create new message transport
+                            Console.WriteLine($"Creating new message transport with channel-based communication...");
+                            _messageTransport = ChannelContextHelper.CreateServiceTransport(_serviceId);
+                            await _messageTransport.StartAsync();
+                            Console.WriteLine($"Message transport created and started successfully with channel-based communication");
                             
-                            // Create new in-process publisher socket
-                            if (_publisherSocket == null)
-                            {
-                                Console.WriteLine($"Creating new publisher socket with in-process communication...");
-                                _publisherSocket = NetMQContextHelper.CreateServicePublisher();
-                                Console.WriteLine($"Publisher socket connected successfully with in-process communication");
-                            }
-                            
-                            // Give the sockets a moment to fully initialize
+                            // Give the transport a moment to fully initialize
                             await Task.Delay(100, token);
-                            Console.WriteLine("Socket reconnection successful with in-process communication, continuing message loop");
+                            Console.WriteLine("Transport reconnection successful with channel-based communication, continuing message loop");
                             
-                            // Skip to the next iteration to immediately use the new sockets
+                            // Skip to the next iteration to immediately use the new transport
                             continue;
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Failed to recreate sockets with in-process communication: {ex.Message}");
+                            Console.WriteLine($"Failed to recreate message transport with channel-based communication: {ex.Message}");
                             
                             // Wait a bit longer before retrying to avoid rapid failures
                             await Task.Delay(1000, token);
@@ -836,9 +810,20 @@ namespace PokerGame.Core.Microservices
                         }
                     }
                     
-                    // Check for incoming messages with a very short timeout to avoid blocking
-                    if (_subscriberSocket.TryReceiveFrameString(TimeSpan.FromMilliseconds(50), out string? messageJson) && !string.IsNullOrEmpty(messageJson))
+                    // Check for incoming messages from the message transport
+                    // With channel-based messaging, we use the message transport to receive messages
+                    var channelTransport = _messageTransport as ChannelMessageTransport;
+                    if (channelTransport == null)
                     {
+                        Console.WriteLine($"Error: Expected ChannelMessageTransport but got {_messageTransport?.GetType().Name ?? "null"}");
+                        await Task.Delay(1000, token);
+                        continue;
+                    }
+                    
+                    var result = await channelTransport.TryReceiveMessageAsync(50);
+                    if (result.Success)
+                    {
+                        string messageJson = result.MessageData;
                         try 
                         {
                             Console.WriteLine($"====> [{_serviceType} {_serviceId}] Received raw message: {messageJson.Substring(0, Math.Min(100, messageJson.Length))}...");
@@ -909,8 +894,8 @@ namespace PokerGame.Core.Microservices
                         }
                         catch (ObjectDisposedException)
                         {
-                            // Socket was disposed during receive - break out of the loop
-                            Console.WriteLine("Socket was disposed during message processing");
+                            // Transport or channel was disposed during receive - break out of the loop
+                            Console.WriteLine("Message transport was disposed during message processing");
                             isShuttingDown = true;
                             break;
                         }
@@ -1032,8 +1017,8 @@ namespace PokerGame.Core.Microservices
                 }
                 catch (ObjectDisposedException)
                 {
-                    // Socket was disposed - break out of the loop
-                    Console.WriteLine("Socket was disposed during processing");
+                    // Message transport was disposed - break out of the loop
+                    Console.WriteLine("Message transport was disposed during processing");
                     break;
                 }
                 catch (Exception ex)
@@ -1044,32 +1029,27 @@ namespace PokerGame.Core.Microservices
                         break;
                     }
                     
-                    // Special handling for NetMQ context termination errors
-                    if (ex.Message.Contains("CheckContextTerminated") || ex.Message.Contains("Context was terminated"))
+                    // Special handling for channel-related errors
+                    if (ex.Message.Contains("Channel") || ex.Message.Contains("disposed"))
                     {
-                        // This is a NetMQ internal error that happens during socket operations
-                        // when the context is being terminated or has been terminated
-                        Console.WriteLine("NetMQ context termination detected - attempting to recreate sockets");
+                        // This is likely a channel or transport-related error 
+                        Console.WriteLine("Channel/transport error detected - attempting to recreate message transport");
                         
                         try
                         {
-                            // Close and dispose sockets
-                            _publisherSocket?.Close();
-                            _subscriberSocket?.Close();
-                            _publisherSocket?.Dispose();
-                            _subscriberSocket?.Dispose();
-                            _publisherSocket = null;
-                            _subscriberSocket = null;
+                            // Dispose message transport
+                            _messageTransport?.Dispose();
+                            _messageTransport = null;
                             
-                            // Allow some time for sockets to close and context to settle
+                            // Allow some time for cleanup
                             await Task.Delay(200);
                             
                             // Attempt to reconnect in the next loop iteration
                             continue;
                         }
-                        catch (Exception socketEx)
+                        catch (Exception transportEx)
                         {
-                            Console.WriteLine($"Error cleaning up sockets after context termination: {socketEx.Message}");
+                            Console.WriteLine($"Error cleaning up message transport: {transportEx.Message}");
                         }
                     }
                     else

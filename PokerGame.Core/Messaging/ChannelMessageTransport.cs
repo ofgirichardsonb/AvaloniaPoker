@@ -11,6 +11,27 @@ using MSA.Foundation.ServiceManagement;
 namespace PokerGame.Core.Messaging
 {
     /// <summary>
+    /// Represents the result of a message receive operation
+    /// </summary>
+    public class MessageReceiveResult
+    {
+        /// <summary>
+        /// Gets whether the receive operation was successful
+        /// </summary>
+        public bool Success { get; set; }
+        
+        /// <summary>
+        /// Gets the received message data
+        /// </summary>
+        public string MessageData { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets any error that occurred during the receive operation
+        /// </summary>
+        public string Error { get; set; } = string.Empty;
+    }
+    
+    /// <summary>
     /// A native .NET implementation of IMessageTransport using System.Threading.Channels
     /// for efficient in-process messaging without external dependencies.
     /// </summary>
@@ -642,6 +663,87 @@ namespace PokerGame.Core.Messaging
             Dispose();
         }
         
+        /// <summary>
+        /// Tries to receive a message asynchronously from the transport's channel
+        /// </summary>
+        /// <param name="timeoutMs">The timeout in milliseconds</param>
+        /// <param name="cancellationToken">A token to monitor for cancellation requests</param>
+        /// <returns>A MessageReceiveResult indicating success or failure and containing the message data</returns>
+        public async Task<MessageReceiveResult> TryReceiveMessageAsync(int timeoutMs = 100, CancellationToken cancellationToken = default)
+        {
+            var result = new MessageReceiveResult();
+            
+            if (_isDisposed || !_isRunning)
+            {
+                result.Success = false;
+                result.Error = "Transport is disposed or not running";
+                return result;
+            }
+            
+            try
+            {
+                // Create a timeout task
+                var timeoutTask = Task.Delay(timeoutMs, cancellationToken);
+                
+                // Try to read from the channel with timeout
+                var readTask = _serviceChannel.Reader.ReadAsync(cancellationToken).AsTask();
+                
+                // Wait for either the read or the timeout
+                var completedTask = await Task.WhenAny(readTask, timeoutTask);
+                
+                if (completedTask == readTask && !readTask.IsFaulted)
+                {
+                    // Successfully read a message
+                    var message = await readTask;
+                    result.Success = true;
+                    
+                    // Convert the message to JSON format for backward compatibility
+                    if (message != null)
+                    {
+                        // Use Newtonsoft.Json or System.Text.Json to serialize the message
+                        result.MessageData = System.Text.Json.JsonSerializer.Serialize(message);
+                    }
+                    
+                    return result;
+                }
+                else if (completedTask == timeoutTask)
+                {
+                    // Timeout occurred
+                    result.Success = false;
+                    result.Error = "Timeout waiting for message";
+                    return result;
+                }
+                else
+                {
+                    // Read task faulted
+                    result.Success = false;
+                    result.Error = readTask.Exception?.InnerException?.Message ?? "Unknown error";
+                    return result;
+                }
+            }
+            catch (ChannelClosedException)
+            {
+                // Channel was closed
+                result.Success = false;
+                result.Error = "Channel was closed";
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                // Operation was canceled
+                result.Success = false;
+                result.Error = "Operation was canceled";
+                return result;
+            }
+            catch (Exception ex)
+            {
+                // Other error
+                result.Success = false;
+                result.Error = ex.Message;
+                return result;
+            }
+        }
+
         /// <summary>
         /// Disposes resources used by the transport
         /// </summary>
