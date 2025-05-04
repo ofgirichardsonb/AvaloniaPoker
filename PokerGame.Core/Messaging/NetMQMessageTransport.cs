@@ -899,46 +899,46 @@ namespace PokerGame.Core.Messaging
             }
         }
         
-        // Helper methods for setting properties using reflection (since IMessage properties are get-only)
+        // Helper methods for setting properties directly
         
         private void SetMessageId(ServiceMessage message, string value)
         {
-            typeof(ServiceMessage).GetProperty("MessageId")?.SetValue(message, value);
+            message.MessageId = value;
         }
         
         private void SetMessageType(ServiceMessage message, string value)
         {
-            typeof(ServiceMessage).GetProperty("MessageType")?.SetValue(message, value);
+            message.MessageType = value;
         }
         
         private void SetSenderId(ServiceMessage message, string value)
         {
-            typeof(ServiceMessage).GetProperty("SenderId")?.SetValue(message, value);
+            message.SenderId = value;
         }
         
         private void SetCorrelationId(ServiceMessage message, string value)
         {
-            typeof(ServiceMessage).GetProperty("CorrelationId")?.SetValue(message, value);
+            message.CorrelationId = value;
         }
         
         private void SetReplyTo(ServiceMessage message, string value)
         {
-            typeof(ServiceMessage).GetProperty("ReplyTo")?.SetValue(message, value);
+            message.ReplyTo = value;
         }
         
         private void SetRequireAcknowledgement(ServiceMessage message, bool value)
         {
-            typeof(ServiceMessage).GetProperty("RequireAcknowledgement")?.SetValue(message, value);
+            message.RequireAcknowledgement = value;
         }
         
         private void SetContentType(ServiceMessage message, string value)
         {
-            typeof(ServiceMessage).GetProperty("ContentType")?.SetValue(message, value);
+            message.ContentType = value;
         }
         
         private void SetContent(ServiceMessage message, byte[] value)
         {
-            typeof(ServiceMessage).GetProperty("Content")?.SetValue(message, value);
+            message.Content = value;
         }
     }
 }

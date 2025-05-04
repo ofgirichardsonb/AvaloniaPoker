@@ -83,49 +83,49 @@ namespace MSA.Foundation.Messaging
         private readonly Dictionary<string, string> _headers = new Dictionary<string, string>();
         
         /// <summary>
-        /// Gets the unique identifier for the message
+        /// Gets or sets the unique identifier for the message
         /// </summary>
-        public string MessageId { get; private set; }
+        public string MessageId { get; internal set; }
         
         /// <summary>
-        /// Gets the type of the message
+        /// Gets or sets the type of the message
         /// </summary>
-        public string MessageType { get; private set; }
+        public string MessageType { get; internal set; }
         
         /// <summary>
-        /// Gets the timestamp when the message was created
+        /// Gets or sets the timestamp when the message was created
         /// </summary>
-        public DateTime Timestamp { get; private set; }
+        public DateTime Timestamp { get; internal set; }
         
         /// <summary>
-        /// Gets the sender's identifier
+        /// Gets or sets the sender's identifier
         /// </summary>
-        public string SenderId { get; private set; }
+        public string SenderId { get; internal set; }
         
         /// <summary>
-        /// Gets the correlation identifier for related messages
+        /// Gets or sets the correlation identifier for related messages
         /// </summary>
-        public string CorrelationId { get; private set; }
+        public string CorrelationId { get; internal set; }
         
         /// <summary>
-        /// Gets the reply-to address for response messages
+        /// Gets or sets the reply-to address for response messages
         /// </summary>
-        public string ReplyTo { get; private set; }
+        public string ReplyTo { get; internal set; }
         
         /// <summary>
-        /// Gets whether acknowledgement is required for this message
+        /// Gets or sets whether acknowledgement is required for this message
         /// </summary>
-        public bool RequireAcknowledgement { get; private set; }
+        public bool RequireAcknowledgement { get; internal set; }
         
         /// <summary>
-        /// Gets the content type of the message
+        /// Gets or sets the content type of the message
         /// </summary>
-        public string ContentType { get; private set; }
+        public string ContentType { get; internal set; }
         
         /// <summary>
-        /// Gets the message content as a byte array
+        /// Gets or sets the message content as a byte array
         /// </summary>
-        public byte[] Content { get; private set; }
+        public byte[] Content { get; internal set; }
         
         /// <summary>
         /// Gets the message headers
