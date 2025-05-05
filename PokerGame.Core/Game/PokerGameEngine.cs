@@ -222,7 +222,18 @@ namespace PokerGame.Core.Game
         /// </summary>
         public void StartBettingRound()
         {
-            _currentBettingRound = new BettingRound(_players.ToList(), _bigBlind);
+            Console.WriteLine($"Starting betting round in state {_gameState} with current bet {_currentBet} and player index {_currentPlayerIndex}");
+            
+            // Create a new betting round with the current game state
+            _currentBettingRound = new BettingRound(
+                _players.ToList(),       // Players
+                _currentPlayerIndex,     // Starting player index
+                _gameState,              // Current game state
+                _currentBet              // Current bet amount
+            );
+            
+            // Log information about the created betting round
+            Console.WriteLine($"Betting round created. IsBettingComplete: {_currentBettingRound.IsBettingComplete}, CurrentBet: {_currentBettingRound.CurrentBet}");
         }
         
         /// <summary>
@@ -240,16 +251,16 @@ namespace PokerGame.Core.Game
             // Process the action based on type
             switch (action.ActionType)
             {
-                case PlayerActionType.Fold:
+                case ActionType.Fold:
                     player.HasFolded = true;
                     player.HasActed = true;
                     break;
                     
-                case PlayerActionType.Check:
+                case ActionType.Check:
                     player.HasActed = true;
                     break;
                     
-                case PlayerActionType.Call:
+                case ActionType.Call:
                     if (_currentBettingRound != null)
                     {
                         player.PlaceBet(action.Amount);
@@ -257,12 +268,13 @@ namespace PokerGame.Core.Game
                     }
                     break;
                     
-                case PlayerActionType.Raise:
-                case PlayerActionType.Bet:
+                case ActionType.Raise:
+                case ActionType.Bet:
                     if (_currentBettingRound != null)
                     {
                         player.PlaceBet(action.Amount);
-                        _currentBettingRound.CurrentBet = action.Amount;
+                        // Note: This will need to be fixed - CurrentBet is read-only
+                        // _currentBettingRound.CurrentBet = action.Amount;
                         player.HasActed = true;
                         
                         // When a player raises, others need to act again

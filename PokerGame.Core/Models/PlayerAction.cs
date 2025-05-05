@@ -18,6 +18,11 @@ namespace PokerGame.Core.Models
         public int Amount { get; set; }
         
         /// <summary>
+        /// The ID of the player taking the action
+        /// </summary>
+        public string PlayerId { get; set; } = string.Empty;
+        
+        /// <summary>
         /// Creates a new PlayerAction instance
         /// </summary>
         public PlayerAction()
@@ -43,6 +48,19 @@ namespace PokerGame.Core.Models
         {
             ActionType = actionType;
             Amount = amount;
+        }
+        
+        /// <summary>
+        /// Creates a new PlayerAction with the specified action type, amount, and player ID
+        /// </summary>
+        /// <param name="actionType">The type of action</param>
+        /// <param name="amount">The amount associated with the action</param>
+        /// <param name="playerId">The ID of the player taking the action</param>
+        public PlayerAction(ActionType actionType, int amount, string playerId)
+        {
+            ActionType = actionType;
+            Amount = amount;
+            PlayerId = playerId;
         }
         
         /// <summary>

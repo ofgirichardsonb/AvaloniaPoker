@@ -19,5 +19,15 @@ namespace PokerGame.Core.Interfaces
         /// </summary>
         /// <returns>The drawn card</returns>
         Card DrawCard();
+        
+        /// <summary>
+        /// Resets the deck to its initial state
+        /// </summary>
+        void ResetDeck();
+        
+        /// <summary>
+        /// Shuffles the current deck
+        /// </summary>
+        void ShuffleDeck();
     }
 }

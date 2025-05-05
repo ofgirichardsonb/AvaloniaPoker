@@ -11,10 +11,74 @@ namespace PokerGame.Core.Microservices
     /// <summary>
     /// A microservice that manages card decks for card games
     /// </summary>
-    public class CardDeckService : MicroserviceBase
+    public class CardDeckService : MicroserviceBase, PokerGame.Core.Interfaces.ICardDeckService
     {
         private readonly Dictionary<string, Deck> _decks = new Dictionary<string, Deck>();
         private readonly Dictionary<string, List<Card>> _burnPiles = new Dictionary<string, List<Card>>();
+        
+        // Default deck ID for the ICardDeckService implementation
+        private const string DefaultDeckId = "default-deck";
+        
+        /// <summary>
+        /// Gets a shuffled deck of cards
+        /// </summary>
+        /// <returns>A shuffled deck of cards</returns>
+        public List<Card> GetShuffledDeck()
+        {
+            // Create a new default deck if it doesn't exist
+            if (!_decks.ContainsKey(DefaultDeckId))
+            {
+                CreateDeck(DefaultDeckId, true);
+            }
+            else
+            {
+                // If the deck exists, make sure it's shuffled
+                ShuffleDeck(DefaultDeckId);
+            }
+            
+            // Return a copy of the cards in the deck
+            return _decks[DefaultDeckId].GetAllCards();
+        }
+        
+        /// <summary>
+        /// Draws a card from the deck
+        /// </summary>
+        /// <returns>The drawn card</returns>
+        public Card DrawCard()
+        {
+            // Create a new default deck if it doesn't exist
+            if (!_decks.ContainsKey(DefaultDeckId) || _decks[DefaultDeckId].RemainingCards == 0)
+            {
+                CreateDeck(DefaultDeckId, true);
+            }
+            
+            // Draw a card from the deck
+            return _decks[DefaultDeckId].DealCard();
+        }
+        
+        /// <summary>
+        /// Resets the deck to its initial state
+        /// </summary>
+        public void ResetDeck()
+        {
+            // Call the implementation with the default deck ID
+            ResetDeck(DefaultDeckId);
+        }
+        
+        /// <summary>
+        /// Shuffles the current deck
+        /// </summary>
+        public void ShuffleDeck()
+        {
+            // Create the deck if it doesn't exist
+            if (!_decks.ContainsKey(DefaultDeckId))
+            {
+                CreateDeck(DefaultDeckId, false);
+            }
+            
+            // Shuffle the deck
+            ShuffleDeck(DefaultDeckId);
+        }
         
         // Default publisher and subscriber ports
         public const int DefaultPublisherPort = 5559;

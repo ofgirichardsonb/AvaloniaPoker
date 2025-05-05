@@ -3,16 +3,17 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using MSA.Foundation.Messaging;
 using Moq;
-using Xunit;
+using NUnit.Framework;
 using FluentAssertions;
 using System.Threading;
 using System.Reflection;
 
 namespace MSA.Foundation.Tests.Messaging
 {
+    [TestFixture]
     public class MessageBrokerTests
     {
-        [Fact]
+        [Test]
         public void Constructor_WithValidParameters_ShouldInitializeCorrectly()
         {
             // Arrange & Act
@@ -22,7 +23,7 @@ namespace MSA.Foundation.Tests.Messaging
             messageBroker.Should().NotBeNull();
         }
         
-        [Fact]
+        [Test]
         public async Task Subscribe_ShouldReceiveMessages_WhenMessageIsPublished()
         {
             // Arrange
@@ -55,7 +56,7 @@ namespace MSA.Foundation.Tests.Messaging
             messageBroker.Stop();
         }
         
-        [Fact]
+        [Test]
         public async Task SubscribeAll_ShouldReceiveAllMessageTypes()
         {
             // Arrange
@@ -95,7 +96,7 @@ namespace MSA.Foundation.Tests.Messaging
             messageBroker.Stop();
         }
         
-        [Fact]
+        [Test]
         public void Unsubscribe_ShouldStopReceivingMessages()
         {
             // Arrange
@@ -121,7 +122,7 @@ namespace MSA.Foundation.Tests.Messaging
             messageBroker.Stop();
         }
         
-        [Fact]
+        [Test]
         public async Task PublishMessage_ShouldReturnTrue_WhenMessageIsSent()
         {
             // Arrange
@@ -143,7 +144,7 @@ namespace MSA.Foundation.Tests.Messaging
             messageBroker.Stop();
         }
         
-        [Fact]
+        [Test]
         public async Task PublishMessageAsync_ShouldCompleteSuccessfully()
         {
             // Arrange
@@ -167,7 +168,7 @@ namespace MSA.Foundation.Tests.Messaging
             messageBroker.Stop();
         }
         
-        [Fact]
+        [Test]
         public void AcknowledgmentMessages_ShouldBeSentAutomatically_WhenRequireAcknowledgmentIsTrue()
         {
             // Arrange
@@ -204,7 +205,7 @@ namespace MSA.Foundation.Tests.Messaging
             messageBroker.Stop();
         }
         
-        [Fact]
+        [Test]
         public void Start_WhenSocketFailsToInitialize_ShouldHandleGracefully()
         {
             // Arrange
@@ -222,7 +223,7 @@ namespace MSA.Foundation.Tests.Messaging
             messageBroker.Stop();
         }
         
-        [Fact]
+        [Test]
         public void Stop_ShouldHandleExceptionsGracefully()
         {
             // Arrange
@@ -238,7 +239,7 @@ namespace MSA.Foundation.Tests.Messaging
             stopAction.Should().NotThrow("Stop should handle socket cleanup exceptions gracefully");
         }
         
-        [Fact]
+        [Test]
         public void Dispose_ShouldCallStop()
         {
             // Arrange
@@ -253,7 +254,7 @@ namespace MSA.Foundation.Tests.Messaging
             mock.Verify(m => m.Dispose(), Times.Once, "Dispose should call Stop on the socket adapter");
         }
         
-        [Fact]
+        [Test]
         public void PublishMessage_WhenNotStarted_ShouldReturnFalse()
         {
             // Arrange
@@ -267,7 +268,7 @@ namespace MSA.Foundation.Tests.Messaging
             result.Should().BeFalse("PublishMessage should return false when not started");
         }
         
-        [Fact]
+        [Test]
         public async Task PublishMessageAsync_WhenNotStarted_ShouldReturnFalse()
         {
             // Arrange
@@ -281,7 +282,7 @@ namespace MSA.Foundation.Tests.Messaging
             result.Should().BeFalse("PublishMessageAsync should return false when not started");
         }
         
-        [Fact]
+        [Test]
         public void Constructor_WithDependencyInjection_ShouldWorkCorrectly()
         {
             // Arrange
