@@ -149,11 +149,15 @@ coverage*.info
 .DS_Store
 
 *.log
+*.pid
 tools/
 backup/
 attached_assets/
 archived_tests/
 workflow_input.txt
+Build/
+publish/
+web_fallback/
 
 appsettings*.json
 

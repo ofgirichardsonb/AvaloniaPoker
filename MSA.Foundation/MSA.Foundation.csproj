@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <Title>MSA.Foundation</Title>
     <Description>A reusable microservices architecture foundation with messaging, telemetry, and service management</Description>
-    <Version>0.1.0</Version>
+    <Version>1.0.0</Version>
     <Authors>MSA Team</Authors>
     <PackageTags>microservices;messaging;telemetry;netmq</PackageTags>
     <RootNamespace>MSA.Foundation</RootNamespace>

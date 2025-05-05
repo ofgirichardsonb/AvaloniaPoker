@@ -4,6 +4,9 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Version>1.0.0</Version>
+    <Authors>PokerGame Team</Authors>
+    <Description>Interface definitions and abstractions for the poker game services</Description>
   </PropertyGroup>
 
   <ItemGroup>

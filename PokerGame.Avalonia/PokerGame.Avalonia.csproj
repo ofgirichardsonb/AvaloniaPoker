@@ -11,7 +11,7 @@
     <!-- Windows and macOS desktop support only -->
     <RuntimeIdentifiers>win-x64;osx-x64</RuntimeIdentifiers>
     <!-- Version information -->
-    <Version>0.1.0</Version>
+    <Version>1.0.0</Version>
     <Authors>PokerGame Team</Authors>
     <Product>PokerGame</Product>
     <Description>Texas Hold'em poker game with microservices architecture</Description>
@@ -35,8 +35,8 @@
     <CFBundleName>PokerGame</CFBundleName>
     <CFBundleDisplayName>PokerGame</CFBundleDisplayName>
     <CFBundleIdentifier>com.pokergame</CFBundleIdentifier>
-    <CFBundleVersion>0.1.0</CFBundleVersion>
-    <CFBundleShortVersionString>0.1.0</CFBundleShortVersionString>
+    <CFBundleVersion>1.0.0</CFBundleVersion>
+    <CFBundleShortVersionString>1.0.0</CFBundleShortVersionString>
     <CFBundlePackageType>APPL</CFBundlePackageType>
     <CFBundleSignature>????</CFBundleSignature>
     <NSHighResolutionCapable>true</NSHighResolutionCapable>
