@@ -1,15 +1,16 @@
 using System;
 using System.Collections.Generic;
 using PokerGame.Core.Models;
-using Xunit;
+using NUnit.Framework;
 using FluentAssertions;
 using ModelsHand = PokerGame.Core.Models.Hand;
 
-namespace PokerGame.Tests.New.Core.Models
+namespace PokerGame.Tests.Core.Models
 {
+    [TestFixture]
     public class HandTests
     {
-        [Fact]
+        [Test]
         public void Constructor_WithNoCards_ShouldInitializeEmptyHand()
         {
             // Arrange & Act
@@ -20,7 +21,7 @@ namespace PokerGame.Tests.New.Core.Models
             hand.Cards.Should().BeEmpty();
         }
         
-        [Fact]
+        [Test]
         public void Constructor_WithCardCollection_ShouldInitializeWithCards()
         {
             // Arrange
@@ -38,7 +39,7 @@ namespace PokerGame.Tests.New.Core.Models
             hand.Cards.Should().Contain(cards);
         }
         
-        [Fact]
+        [Test]
         public void AddCard_ShouldAddCardToHand()
         {
             // Arrange
@@ -53,7 +54,7 @@ namespace PokerGame.Tests.New.Core.Models
             hand.Cards.Should().Contain(card);
         }
         
-        [Fact]
+        [Test]
         public void AddCards_ShouldAddMultipleCardsToHand()
         {
             // Arrange
@@ -72,7 +73,7 @@ namespace PokerGame.Tests.New.Core.Models
             hand.Cards.Should().Contain(cards);
         }
         
-        [Fact]
+        [Test]
         public void RemoveCard_WithExistingCard_ShouldRemoveCardFromHand()
         {
             // Arrange
@@ -87,7 +88,7 @@ namespace PokerGame.Tests.New.Core.Models
             hand.Cards.Should().BeEmpty();
         }
         
-        [Fact]
+        [Test]
         public void RemoveCard_WithNonExistingCard_ShouldReturnFalse()
         {
             // Arrange
@@ -102,7 +103,7 @@ namespace PokerGame.Tests.New.Core.Models
             hand.Cards.Should().HaveCount(1);
         }
         
-        [Fact]
+        [Test]
         public void Clear_ShouldRemoveAllCardsFromHand()
         {
             // Arrange
@@ -119,7 +120,7 @@ namespace PokerGame.Tests.New.Core.Models
             hand.Cards.Should().BeEmpty();
         }
         
-        [Fact]
+        [Test]
         public void Contains_WithExistingCard_ShouldReturnTrue()
         {
             // Arrange
@@ -133,7 +134,7 @@ namespace PokerGame.Tests.New.Core.Models
             result.Should().BeTrue();
         }
         
-        [Fact]
+        [Test]
         public void Contains_WithNonExistingCard_ShouldReturnFalse()
         {
             // Arrange
@@ -147,7 +148,7 @@ namespace PokerGame.Tests.New.Core.Models
             result.Should().BeFalse();
         }
         
-        [Fact]
+        [Test]
         public void ToString_ShouldReturnFormattedStringOfCards()
         {
             // Arrange

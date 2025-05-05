@@ -2,462 +2,443 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using PokerGame.Core.Models;
-using PokerGame.Core.Messaging;
-using static PokerGame.Core.Messaging.Logger;
 
 namespace PokerGame.Core.Game
 {
     /// <summary>
-    /// Evaluates poker hands and determines the winner
+    /// Evaluates poker hands and determines their ranking
     /// </summary>
-    public class HandEvaluator
+    public static class HandEvaluator
     {
         /// <summary>
-        /// Determines the best 5-card hand for a player given their hole cards and the community cards
+        /// Evaluates a hand of cards and determines its ranking
         /// </summary>
-        /// <param name="holeCards">The player's 2 hole cards</param>
-        /// <param name="communityCards">The 3-5 community cards</param>
-        /// <param name="playerId">Optional player ID to associate with the hand</param>
-        /// <returns>The best 5-card hand for the player</returns>
-        public static Hand EvaluateBestHand(List<Card> holeCards, List<Card> communityCards, string playerId = "", Logger? logger = null)
+        /// <param name="cards">The cards to evaluate</param>
+        /// <returns>The ranking of the hand</returns>
+        public static HandRanking EvaluateHand(List<Card> cards)
         {
-            // Combine the hole cards and community cards
+            if (cards == null || cards.Count < 5)
+                throw new ArgumentException("A poker hand must consist of at least 5 cards", nameof(cards));
+                
+            // Take the best 5-card hand if more than 5 cards are provided
+            var bestHand = FindBestFiveCardHand(cards);
+            
+            // Check for royal flush
+            if (IsRoyalFlush(bestHand))
+                return new HandRanking(HandRank.RoyalFlush, new List<int> { 14 }); // Ace high
+                
+            // Check for straight flush
+            if (IsStraightFlush(bestHand, out var straightFlushHighCard))
+                return new HandRanking(HandRank.StraightFlush, new List<int> { straightFlushHighCard });
+                
+            // Check for four of a kind
+            if (IsFourOfAKind(bestHand, out var fourOfAKindRank, out var fourOfAKindKicker))
+                return new HandRanking(HandRank.FourOfAKind, new List<int> { fourOfAKindRank, fourOfAKindKicker });
+                
+            // Check for full house
+            if (IsFullHouse(bestHand, out var fullHouseThreeRank, out var fullHouseTwoRank))
+                return new HandRanking(HandRank.FullHouse, new List<int> { fullHouseThreeRank, fullHouseTwoRank });
+                
+            // Check for flush
+            if (IsFlush(bestHand, out var flushHighCards))
+                return new HandRanking(HandRank.Flush, flushHighCards);
+                
+            // Check for straight
+            if (IsStraight(bestHand, out var straightHighCard))
+                return new HandRanking(HandRank.Straight, new List<int> { straightHighCard });
+                
+            // Check for three of a kind
+            if (IsThreeOfAKind(bestHand, out var threeOfAKindRank, out var threeOfAKindKickers))
+                return new HandRanking(HandRank.ThreeOfAKind, new List<int> { threeOfAKindRank }.Concat(threeOfAKindKickers).ToList());
+                
+            // Check for two pair
+            if (IsTwoPair(bestHand, out var twoPairHighRank, out var twoPairLowRank, out var twoPairKicker))
+                return new HandRanking(HandRank.TwoPair, new List<int> { twoPairHighRank, twoPairLowRank, twoPairKicker });
+                
+            // Check for one pair
+            if (IsOnePair(bestHand, out var onePairRank, out var onePairKickers))
+                return new HandRanking(HandRank.OnePair, new List<int> { onePairRank }.Concat(onePairKickers).ToList());
+                
+            // High card
+            var highCardValues = bestHand.Select(GetCardValue).OrderByDescending(v => v).Take(5).ToList();
+            return new HandRanking(HandRank.HighCard, highCardValues);
+        }
+        
+        /// <summary>
+        /// Finds the best 5-card hand from a set of cards
+        /// </summary>
+        /// <param name="cards">The cards to evaluate</param>
+        /// <returns>The best 5-card hand</returns>
+        private static List<Card> FindBestFiveCardHand(List<Card> cards)
+        {
+            if (cards.Count <= 5)
+                return cards.ToList();
+                
+            // Generate all possible 5-card combinations
+            var allPossibleHands = new List<List<Card>>();
+            GenerateCombinations(cards, 5, 0, new Card[5], 0, allPossibleHands);
+            
+            // Evaluate each hand and return the best one
+            List<Card> bestHand = null;
+            HandRank bestRank = HandRank.HighCard;
+            List<int> bestHighCards = null;
+            
+            foreach (var hand in allPossibleHands)
+            {
+                var ranking = EvaluateHand(hand);
+                if (bestHand == null || ranking.Rank > bestRank || 
+                   (ranking.Rank == bestRank && CompareHighCards(ranking.HighCardValues, bestHighCards) > 0))
+                {
+                    bestHand = hand;
+                    bestRank = ranking.Rank;
+                    bestHighCards = ranking.HighCardValues;
+                }
+            }
+            
+            return bestHand;
+        }
+        
+        /// <summary>
+        /// Generates all possible combinations of k cards from n cards
+        /// </summary>
+        private static void GenerateCombinations(List<Card> cards, int k, int start, Card[] combination, int index, List<List<Card>> result)
+        {
+            if (index == k)
+            {
+                result.Add(combination.ToList());
+                return;
+            }
+            
+            for (int i = start; i <= cards.Count - k + index; i++)
+            {
+                combination[index] = cards[i];
+                GenerateCombinations(cards, k, i + 1, combination, index + 1, result);
+            }
+        }
+        
+        /// <summary>
+        /// Compares two lists of high card values
+        /// </summary>
+        private static int CompareHighCards(List<int> a, List<int> b)
+        {
+            if (a == null)
+                return b == null ? 0 : -1;
+                
+            if (b == null)
+                return 1;
+                
+            for (int i = 0; i < Math.Min(a.Count, b.Count); i++)
+            {
+                int comparison = a[i].CompareTo(b[i]);
+                if (comparison != 0)
+                    return comparison;
+            }
+            
+            return a.Count.CompareTo(b.Count);
+        }
+        
+        /// <summary>
+        /// Checks if a hand is a royal flush
+        /// </summary>
+        private static bool IsRoyalFlush(List<Card> cards)
+        {
+            return IsStraightFlush(cards, out var highCard) && highCard == 14; // Ace high
+        }
+        
+        /// <summary>
+        /// Checks if a hand is a straight flush
+        /// </summary>
+        private static bool IsStraightFlush(List<Card> cards, out int highCard)
+        {
+            highCard = 0;
+            
+            if (!IsFlush(cards, out _))
+                return false;
+                
+            return IsStraight(cards, out highCard);
+        }
+        
+        /// <summary>
+        /// Checks if a hand is four of a kind
+        /// </summary>
+        private static bool IsFourOfAKind(List<Card> cards, out int fourRank, out int kicker)
+        {
+            fourRank = 0;
+            kicker = 0;
+            
+            var groups = cards.GroupBy(c => GetCardValue(c)).OrderByDescending(g => g.Count()).ThenByDescending(g => g.Key).ToList();
+            
+            if (groups.Count >= 2 && groups[0].Count() == 4)
+            {
+                fourRank = groups[0].Key;
+                kicker = groups[1].Key;
+                return true;
+            }
+            
+            return false;
+        }
+        
+        /// <summary>
+        /// Checks if a hand is a full house
+        /// </summary>
+        private static bool IsFullHouse(List<Card> cards, out int threeRank, out int twoRank)
+        {
+            threeRank = 0;
+            twoRank = 0;
+            
+            var groups = cards.GroupBy(c => GetCardValue(c)).OrderByDescending(g => g.Count()).ThenByDescending(g => g.Key).ToList();
+            
+            if (groups.Count >= 2 && groups[0].Count() >= 3 && groups[1].Count() >= 2)
+            {
+                threeRank = groups[0].Key;
+                twoRank = groups[1].Key;
+                return true;
+            }
+            
+            return false;
+        }
+        
+        /// <summary>
+        /// Checks if a hand is a flush
+        /// </summary>
+        private static bool IsFlush(List<Card> cards, out List<int> highCards)
+        {
+            highCards = cards.Select(c => GetCardValue(c)).OrderByDescending(v => v).Take(5).ToList();
+            
+            var grouped = cards.GroupBy(c => c.Suit);
+            return grouped.Any(g => g.Count() >= 5);
+        }
+        
+        /// <summary>
+        /// Checks if a hand is a straight
+        /// </summary>
+        private static bool IsStraight(List<Card> cards, out int highCard)
+        {
+            highCard = 0;
+            
+            var distinctValues = cards.Select(c => GetCardValue(c)).Distinct().OrderBy(v => v).ToList();
+            
+            // Handle Ace as both high and low
+            if (distinctValues.Contains(14)) // Ace
+                distinctValues.Insert(0, 1); // Add Ace as 1 as well
+                
+            for (int i = 0; i <= distinctValues.Count - 5; i++)
+            {
+                if (distinctValues[i + 4] - distinctValues[i] == 4)
+                {
+                    highCard = distinctValues[i + 4];
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+        
+        /// <summary>
+        /// Checks if a hand is three of a kind
+        /// </summary>
+        private static bool IsThreeOfAKind(List<Card> cards, out int threeRank, out List<int> kickers)
+        {
+            threeRank = 0;
+            kickers = new List<int>();
+            
+            var groups = cards.GroupBy(c => GetCardValue(c)).OrderByDescending(g => g.Count()).ThenByDescending(g => g.Key).ToList();
+            
+            if (groups.Count >= 3 && groups[0].Count() == 3 && groups[1].Count() != 2)
+            {
+                threeRank = groups[0].Key;
+                kickers = groups.Skip(1).Take(2).Select(g => g.Key).ToList();
+                return true;
+            }
+            
+            return false;
+        }
+        
+        /// <summary>
+        /// Checks if a hand is two pair
+        /// </summary>
+        private static bool IsTwoPair(List<Card> cards, out int highPairRank, out int lowPairRank, out int kicker)
+        {
+            highPairRank = 0;
+            lowPairRank = 0;
+            kicker = 0;
+            
+            var groups = cards.GroupBy(c => GetCardValue(c)).OrderByDescending(g => g.Count()).ThenByDescending(g => g.Key).ToList();
+            
+            if (groups.Count >= 3 && groups[0].Count() == 2 && groups[1].Count() == 2)
+            {
+                highPairRank = groups[0].Key;
+                lowPairRank = groups[1].Key;
+                kicker = groups[2].Key;
+                return true;
+            }
+            
+            return false;
+        }
+        
+        /// <summary>
+        /// Checks if a hand is one pair
+        /// </summary>
+        private static bool IsOnePair(List<Card> cards, out int pairRank, out List<int> kickers)
+        {
+            pairRank = 0;
+            kickers = new List<int>();
+            
+            var groups = cards.GroupBy(c => GetCardValue(c)).OrderByDescending(g => g.Count()).ThenByDescending(g => g.Key).ToList();
+            
+            if (groups.Count >= 4 && groups[0].Count() == 2)
+            {
+                pairRank = groups[0].Key;
+                kickers = groups.Skip(1).Take(3).Select(g => g.Key).ToList();
+                return true;
+            }
+            
+            return false;
+        }
+        
+        /// <summary>
+        /// Gets the numerical value of a card (2-14, with Ace as 14)
+        /// </summary>
+        private static int GetCardValue(Card card)
+        {
+            return (int)card.Rank;
+        }
+        
+        /// <summary>
+        /// Evaluates the best possible hand from the given hole cards and community cards
+        /// </summary>
+        /// <param name="holeCards">The player's hole cards</param>
+        /// <param name="communityCards">The community cards</param>
+        /// <param name="playerId">The player ID for reference</param>
+        /// <returns>The best hand for the player</returns>
+        public static Hand EvaluateBestHand(List<Card> holeCards, List<Card> communityCards, string playerId)
+        {
+            // Combine hole cards and community cards
             var allCards = new List<Card>();
             allCards.AddRange(holeCards);
             allCards.AddRange(communityCards);
             
-            // Generate all possible 5-card combinations from the available cards
-            var possibleHands = GenerateAllFiveCardCombinations(allCards);
+            // Find the best 5-card hand
+            var bestCards = FindBestFiveCardHand(allCards);
             
-            // Evaluate each possible hand and return the best one
-            Hand bestHand = null;
+            // Evaluate the hand ranking
+            var handRanking = EvaluateHand(bestCards);
             
-            foreach (var cards in possibleHands)
+            // Convert to an array of tie breakers
+            int[] tieBreakers = handRanking.HighCardValues.ToArray();
+            
+            // Create the hand object with the ranking and description
+            var hand = new Hand(bestCards, handRanking.Rank, tieBreakers, playerId);
+            
+            return hand;
+        }
+        
+        /// <summary>
+        /// Gets a human-readable description of the hand
+        /// </summary>
+        private static string GetHandDescription(HandRank rank, List<int> tieBreakers)
+        {
+            switch (rank)
             {
-                var hand = EvaluateHand(cards, playerId);
+                case HandRank.RoyalFlush:
+                    return "Royal Flush";
+                    
+                case HandRank.StraightFlush:
+                    return $"Straight Flush, {GetCardName(tieBreakers[0])} high";
+                    
+                case HandRank.FourOfAKind:
+                    return $"Four of a Kind, {GetCardName(tieBreakers[0])}s";
+                    
+                case HandRank.FullHouse:
+                    return $"Full House, {GetCardName(tieBreakers[0])}s full of {GetCardName(tieBreakers[1])}s";
+                    
+                case HandRank.Flush:
+                    return $"Flush, {GetCardName(tieBreakers[0])} high";
+                    
+                case HandRank.Straight:
+                    return $"Straight, {GetCardName(tieBreakers[0])} high";
+                    
+                case HandRank.ThreeOfAKind:
+                    return $"Three of a Kind, {GetCardName(tieBreakers[0])}s";
+                    
+                case HandRank.TwoPair:
+                    return $"Two Pair, {GetCardName(tieBreakers[0])}s and {GetCardName(tieBreakers[1])}s";
+                    
+                case HandRank.OnePair:
+                    return $"Pair of {GetCardName(tieBreakers[0])}s";
+                    
+                case HandRank.HighCard:
+                    return $"High Card {GetCardName(tieBreakers[0])}";
+                    
+                default:
+                    return "Unknown Hand";
+            }
+        }
+        
+        /// <summary>
+        /// Gets the name of a card by its numerical value
+        /// </summary>
+        private static string GetCardName(int value)
+        {
+            switch (value)
+            {
+                case 14: return "Ace";
+                case 13: return "King";
+                case 12: return "Queen";
+                case 11: return "Jack";
+                case 10: return "10";
+                default: return value.ToString();
+            }
+        }
+        
+        /// <summary>
+        /// Determines the winners among the players
+        /// </summary>
+        /// <param name="playerHands">Dictionary mapping players to their best hands</param>
+        /// <returns>List of winning players</returns>
+        public static List<Player> DetermineWinners(Dictionary<Player, Hand> playerHands)
+        {
+            List<Player> winners = new List<Player>();
+            Player? bestPlayer = null;
+            
+            foreach (var kvp in playerHands)
+            {
+                var player = kvp.Key;
+                var hand = kvp.Value;
                 
-                if (bestHand == null || hand.CompareTo(bestHand) > 0)
+                if (bestPlayer == null || 
+                    CompareHands(hand, playerHands[bestPlayer]) > 0)
                 {
-                    bestHand = hand;
+                    bestPlayer = player;
+                    winners.Clear();
+                    winners.Add(player);
+                }
+                else if (bestPlayer != null && 
+                        CompareHands(hand, playerHands[bestPlayer]) == 0)
+                {
+                    winners.Add(player);
                 }
             }
             
-            logger?.Log($"Best hand for player {playerId}: {bestHand?.Description}");
-            
-            // Return the best hand (should never be null if inputs are valid)
-            return bestHand!;
-        }
-        
-        /// <summary>
-        /// Evaluates a specific 5-card hand
-        /// </summary>
-        /// <param name="cards">The 5 cards to evaluate</param>
-        /// <param name="playerId">Optional player ID to associate with the hand</param>
-        /// <returns>The evaluated hand</returns>
-        public static Hand EvaluateHand(List<Card> cards, string playerId = "")
-        {
-            if (cards.Count != 5)
-            {
-                throw new ArgumentException("Hand evaluation requires exactly 5 cards", nameof(cards));
-            }
-            
-            // Check for each hand type from highest to lowest
-            
-            // Check for royal flush
-            if (IsRoyalFlush(cards, out var royalFlushTieBreakers))
-            {
-                return new Hand(cards, HandRank.RoyalFlush, royalFlushTieBreakers, playerId);
-            }
-            
-            // Check for straight flush
-            if (IsStraightFlush(cards, out var straightFlushTieBreakers))
-            {
-                return new Hand(cards, HandRank.StraightFlush, straightFlushTieBreakers, playerId);
-            }
-            
-            // Check for four of a kind
-            if (IsFourOfAKind(cards, out var fourOfAKindTieBreakers))
-            {
-                return new Hand(cards, HandRank.FourOfAKind, fourOfAKindTieBreakers, playerId);
-            }
-            
-            // Check for full house
-            if (IsFullHouse(cards, out var fullHouseTieBreakers))
-            {
-                return new Hand(cards, HandRank.FullHouse, fullHouseTieBreakers, playerId);
-            }
-            
-            // Check for flush
-            if (IsFlush(cards, out var flushTieBreakers))
-            {
-                return new Hand(cards, HandRank.Flush, flushTieBreakers, playerId);
-            }
-            
-            // Check for straight
-            if (IsStraight(cards, out var straightTieBreakers))
-            {
-                return new Hand(cards, HandRank.Straight, straightTieBreakers, playerId);
-            }
-            
-            // Check for three of a kind
-            if (IsThreeOfAKind(cards, out var threeOfAKindTieBreakers))
-            {
-                return new Hand(cards, HandRank.ThreeOfAKind, threeOfAKindTieBreakers, playerId);
-            }
-            
-            // Check for two pair
-            if (IsTwoPair(cards, out var twoPairTieBreakers))
-            {
-                return new Hand(cards, HandRank.TwoPair, twoPairTieBreakers, playerId);
-            }
-            
-            // Check for one pair
-            if (IsOnePair(cards, out var onePairTieBreakers))
-            {
-                return new Hand(cards, HandRank.OnePair, onePairTieBreakers, playerId);
-            }
-            
-            // If nothing else, it's a high card hand
-            var highCardTieBreakers = GetRankCountMap(cards)
-                .Select(kvp => kvp.Key)
-                .OrderByDescending(rank => rank)
-                .ToArray();
-            
-            return new Hand(cards, HandRank.HighCard, highCardTieBreakers, playerId);
-        }
-        
-        /// <summary>
-        /// Determines the winner(s) from a list of evaluated hands
-        /// </summary>
-        /// <param name="hands">The list of hands to compare</param>
-        /// <returns>A list of hands that tie for the win</returns>
-        public static List<Hand> DetermineWinners(List<Hand> hands)
-        {
-            if (hands == null || hands.Count == 0)
-            {
-                return new List<Hand>();
-            }
-            
-            // Find the best hand
-            var bestHand = hands[0];
-            foreach (var hand in hands.Skip(1))
-            {
-                if (hand.CompareTo(bestHand) > 0)
-                {
-                    bestHand = hand;
-                }
-            }
-            
-            // Find all hands that tie with the best hand
-            var winners = hands.Where(h => h.CompareTo(bestHand) == 0).ToList();
-            
-            // Return the winner(s)
             return winners;
         }
         
-        #region Hand Type Checkers
-        
         /// <summary>
-        /// Checks if the hand is a royal flush (A, K, Q, J, 10 of the same suit)
+        /// Compares two poker hands
         /// </summary>
-        private static bool IsRoyalFlush(List<Card> cards, out int[] tieBreakers)
+        /// <param name="hand1">The first hand</param>
+        /// <param name="hand2">The second hand</param>
+        /// <returns>A positive value if hand1 is better, 0 if they're equal, a negative value if hand2 is better</returns>
+        private static int CompareHands(Hand hand1, Hand hand2)
         {
-            // A royal flush is a straight flush with an ace high
-            if (IsStraightFlush(cards, out tieBreakers) && tieBreakers[0] == 14)
-            {
-                return true;
-            }
-            
-            return false;
-        }
-        
-        /// <summary>
-        /// Checks if the hand is a straight flush (five cards in sequence, all of the same suit)
-        /// </summary>
-        private static bool IsStraightFlush(List<Card> cards, out int[] tieBreakers)
-        {
-            if (IsFlush(cards, out _) && IsStraight(cards, out tieBreakers))
-            {
-                return true;
-            }
-            
-            tieBreakers = Array.Empty<int>();
-            return false;
-        }
-        
-        /// <summary>
-        /// Checks if the hand is four of a kind (four cards of the same rank)
-        /// </summary>
-        private static bool IsFourOfAKind(List<Card> cards, out int[] tieBreakers)
-        {
-            var rankCounts = GetRankCountMap(cards);
-            
-            var fourOfAKind = rankCounts.FirstOrDefault(kvp => kvp.Value == 4);
-            if (fourOfAKind.Value == 4)
-            {
-                // The first tie breaker is the rank of the four of a kind
-                // The second tie breaker is the rank of the kicker
-                var kicker = rankCounts.FirstOrDefault(kvp => kvp.Value == 1);
-                tieBreakers = new[] { fourOfAKind.Key, kicker.Key };
-                return true;
-            }
-            
-            tieBreakers = Array.Empty<int>();
-            return false;
-        }
-        
-        /// <summary>
-        /// Checks if the hand is a full house (three cards of one rank, two cards of another rank)
-        /// </summary>
-        private static bool IsFullHouse(List<Card> cards, out int[] tieBreakers)
-        {
-            var rankCounts = GetRankCountMap(cards);
-            
-            var threeOfAKind = rankCounts.FirstOrDefault(kvp => kvp.Value == 3);
-            var pair = rankCounts.FirstOrDefault(kvp => kvp.Value == 2);
-            
-            if (threeOfAKind.Value == 3 && pair.Value == 2)
-            {
-                // The first tie breaker is the rank of the three of a kind
-                // The second tie breaker is the rank of the pair
-                tieBreakers = new[] { threeOfAKind.Key, pair.Key };
-                return true;
-            }
-            
-            tieBreakers = Array.Empty<int>();
-            return false;
-        }
-        
-        /// <summary>
-        /// Checks if the hand is a flush (five cards of the same suit)
-        /// </summary>
-        private static bool IsFlush(List<Card> cards, out int[] tieBreakers)
-        {
-            var firstSuit = cards[0].Suit;
-            
-            if (cards.All(c => c.Suit == firstSuit))
-            {
-                // Tie breakers are all five card ranks in descending order
-                tieBreakers = cards
-                    .Select(c => c.RankValue)
-                    .OrderByDescending(r => r)
-                    .ToArray();
+            // First compare by hand rank
+            int rankComparison = hand1.Rank.CompareTo(hand2.Rank);
+            if (rankComparison != 0)
+                return rankComparison;
                 
-                return true;
-            }
-            
-            tieBreakers = Array.Empty<int>();
-            return false;
+            // If ranks are equal, compare by tie breakers
+            // This is handled by the Hand.CompareTo method
+            return hand1.CompareTo(hand2);
         }
-        
-        /// <summary>
-        /// Checks if the hand is a straight (five cards in sequence)
-        /// </summary>
-        private static bool IsStraight(List<Card> cards, out int[] tieBreakers)
-        {
-            // Get the distinct ranks in ascending order
-            var ranks = cards
-                .Select(c => c.RankValue)
-                .OrderBy(r => r)
-                .Distinct()
-                .ToList();
-            
-            // A straight must have exactly 5 distinct ranks
-            if (ranks.Count != 5)
-            {
-                tieBreakers = Array.Empty<int>();
-                return false;
-            }
-            
-            // Special case for A-5 straight (where Ace is treated as 1)
-            if (ranks.SequenceEqual(new[] { 2, 3, 4, 5, 14 }))
-            {
-                // In A-5 straight, the highest card is actually 5
-                tieBreakers = new[] { 5 };
-                return true;
-            }
-            
-            // Check if the ranks form a sequence
-            for (int i = 1; i < ranks.Count; i++)
-            {
-                if (ranks[i] != ranks[i - 1] + 1)
-                {
-                    tieBreakers = Array.Empty<int>();
-                    return false;
-                }
-            }
-            
-            // The highest card determines the straight
-            tieBreakers = new[] { ranks.Max() };
-            return true;
-        }
-        
-        /// <summary>
-        /// Checks if the hand is three of a kind (three cards of the same rank)
-        /// </summary>
-        private static bool IsThreeOfAKind(List<Card> cards, out int[] tieBreakers)
-        {
-            var rankCounts = GetRankCountMap(cards);
-            
-            var threeOfAKind = rankCounts.FirstOrDefault(kvp => kvp.Value == 3);
-            if (threeOfAKind.Value == 3)
-            {
-                // Make sure it's not a full house
-                if (rankCounts.Any(kvp => kvp.Value == 2))
-                {
-                    tieBreakers = Array.Empty<int>();
-                    return false;
-                }
-                
-                // The first tie breaker is the rank of the three of a kind
-                // The next tie breakers are the ranks of the kickers in descending order
-                var kickers = rankCounts
-                    .Where(kvp => kvp.Value == 1)
-                    .Select(kvp => kvp.Key)
-                    .OrderByDescending(r => r)
-                    .ToList();
-                
-                tieBreakers = new[] { threeOfAKind.Key, kickers[0], kickers[1] };
-                return true;
-            }
-            
-            tieBreakers = Array.Empty<int>();
-            return false;
-        }
-        
-        /// <summary>
-        /// Checks if the hand is two pair (two cards of one rank, two cards of another rank)
-        /// </summary>
-        private static bool IsTwoPair(List<Card> cards, out int[] tieBreakers)
-        {
-            var rankCounts = GetRankCountMap(cards);
-            
-            var pairs = rankCounts
-                .Where(kvp => kvp.Value == 2)
-                .Select(kvp => kvp.Key)
-                .OrderByDescending(r => r)
-                .ToList();
-            
-            if (pairs.Count == 2)
-            {
-                // The first two tie breakers are the ranks of the pairs in descending order
-                // The third tie breaker is the rank of the kicker
-                var kicker = rankCounts.First(kvp => kvp.Value == 1).Key;
-                tieBreakers = new[] { pairs[0], pairs[1], kicker };
-                return true;
-            }
-            
-            tieBreakers = Array.Empty<int>();
-            return false;
-        }
-        
-        /// <summary>
-        /// Checks if the hand is one pair (two cards of the same rank)
-        /// </summary>
-        private static bool IsOnePair(List<Card> cards, out int[] tieBreakers)
-        {
-            var rankCounts = GetRankCountMap(cards);
-            
-            var pair = rankCounts.FirstOrDefault(kvp => kvp.Value == 2);
-            if (pair.Value == 2)
-            {
-                // Make sure it's not two pair or better
-                if (rankCounts.Count(kvp => kvp.Value == 2) > 1 || rankCounts.Any(kvp => kvp.Value > 2))
-                {
-                    tieBreakers = Array.Empty<int>();
-                    return false;
-                }
-                
-                // The first tie breaker is the rank of the pair
-                // The next tie breakers are the ranks of the kickers in descending order
-                var kickers = rankCounts
-                    .Where(kvp => kvp.Value == 1)
-                    .Select(kvp => kvp.Key)
-                    .OrderByDescending(r => r)
-                    .ToList();
-                
-                tieBreakers = new[] { pair.Key, kickers[0], kickers[1], kickers[2] };
-                return true;
-            }
-            
-            tieBreakers = Array.Empty<int>();
-            return false;
-        }
-        
-        #endregion
-        
-        #region Helper Methods
-        
-        /// <summary>
-        /// Generates all possible 5-card combinations from a list of cards
-        /// </summary>
-        private static List<List<Card>> GenerateAllFiveCardCombinations(List<Card> cards)
-        {
-            var result = new List<List<Card>>();
-            
-            // If there are exactly 5 cards, there's only one possible combination
-            if (cards.Count == 5)
-            {
-                result.Add(new List<Card>(cards));
-                return result;
-            }
-            
-            // If there are more than 5 cards, generate all 5-card combinations
-            GenerateCombinations(cards, 0, new List<Card>(), result, 5);
-            
-            return result;
-        }
-        
-        /// <summary>
-        /// Recursive helper method for generating combinations
-        /// </summary>
-        private static void GenerateCombinations(List<Card> cards, int startIndex, List<Card> currentCombination, 
-            List<List<Card>> result, int combinationLength)
-        {
-            // If we've reached the desired combination length, add it to the result
-            if (currentCombination.Count == combinationLength)
-            {
-                result.Add(new List<Card>(currentCombination));
-                return;
-            }
-            
-            // If we've run out of cards to add, return
-            if (startIndex >= cards.Count)
-            {
-                return;
-            }
-            
-            // Try including the current card
-            currentCombination.Add(cards[startIndex]);
-            GenerateCombinations(cards, startIndex + 1, currentCombination, result, combinationLength);
-            
-            // Try excluding the current card
-            currentCombination.RemoveAt(currentCombination.Count - 1);
-            GenerateCombinations(cards, startIndex + 1, currentCombination, result, combinationLength);
-        }
-        
-        /// <summary>
-        /// Gets a map of card ranks to their counts in the hand
-        /// </summary>
-        private static Dictionary<int, int> GetRankCountMap(List<Card> cards)
-        {
-            var rankCounts = new Dictionary<int, int>();
-            
-            foreach (var card in cards)
-            {
-                if (rankCounts.ContainsKey(card.RankValue))
-                {
-                    rankCounts[card.RankValue]++;
-                }
-                else
-                {
-                    rankCounts[card.RankValue] = 1;
-                }
-            }
-            
-            return rankCounts;
-        }
-        
-        #endregion
     }
 }

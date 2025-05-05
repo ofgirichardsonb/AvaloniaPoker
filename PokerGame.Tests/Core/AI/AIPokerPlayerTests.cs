@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using PokerGame.Core.Game;
 using CardModel = PokerGame.Core.Models.Card;
 
-namespace PokerGame.Tests.New.Core.AI;
+namespace PokerGame.Tests.Core.AI;
 
 [TestFixture]
 public class AIPokerPlayerTests

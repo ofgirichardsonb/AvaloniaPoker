@@ -14,10 +14,10 @@ namespace PokerGame.Core.Game
     public class PokerGameEngine
     {
         private readonly IPokerGameUI _ui;
-        private readonly Deck _deck = new Deck();
         private readonly List<Player> _players = new List<Player>();
         private readonly List<Card> _communityCards = new List<Card>();
         private GameState _gameState;
+        private BettingRound _currentBettingRound;
         
         private int _dealerPosition = -1;
         private int _currentPlayerIndex = -1;
@@ -30,13 +30,79 @@ namespace PokerGame.Core.Game
         private int _maxPlayers = 8; // Maximum number of players at the table
         
         /// <summary>
+        /// Card deck service for shuffling and dealing cards
+        /// </summary>
+        public ICardDeckService CardDeckService { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the big blind amount
+        /// </summary>
+        public int BigBlindAmount 
+        { 
+            get => _bigBlind; 
+            set => _bigBlind = value; 
+        }
+        
+        /// <summary>
+        /// Gets or sets the small blind amount
+        /// </summary>
+        public int SmallBlindAmount 
+        { 
+            get => _smallBlind; 
+            set => _smallBlind = value; 
+        }
+        
+        /// <summary>
+        /// Gets or sets the maximum bet amount
+        /// </summary>
+        public int MaxBet 
+        { 
+            get => _maxBet; 
+            set => _maxBet = value; 
+        }
+        
+        /// <summary>
+        /// Gets or sets the current dealer position
+        /// </summary>
+        public int DealerPosition 
+        { 
+            get => _dealerPosition; 
+            set => _dealerPosition = value; 
+        }
+        
+        /// <summary>
+        /// Gets or sets the current game state
+        /// </summary>
+        public GameState GameState 
+        { 
+            get => _gameState; 
+            set => _gameState = value; 
+        }
+        
+        /// <summary>
+        /// Gets or sets the current betting round
+        /// </summary>
+        public BettingRound CurrentBettingRound 
+        { 
+            get => _currentBettingRound; 
+            set => _currentBettingRound = value; 
+        }
+        
+        /// <summary>
         /// Creates a new poker game engine
         /// </summary>
+        public PokerGameEngine()
+        {
+            _gameState = GameState.WaitingToStart;
+        }
+        
+        /// <summary>
+        /// Creates a new poker game engine with a UI implementation
+        /// </summary>
         /// <param name="ui">The UI implementation to use for player interaction</param>
-        public PokerGameEngine(IPokerGameUI ui)
+        public PokerGameEngine(IPokerGameUI ui) : this()
         {
             _ui = ui;
-            _gameState = GameState.Setup;
         }
         
         /// <summary>
@@ -60,9 +126,9 @@ namespace PokerGame.Core.Game
         public int BigBlind => _bigBlind;
         
         /// <summary>
-        /// Gets the maximum bet limit per round
+        /// Gets the maximum bet limit per round (use MaxBet property getter/setter instead)
         /// </summary>
-        public int MaxBet => _maxBet;
+        private int MaxBetValue => _maxBet;
         
         /// <summary>
         /// Gets the maximum table limit (max chips per player)
@@ -86,6 +152,192 @@ namespace PokerGame.Core.Game
         public void AddCommunityCard(Card card)
         {
             _communityCards.Add(card);
+        }
+        
+        /// <summary>
+        /// Adds a player to the game
+        /// </summary>
+        /// <param name="player">The player to add</param>
+        public void AddPlayer(Player player)
+        {
+            if (_players.Count < _maxPlayers)
+            {
+                _players.Add(player);
+            }
+        }
+        
+        /// <summary>
+        /// Removes a player from the game
+        /// </summary>
+        /// <param name="playerId">The ID of the player to remove</param>
+        public void RemovePlayer(string playerId)
+        {
+            _players.RemoveAll(p => p.Id == playerId);
+        }
+        
+        /// <summary>
+        /// Deals the flop (first three community cards)
+        /// </summary>
+        public void DealFlop()
+        {
+            if (CardDeckService != null)
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    _communityCards.Add(CardDeckService.DrawCard());
+                }
+            }
+            
+            _gameState = GameState.Flop;
+        }
+        
+        /// <summary>
+        /// Deals the turn (fourth community card)
+        /// </summary>
+        public void DealTurn()
+        {
+            if (CardDeckService != null)
+            {
+                _communityCards.Add(CardDeckService.DrawCard());
+            }
+            
+            _gameState = GameState.Turn;
+        }
+        
+        /// <summary>
+        /// Deals the river (fifth community card)
+        /// </summary>
+        public void DealRiver()
+        {
+            if (CardDeckService != null)
+            {
+                _communityCards.Add(CardDeckService.DrawCard());
+            }
+            
+            _gameState = GameState.River;
+        }
+        
+        /// <summary>
+        /// Starts a betting round
+        /// </summary>
+        public void StartBettingRound()
+        {
+            _currentBettingRound = new BettingRound(_players.ToList(), _bigBlind);
+        }
+        
+        /// <summary>
+        /// Processes a player action
+        /// </summary>
+        /// <param name="action">The player action</param>
+        public void ProcessPlayerAction(PlayerAction action)
+        {
+            // Find the player
+            var player = _players.FirstOrDefault(p => p.Id == action.PlayerId);
+            
+            if (player == null)
+                return;
+                
+            // Process the action based on type
+            switch (action.ActionType)
+            {
+                case PlayerActionType.Fold:
+                    player.HasFolded = true;
+                    player.HasActed = true;
+                    break;
+                    
+                case PlayerActionType.Check:
+                    player.HasActed = true;
+                    break;
+                    
+                case PlayerActionType.Call:
+                    if (_currentBettingRound != null)
+                    {
+                        player.PlaceBet(action.Amount);
+                        player.HasActed = true;
+                    }
+                    break;
+                    
+                case PlayerActionType.Raise:
+                case PlayerActionType.Bet:
+                    if (_currentBettingRound != null)
+                    {
+                        player.PlaceBet(action.Amount);
+                        _currentBettingRound.CurrentBet = action.Amount;
+                        player.HasActed = true;
+                        
+                        // When a player raises, others need to act again
+                        foreach (var otherPlayer in _players.Where(p => p.Id != player.Id && !p.HasFolded))
+                        {
+                            otherPlayer.HasActed = false;
+                        }
+                    }
+                    break;
+            }
+        }
+        
+        /// <summary>
+        /// Ends the current hand and resets for next hand (implementation for unit tests)
+        /// </summary>
+        public void EndHandForTesting()
+        {
+            // Clear community cards
+            _communityCards.Clear();
+            
+            // Reset all players
+            foreach (var player in _players)
+            {
+                player.ResetForNewHand();
+            }
+            
+            // Move dealer position
+            if (_players.Count > 0)
+            {
+                _dealerPosition = (_dealerPosition + 1) % _players.Count;
+            }
+            
+            // Reset game state
+            _gameState = GameState.WaitingToStart;
+        }
+        
+        /// <summary>
+        /// Gets the winners of the current hand
+        /// </summary>
+        /// <returns>A list of winners with their hand rankings</returns>
+        public List<(Player Player, HandRanking Ranking)> GetWinners()
+        {
+            var winners = new List<(Player Player, HandRanking Ranking)>();
+            
+            // Evaluate all player hands using all 7 cards (5 community + 2 hole)
+            var handRankings = new List<(Player Player, HandRanking Ranking)>();
+            
+            foreach (var player in _players.Where(p => !p.HasFolded))
+            {
+                var allCards = new List<Card>();
+                allCards.AddRange(player.HoleCards);
+                allCards.AddRange(_communityCards);
+                
+                var handRanking = HandEvaluator.EvaluateHand(allCards);
+                handRankings.Add((player, handRanking));
+            }
+            
+            // Find the highest ranking
+            var highestRank = handRankings.Max(h => h.Ranking.Rank);
+            
+            // Get all players with the highest rank
+            winners.AddRange(handRankings.Where(h => h.Ranking.Rank == highestRank));
+            
+            return winners;
+        }
+        
+        /// <summary>
+        /// Resets the HasActed flags for all players (use ResetHasActedFlags with context parameter)
+        /// </summary>
+        private void ResetHasActedFlagsWithoutContext()
+        {
+            foreach (var player in _players)
+            {
+                player.HasActed = false;
+            }
         }
         
         /// <summary>
@@ -237,23 +489,22 @@ namespace PokerGame.Core.Game
             }
             
             // In microservice mode, we might already have cards dealt externally
-            // So only use the internal deck if needed
-            bool needToUseInternalDeck = _players.All(p => p.HoleCards.Count == 0);
+            // So only use the card deck service if needed
+            bool needToUseCardDeckService = _players.All(p => p.HoleCards.Count == 0);
             
-            if (needToUseInternalDeck)
+            if (needToUseCardDeckService && CardDeckService != null)
             {
-                // Shuffle the deck
-                _deck.Reset();
-                _deck.Shuffle();
+                // Reset and shuffle the deck via the service
+                CardDeckService.ResetDeck();
+                CardDeckService.ShuffleDeck();
                 
                 // Deal hole cards to each player
                 for (int i = 0; i < 2; i++) // Two cards per player
                 {
                     foreach (var player in _players)
                     {
-                        Card? card = _deck.DealCard();
-                        if (card != null)
-                            player.HoleCards.Add(card);
+                        Card card = CardDeckService.DrawCard();
+                        player.HoleCards.Add(card);
                     }
                 }
             }
@@ -600,15 +851,17 @@ namespace PokerGame.Core.Game
         /// <param name="processBetting">If true, will process the betting round; otherwise, just deal cards</param>
         private void DealFlop(bool processBetting = true)
         {
-            // Burn a card
-            _deck.DealCard();
-            
-            // Deal the flop (3 cards)
-            for (int i = 0; i < 3; i++)
+            if (CardDeckService != null)
             {
-                Card? card = _deck.DealCard();
-                if (card != null)
+                // Burn a card
+                CardDeckService.DrawCard();
+                
+                // Deal the flop (3 cards)
+                for (int i = 0; i < 3; i++)
+                {
+                    Card card = CardDeckService.DrawCard();
                     _communityCards.Add(card);
+                }
             }
             
             _gameState = GameState.Flop;
@@ -635,13 +888,15 @@ namespace PokerGame.Core.Game
         /// <param name="processBetting">If true, will process the betting round; otherwise, just deal cards</param>
         private void DealTurn(bool processBetting = true)
         {
-            // Burn a card
-            _deck.DealCard();
-            
-            // Deal the turn (1 card)
-            Card? card = _deck.DealCard();
-            if (card != null)
+            if (CardDeckService != null)
+            {
+                // Burn a card
+                CardDeckService.DrawCard();
+                
+                // Deal the turn (1 card)
+                Card card = CardDeckService.DrawCard();
                 _communityCards.Add(card);
+            }
             
             _gameState = GameState.Turn;
             _ui.ShowMessage("Turn dealt.");
@@ -667,13 +922,15 @@ namespace PokerGame.Core.Game
         /// <param name="processBetting">If true, will process the betting round; otherwise, just deal cards</param>
         private void DealRiver(bool processBetting = true)
         {
-            // Burn a card
-            _deck.DealCard();
-            
-            // Deal the river (1 card)
-            Card? card = _deck.DealCard();
-            if (card != null)
+            if (CardDeckService != null)
+            {
+                // Burn a card
+                CardDeckService.DrawCard();
+                
+                // Deal the river (1 card)
+                Card card = CardDeckService.DrawCard();
                 _communityCards.Add(card);
+            }
             
             _gameState = GameState.River;
             _ui.ShowMessage("River dealt.");
