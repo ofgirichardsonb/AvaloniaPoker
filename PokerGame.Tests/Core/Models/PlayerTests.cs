@@ -1,14 +1,15 @@
 using System;
 using PokerGame.Core.Models;
-using Xunit;
+using NUnit.Framework;
 using FluentAssertions;
 using System.Collections.Generic;
 
 namespace PokerGame.Tests.New.Core.Models
 {
+    [TestFixture]
     public class PlayerTests
     {
-        [Fact]
+        [Test]
         public void Constructor_WithValidParameters_ShouldInitializeCorrectly()
         {
             // Arrange
@@ -29,7 +30,7 @@ namespace PokerGame.Tests.New.Core.Models
             player.CurrentBet.Should().Be(0);
         }
         
-        [Fact]
+        [Test]
         public void Constructor_WithChipCount_ShouldSetSpecifiedChips()
         {
             // Arrange
@@ -44,7 +45,7 @@ namespace PokerGame.Tests.New.Core.Models
             player.ChipCount.Should().Be(chipCount);
         }
         
-        [Fact]
+        [Test]
         public void PlaceBet_WithValidAmount_ShouldDeductChipsAndUpdateCurrentBet()
         {
             // Arrange
@@ -61,7 +62,7 @@ namespace PokerGame.Tests.New.Core.Models
             player.CurrentBet.Should().Be(betAmount);
         }
         
-        [Fact]
+        [Test]
         public void PlaceBet_WithInsufficientChips_ShouldReturnFalse()
         {
             // Arrange
@@ -78,7 +79,7 @@ namespace PokerGame.Tests.New.Core.Models
             player.CurrentBet.Should().Be(0); // Current bet should not change
         }
         
-        [Fact]
+        [Test]
         public void PlaceBet_WithAllChips_ShouldSetIsAllInTrue()
         {
             // Arrange
@@ -95,7 +96,7 @@ namespace PokerGame.Tests.New.Core.Models
             player.IsAllIn.Should().BeTrue();
         }
         
-        [Fact]
+        [Test]
         public void Fold_ShouldSetHasFoldedTrue()
         {
             // Arrange
@@ -108,7 +109,7 @@ namespace PokerGame.Tests.New.Core.Models
             player.HasFolded.Should().BeTrue();
         }
         
-        [Fact]
+        [Test]
         public void WinPot_ShouldAddChipsToPlayerTotal()
         {
             // Arrange
@@ -123,7 +124,7 @@ namespace PokerGame.Tests.New.Core.Models
             player.ChipCount.Should().Be(initialChips + potAmount);
         }
         
-        [Fact]
+        [Test]
         public void ResetForNewHand_ShouldResetPlayerStateForNewHand()
         {
             // Arrange
@@ -145,7 +146,7 @@ namespace PokerGame.Tests.New.Core.Models
             player.HoleCards.Cards.Should().BeEmpty();
         }
         
-        [Fact]
+        [Test]
         public void CheckCall_WithEnoughChips_ShouldMatchTargetBet()
         {
             // Arrange
@@ -165,7 +166,7 @@ namespace PokerGame.Tests.New.Core.Models
             player.ChipCount.Should().Be(initialChips - expectedBetAmount);
         }
         
-        [Fact]
+        [Test]
         public void CheckCall_WithInsufficientChips_ShouldGoAllIn()
         {
             // Arrange
@@ -184,7 +185,7 @@ namespace PokerGame.Tests.New.Core.Models
             player.IsAllIn.Should().BeTrue();
         }
         
-        [Fact]
+        [Test]
         public void Raise_WithEnoughChips_ShouldIncreaseTargetBetByRaiseAmount()
         {
             // Arrange
@@ -206,7 +207,7 @@ namespace PokerGame.Tests.New.Core.Models
             player.ChipCount.Should().Be(initialChips - expectedAdditionalBet);
         }
         
-        [Fact]
+        [Test]
         public void Raise_WithInsufficientChips_ShouldReturnFalse()
         {
             // Arrange
@@ -227,7 +228,7 @@ namespace PokerGame.Tests.New.Core.Models
             player.ChipCount.Should().Be(initialChips); // Chips should not change
         }
         
-        [Fact]
+        [Test]
         public void DealHoleCard_ShouldAddCardToPlayerHoleCards()
         {
             // Arrange
@@ -242,7 +243,7 @@ namespace PokerGame.Tests.New.Core.Models
             player.HoleCards.Cards.Should().Contain(card);
         }
         
-        [Fact]
+        [Test]
         public void ToString_ShouldReturnFormattedPlayerInformation()
         {
             // Arrange

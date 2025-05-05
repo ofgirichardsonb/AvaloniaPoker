@@ -13,6 +13,75 @@ namespace PokerGame.Core.AI
     public class AIPokerPlayer
     {
         private readonly Random _random = new Random();
+        private Player _player;
+        
+        public int BigBlind { get; set; } = 10;
+        public int MaxBet { get; set; } = 100;
+        
+        public AIPokerPlayer(Player player)
+        {
+            _player = player;
+        }
+        
+        /// <summary>
+        /// Makes a decision for the AI player based on current game state
+        /// </summary>
+        /// <param name="communityCards">The community cards currently on the table</param>
+        /// <param name="currentBet">The current bet that needs to be called</param>
+        /// <param name="canCheck">Whether the player can check</param>
+        /// <returns>A PlayerAction with the AI's decision</returns>
+        public PlayerAction MakeDecision(List<Card> communityCards, int currentBet, bool canCheck)
+        {
+            // Evaluate hand strength to make decision
+            double handStrength = EvaluateHandStrength(_player.HoleCards, communityCards, GameNS.GameState.Unknown);
+            
+            // Cannot bet more than the player has
+            if (currentBet > _player.Chips)
+            {
+                return new PlayerAction(ActionType.Fold, 0, _player.Id);
+            }
+            
+            // If no current bet and can check
+            if (currentBet == 0 && canCheck)
+            {
+                // With strong hand, 50% chance to bet
+                if (handStrength > 0.6 && _random.NextDouble() > 0.5)
+                {
+                    int betAmount = CalculateRaiseAmount(BigBlind, MaxBet, _player.HoleCards, communityCards, GameNS.GameState.Unknown);
+                    return new PlayerAction(ActionType.Bet, betAmount, _player.Id);
+                }
+                return new PlayerAction(ActionType.Check, 0, _player.Id);
+            }
+            
+            // If no current bet but cannot check, must bet
+            if (currentBet == 0 && !canCheck)
+            {
+                int betAmount = CalculateRaiseAmount(BigBlind, MaxBet, _player.HoleCards, communityCards, GameNS.GameState.Unknown);
+                return new PlayerAction(ActionType.Bet, betAmount, _player.Id);
+            }
+            
+            // If very strong hand
+            if (handStrength > 0.7)
+            {
+                int raiseAmount = CalculateRaiseAmount(currentBet + BigBlind, MaxBet, _player.HoleCards, communityCards, GameNS.GameState.Unknown);
+                return new PlayerAction(ActionType.Raise, raiseAmount, _player.Id);
+            }
+            
+            // If medium strength hand
+            if (handStrength > 0.4)
+            {
+                return new PlayerAction(ActionType.Call, currentBet, _player.Id);
+            }
+            
+            // With weak hand and high bet, fold
+            if (currentBet > BigBlind * 3 && handStrength < 0.4)
+            {
+                return new PlayerAction(ActionType.Fold, 0, _player.Id);
+            }
+            
+            // With weak hand and low bet, call
+            return new PlayerAction(ActionType.Call, currentBet, _player.Id);
+        }
         
         /// <summary>
         /// Determines the next action for the AI player

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Xunit;
+using NUnit.Framework;
 using FluentAssertions;
 
 // Using alias to avoid ambiguity with System.Threading.ExecutionContext
@@ -10,9 +10,10 @@ using MSAEC = MSA.Foundation.ServiceManagement.ExecutionContext;
 
 namespace MSA.Foundation.Tests.ServiceManagement
 {
+    [TestFixture]
     public class ExecutionContextTests
     {
-        [Fact]
+        [Test]
         public void Constructor_ShouldInitializeWithDefaults()
         {
             // Arrange & Act
@@ -25,7 +26,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             context.CancellationToken.Should().NotBe(CancellationToken.None, "CancellationToken should be linked to CancellationTokenSource");
         }
         
-        [Fact]
+        [Test]
         public void Constructor_WithServiceId_ShouldUseProvidedId()
         {
             // Arrange
@@ -38,7 +39,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             context.ServiceId.Should().Be(serviceId, "ServiceId should match the provided value");
         }
         
-        [Fact]
+        [Test]
         public void Constructor_WithServiceIdAndToken_ShouldUseProvidedValues()
         {
             // Arrange
@@ -53,7 +54,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             context.CancellationToken.Should().Be(cts.Token, "CancellationToken should match the provided token");
         }
         
-        [Fact]
+        [Test]
         public void Cancel_ShouldCancelTheToken()
         {
             // Arrange
@@ -66,7 +67,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             context.CancellationToken.IsCancellationRequested.Should().BeTrue("Token should be canceled after Cancel is called");
         }
         
-        [Fact]
+        [Test]
         public async Task WithTimeout_ShouldCancelAfterSpecifiedTimeout()
         {
             // Arrange
@@ -83,7 +84,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             contextWithTimeout.CancellationToken.IsCancellationRequested.Should().BeTrue("Token should be canceled after timeout period");
         }
         
-        [Fact]
+        [Test]
         public void GetMetadata_ShouldReturnEmptyDictionary_WhenNoMetadataExists()
         {
             // Arrange
@@ -97,7 +98,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             metadata.Should().BeEmpty("Metadata dictionary should be empty initially");
         }
         
-        [Fact]
+        [Test]
         public void SetMetadata_ShouldStoreAndRetrieveValues()
         {
             // Arrange
@@ -113,7 +114,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             retrievedValue.Should().Be(value, "Retrieved metadata value should match the stored value");
         }
         
-        [Fact]
+        [Test]
         public void SetMetadata_WithMultipleValues_ShouldStoreAllValues()
         {
             // Arrange
@@ -139,7 +140,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             context.GetMetadata<bool>("key3").Should().BeTrue();
         }
         
-        [Fact]
+        [Test]
         public void GetMetadata_WithNonExistentKey_ShouldReturnDefaultValue()
         {
             // Arrange
@@ -152,7 +153,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             result.Should().Be(default, "Non-existent key should return default value");
         }
         
-        [Fact]
+        [Test]
         public void GetMetadata_WithIncorrectType_ShouldThrowException()
         {
             // Arrange
@@ -166,7 +167,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             action.Should().Throw<InvalidCastException>("Attempting to retrieve metadata with incorrect type should throw");
         }
         
-        [Fact]
+        [Test]
         public void RemoveMetadata_ShouldRemoveExistingKey()
         {
             // Arrange
@@ -183,7 +184,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             metadata.Should().NotContainKey(key, "Key should be removed from metadata");
         }
         
-        [Fact]
+        [Test]
         public void ClearMetadata_ShouldRemoveAllMetadata()
         {
             // Arrange
@@ -199,7 +200,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             metadata.Should().BeEmpty("All metadata should be cleared");
         }
         
-        [Fact]
+        [Test]
         public void Constructor_WithThread_ShouldInitializeWithProvidedThread()
         {
             // Arrange
@@ -214,7 +215,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             context.IsRunning.Should().BeTrue("IsRunning should be initialized as true");
         }
         
-        [Fact]
+        [Test]
         public void IsRunning_ShouldReturnCorrectState()
         {
             // Arrange
@@ -230,7 +231,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             context.IsRunning.Should().BeFalse("IsRunning should be false after Stop is called");
         }
         
-        [Fact]
+        [Test]
         public void Stop_ShouldCancelTokenAndSetIsRunningToFalse()
         {
             // Arrange
@@ -244,7 +245,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             context.CancellationToken.IsCancellationRequested.Should().BeTrue("Token should be canceled after Stop is called");
         }
         
-        [Fact]
+        [Test]
         public void Stop_WhenAlreadyStopped_ShouldDoNothing()
         {
             // Arrange
@@ -258,7 +259,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             action.Should().NotThrow("Stopping an already stopped context should not throw");
         }
         
-        [Fact]
+        [Test]
         public async Task RunAsync_WithAction_ShouldExecuteAction()
         {
             // Arrange
@@ -272,7 +273,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             actionExecuted.Should().BeTrue("The action should be executed");
         }
         
-        [Fact]
+        [Test]
         public async Task RunAsync_WithFunc_ShouldReturnResult()
         {
             // Arrange
@@ -286,7 +287,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             result.Should().Be(expectedResult, "The function result should be returned");
         }
         
-        [Fact]
+        [Test]
         public async Task RunAsync_WhenStopped_ShouldThrowInvalidOperationException()
         {
             // Arrange
@@ -294,11 +295,12 @@ namespace MSA.Foundation.Tests.ServiceManagement
             context.Stop();
             
             // Act & Assert
-            await Assert.ThrowsAsync<InvalidOperationException>(() => 
-                context.RunAsync(() => { }));
+            var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => 
+                await context.RunAsync(() => { }));
+            Assert.That(ex, Is.Not.Null);
         }
         
-        [Fact]
+        [Test]
         public async Task RunAsync_WithFunc_WhenStopped_ShouldThrowInvalidOperationException()
         {
             // Arrange
@@ -306,11 +308,12 @@ namespace MSA.Foundation.Tests.ServiceManagement
             context.Stop();
             
             // Act & Assert
-            await Assert.ThrowsAsync<InvalidOperationException>(() => 
-                context.RunAsync(() => 42));
+            var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => 
+                await context.RunAsync(() => 42));
+            Assert.That(ex, Is.Not.Null);
         }
         
-        [Fact]
+        [Test]
         public void Dispose_ShouldStopAndDispose()
         {
             // Arrange

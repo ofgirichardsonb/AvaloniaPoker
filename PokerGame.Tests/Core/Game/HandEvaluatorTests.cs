@@ -3,14 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using PokerGame.Core.Game;
 using PokerGame.Core.Models;
-using Xunit;
+using NUnit.Framework;
 using FluentAssertions;
 
 namespace PokerGame.Tests.New.Core.Game
 {
+    [TestFixture]
     public class HandEvaluatorTests
     {
-        [Fact]
+        [Test]
         public void EvaluateHand_WithRoyalFlush_ShouldReturnRoyalFlush()
         {
             // Arrange
@@ -32,7 +33,7 @@ namespace PokerGame.Tests.New.Core.Game
             result.TieBreakers[0].Should().Be(14);
         }
         
-        [Fact]
+        [Test]
         public void EvaluateHand_WithStraightFlush_ShouldReturnStraightFlush()
         {
             // Arrange
@@ -54,7 +55,7 @@ namespace PokerGame.Tests.New.Core.Game
             result.TieBreakers[0].Should().Be(10);
         }
         
-        [Fact]
+        [Test]
         public void EvaluateHand_WithFourOfAKind_ShouldReturnFourOfAKind()
         {
             // Arrange
@@ -76,7 +77,7 @@ namespace PokerGame.Tests.New.Core.Game
             result.TieBreakers[0].Should().Be(8);
         }
         
-        [Fact]
+        [Test]
         public void EvaluateHand_WithFullHouse_ShouldReturnFullHouse()
         {
             // Arrange
@@ -100,7 +101,7 @@ namespace PokerGame.Tests.New.Core.Game
             result.TieBreakers[1].Should().Be(2);
         }
         
-        [Fact]
+        [Test]
         public void EvaluateHand_WithFlush_ShouldReturnFlush()
         {
             // Arrange
@@ -122,7 +123,7 @@ namespace PokerGame.Tests.New.Core.Game
             result.TieBreakers[0].Should().Be(12);
         }
         
-        [Fact]
+        [Test]
         public void EvaluateHand_WithStraight_ShouldReturnStraight()
         {
             // Arrange
@@ -144,7 +145,7 @@ namespace PokerGame.Tests.New.Core.Game
             result.TieBreakers[0].Should().Be(8);
         }
         
-        [Fact]
+        [Test]
         public void EvaluateHand_WithThreeOfAKind_ShouldReturnThreeOfAKind()
         {
             // Arrange
@@ -166,7 +167,7 @@ namespace PokerGame.Tests.New.Core.Game
             result.TieBreakers[0].Should().Be(11);
         }
         
-        [Fact]
+        [Test]
         public void EvaluateHand_WithTwoPair_ShouldReturnTwoPair()
         {
             // Arrange
@@ -190,7 +191,7 @@ namespace PokerGame.Tests.New.Core.Game
             result.TieBreakers[1].Should().Be(4);
         }
         
-        [Fact]
+        [Test]
         public void EvaluateHand_WithOnePair_ShouldReturnOnePair()
         {
             // Arrange
@@ -212,7 +213,7 @@ namespace PokerGame.Tests.New.Core.Game
             result.TieBreakers[0].Should().Be(10);
         }
         
-        [Fact]
+        [Test]
         public void EvaluateHand_WithHighCard_ShouldReturnHighCard()
         {
             // Arrange
@@ -234,7 +235,7 @@ namespace PokerGame.Tests.New.Core.Game
             result.TieBreakers[0].Should().Be(14);
         }
         
-        [Fact]
+        [Test]
         public void EvaluateHand_WithLessThanFiveCards_ShouldThrowException()
         {
             // Arrange
@@ -252,7 +253,7 @@ namespace PokerGame.Tests.New.Core.Game
                 .WithMessage("*five cards*", "Hand evaluation requires exactly five cards");
         }
         
-        [Fact]
+        [Test]
         public void CompareHands_WithDifferentHandRanks_ShouldReturnHigherRank()
         {
             // Arrange
@@ -285,7 +286,7 @@ namespace PokerGame.Tests.New.Core.Game
             comparison.Should().BeGreaterThan(0, "Straight flush should rank higher than four of a kind");
         }
         
-        [Fact]
+        [Test]
         public void CompareHands_WithSameHandRank_ShouldCompareHighCards()
         {
             // Arrange
@@ -318,7 +319,7 @@ namespace PokerGame.Tests.New.Core.Game
             comparison.Should().BeGreaterThan(0, "Pair of kings should rank higher than pair of queens");
         }
         
-        [Fact]
+        [Test]
         public void FindBestHand_WithSevenCards_ShouldFindBestFiveCardHand()
         {
             // Arrange - Create a seven card collection (2 hole cards + 5 community cards)

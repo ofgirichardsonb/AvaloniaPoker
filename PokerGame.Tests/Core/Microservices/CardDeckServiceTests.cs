@@ -7,15 +7,16 @@ using MSA.Foundation.Messaging;
 using MSA.Foundation.ServiceManagement;
 using PokerGame.Core.Models;
 using PokerGame.Core.Microservices;
-using Xunit;
+using NUnit.Framework;
 using FluentAssertions;
 using Moq;
 
 namespace PokerGame.Tests.New.Core.Microservices
 {
+    [TestFixture]
     public class CardDeckServiceTests
     {
-        [Fact]
+        [Test]
         public void Constructor_WithValidParameters_ShouldInitializeCorrectly()
         {
             // Arrange
@@ -28,7 +29,7 @@ namespace PokerGame.Tests.New.Core.Microservices
             service.Should().NotBeNull();
         }
         
-        [Fact]
+        [Test]
         public void Deck_InitializeAndShuffle_ShouldCreateDeckWith52Cards()
         {
             // Arrange
@@ -54,7 +55,7 @@ namespace PokerGame.Tests.New.Core.Microservices
             }
         }
         
-        [Fact]
+        [Test]
         public void Deck_Shuffle_ShouldReorderDeck()
         {
             // Arrange
@@ -90,7 +91,7 @@ namespace PokerGame.Tests.New.Core.Microservices
             atLeastOneCardChangedPosition.Should().BeTrue("At least one card should change position after shuffling");
         }
         
-        [Fact]
+        [Test]
         public void Deck_DealCard_ShouldRemoveAndReturnTopCard()
         {
             // Arrange
@@ -110,7 +111,7 @@ namespace PokerGame.Tests.New.Core.Microservices
             deck.GetAllCards().Should().NotContain(dealtCard, "Dealt card should no longer be in the deck");
         }
         
-        [Fact]
+        [Test]
         public void Deck_DealCards_ShouldRemoveAndReturnSpecifiedNumberOfCards()
         {
             // Arrange
@@ -143,7 +144,7 @@ namespace PokerGame.Tests.New.Core.Microservices
             }
         }
         
-        [Fact]
+        [Test]
         public void Deck_Reset_ShouldReinitializeAndShuffleDeck()
         {
             // Arrange

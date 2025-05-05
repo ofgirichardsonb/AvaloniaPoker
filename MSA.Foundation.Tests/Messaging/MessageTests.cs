@@ -1,14 +1,15 @@
 using System;
 using System.Collections.Generic;
 using MSA.Foundation.Messaging;
-using Xunit;
+using NUnit.Framework;
 using FluentAssertions;
 
 namespace MSA.Foundation.Tests.Messaging
 {
+    [TestFixture]
     public class MessageTests
     {
-        [Fact]
+        [Test]
         public void DefaultConstructor_ShouldInitializeWithDefaults()
         {
             // Arrange & Act
@@ -28,7 +29,7 @@ namespace MSA.Foundation.Tests.Messaging
             message.AcknowledgmentId.Should().BeNull("AcknowledgmentId should be null by default");
         }
         
-        [Fact]
+        [Test]
         public void ParameterizedConstructor_ShouldInitializeCorrectly()
         {
             // Arrange
@@ -47,7 +48,7 @@ namespace MSA.Foundation.Tests.Messaging
             message.Timestamp.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(1), "Timestamp should be initialized to current UTC time");
         }
         
-        [Fact]
+        [Test]
         public void CreateAcknowledgment_ShouldCreateCorrectMessage()
         {
             // Arrange
@@ -71,7 +72,7 @@ namespace MSA.Foundation.Tests.Messaging
             ackMessage.Headers.Should().BeEquivalentTo(originalMessage.Headers, "Headers should be copied from the original message");
         }
         
-        [Fact]
+        [Test]
         public void CreateResponse_ShouldCreateCorrectMessage()
         {
             // Arrange
@@ -99,7 +100,7 @@ namespace MSA.Foundation.Tests.Messaging
             responseMessage.Headers["key"].Should().Be("value", "Header values should be copied from the original message");
         }
         
-        [Fact]
+        [Test]
         public void ToJson_ShouldSerializeCorrectly()
         {
             // Arrange
@@ -123,7 +124,7 @@ namespace MSA.Foundation.Tests.Messaging
             json.Should().Contain("\"key\":\"value\"", "JSON should contain headers");
         }
         
-        [Fact]
+        [Test]
         public void FromJson_WithValidJson_ShouldDeserializeCorrectly()
         {
             // Arrange
@@ -149,7 +150,7 @@ namespace MSA.Foundation.Tests.Messaging
             deserializedMessage.Headers.Should().BeEquivalentTo(originalMessage.Headers, "Headers should match original");
         }
         
-        [Fact]
+        [Test]
         public void FromJson_WithInvalidJson_ShouldReturnNull()
         {
             // Arrange
@@ -162,7 +163,7 @@ namespace MSA.Foundation.Tests.Messaging
             deserializedMessage.Should().BeNull("Deserialized message should be null for invalid JSON");
         }
         
-        [Fact]
+        [Test]
         public void SetPayload_WithValidObject_ShouldSerializeCorrectly()
         {
             // Arrange
@@ -184,7 +185,7 @@ namespace MSA.Foundation.Tests.Messaging
             message.Payload.Should().Contain("\"isActive\":true", "Payload should contain isActive");
         }
         
-        [Fact]
+        [Test]
         public void GetPayload_WithValidPayload_ShouldDeserializeCorrectly()
         {
             // Arrange
@@ -207,7 +208,7 @@ namespace MSA.Foundation.Tests.Messaging
             deserializedPayload.IsActive.Should().Be(originalPayload.IsActive, "IsActive should match original");
         }
         
-        [Fact]
+        [Test]
         public void GetPayload_WithInvalidPayload_ShouldReturnDefault()
         {
             // Arrange
@@ -223,7 +224,7 @@ namespace MSA.Foundation.Tests.Messaging
             deserializedPayload.Should().BeNull("Deserialized payload should be null for invalid JSON");
         }
         
-        [Fact]
+        [Test]
         public void GetPayload_WithNullPayload_ShouldReturnDefault()
         {
             // Arrange
@@ -239,7 +240,7 @@ namespace MSA.Foundation.Tests.Messaging
             deserializedPayload.Should().BeNull("Deserialized payload should be null for null payload");
         }
         
-        [Fact]
+        [Test]
         public void GetPayload_WithEmptyPayload_ShouldReturnDefault()
         {
             // Arrange

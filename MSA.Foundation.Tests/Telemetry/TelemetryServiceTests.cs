@@ -2,15 +2,16 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using MSA.Foundation.Telemetry;
-using Xunit;
+using NUnit.Framework;
 using FluentAssertions;
 using Moq;
 
 namespace MSA.Foundation.Tests.Telemetry
 {
+    [TestFixture]
     public class TelemetryServiceTests
     {
-        [Fact]
+        [Test]
         public void Initialize_WithoutInstrumentationKey_ShouldReturnFalse()
         {
             // Arrange
@@ -24,7 +25,7 @@ namespace MSA.Foundation.Tests.Telemetry
             result.Should().BeFalse("Initialize should return false when no instrumentation key is provided");
         }
         
-        [Fact]
+        [Test]
         public void Initialize_WithInstrumentationKey_ShouldReturnTrue()
         {
             // Arrange
@@ -38,7 +39,7 @@ namespace MSA.Foundation.Tests.Telemetry
             result.Should().BeTrue("Initialize should return true when an instrumentation key is provided");
         }
         
-        [Fact]
+        [Test]
         public void TrackEvent_WhenTelemetryIsEnabled_ShouldNotThrowException()
         {
             // Arrange
@@ -52,7 +53,7 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("TrackEvent should not throw when telemetry is enabled");
         }
         
-        [Fact]
+        [Test]
         public void TrackEvent_WithProperties_ShouldNotThrowException()
         {
             // Arrange
@@ -67,7 +68,7 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("TrackEvent with properties should not throw when telemetry is enabled");
         }
         
-        [Fact]
+        [Test]
         public void TrackException_WhenTelemetryIsEnabled_ShouldNotThrowException()
         {
             // Arrange
@@ -82,7 +83,7 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("TrackException should not throw when telemetry is enabled");
         }
         
-        [Fact]
+        [Test]
         public void TrackException_WithProperties_ShouldNotThrowException()
         {
             // Arrange
@@ -98,7 +99,7 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("TrackException with properties should not throw when telemetry is enabled");
         }
         
-        [Fact]
+        [Test]
         public void TrackTrace_WhenTelemetryIsEnabled_ShouldNotThrowException()
         {
             // Arrange
@@ -112,7 +113,7 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("TrackTrace should not throw when telemetry is enabled");
         }
         
-        [Fact]
+        [Test]
         public void TrackTrace_WithProperties_ShouldNotThrowException()
         {
             // Arrange
@@ -127,7 +128,7 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("TrackTrace with properties should not throw when telemetry is enabled");
         }
         
-        [Fact]
+        [Test]
         public void TrackRequest_WhenTelemetryIsEnabled_ShouldNotThrowException()
         {
             // Arrange
@@ -143,7 +144,7 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("TrackRequest should not throw when telemetry is enabled");
         }
         
-        [Fact]
+        [Test]
         public void TrackDependency_WhenTelemetryIsEnabled_ShouldNotThrowException()
         {
             // Arrange
@@ -159,7 +160,7 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("TrackDependency should not throw when telemetry is enabled");
         }
         
-        [Fact]
+        [Test]
         public void Flush_ShouldNotThrowException()
         {
             // Arrange
@@ -173,7 +174,7 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("Flush should not throw exception");
         }
         
-        [Fact]
+        [Test]
         public async void FlushAsync_ShouldNotThrowException()
         {
             // Arrange
@@ -187,7 +188,7 @@ namespace MSA.Foundation.Tests.Telemetry
             await action.Should().NotThrowAsync("FlushAsync should not throw exception");
         }
         
-        [Fact]
+        [Test]
         public void TrackMetric_WhenTelemetryIsEnabled_ShouldNotThrowException()
         {
             // Arrange
@@ -201,7 +202,7 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("TrackMetric should not throw when telemetry is enabled");
         }
         
-        [Fact]
+        [Test]
         public void TrackMetric_WithProperties_ShouldNotThrowException()
         {
             // Arrange
@@ -216,7 +217,7 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("TrackMetric with properties should not throw when telemetry is enabled");
         }
         
-        [Fact]
+        [Test]
         public void Constructor_WithConfiguration_ShouldInitializeCorrectly()
         {
             // Arrange
@@ -232,7 +233,7 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("Constructor with configuration should not throw");
         }
         
-        [Fact]
+        [Test]
         public void Constructor_WithEmptyConfiguration_ShouldNotThrow()
         {
             // Arrange
@@ -247,7 +248,7 @@ namespace MSA.Foundation.Tests.Telemetry
             action.Should().NotThrow("Constructor with empty configuration should not throw");
         }
         
-        [Fact]
+        [Test]
         public void Dispose_ShouldNotThrowException()
         {
             // Arrange

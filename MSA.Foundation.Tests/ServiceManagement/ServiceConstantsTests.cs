@@ -1,27 +1,28 @@
 using System;
 using MSA.Foundation.ServiceManagement;
-using Xunit;
+using NUnit.Framework;
 using FluentAssertions;
 
 namespace MSA.Foundation.Tests.ServiceManagement
 {
+    [TestFixture]
     public class ServiceConstantsTests
     {
-        [Fact]
+        [Test]
         public void BasePublisherPort_ShouldHaveExpectedValue()
         {
             // Assert
             ServiceConstants.BasePublisherPort.Should().Be(5555, "Base publisher port should be 5555");
         }
         
-        [Fact]
+        [Test]
         public void BaseSubscriberPort_ShouldHaveExpectedValue()
         {
             // Assert
             ServiceConstants.BaseSubscriberPort.Should().Be(5556, "Base subscriber port should be 5556");
         }
         
-        [Fact]
+        [Test]
         public void GetPublisherPort_WithZeroOffset_ShouldReturnBasePort()
         {
             // Act
@@ -31,7 +32,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             port.Should().Be(ServiceConstants.BasePublisherPort, "Publisher port with zero offset should equal base port");
         }
         
-        [Fact]
+        [Test]
         public void GetSubscriberPort_WithZeroOffset_ShouldReturnBasePort()
         {
             // Act
@@ -41,7 +42,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             port.Should().Be(ServiceConstants.BaseSubscriberPort, "Subscriber port with zero offset should equal base port");
         }
         
-        [Fact]
+        [Test]
         public void GetPublisherPort_WithPositiveOffset_ShouldAddOffsetToBasePort()
         {
             // Arrange
@@ -54,7 +55,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             port.Should().Be(ServiceConstants.BasePublisherPort + offset, "Publisher port should add offset to base port");
         }
         
-        [Fact]
+        [Test]
         public void GetSubscriberPort_WithPositiveOffset_ShouldAddOffsetToBasePort()
         {
             // Arrange
@@ -67,7 +68,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             port.Should().Be(ServiceConstants.BaseSubscriberPort + offset, "Subscriber port should add offset to base port");
         }
         
-        [Fact]
+        [Test]
         public void GetPublisherPort_WithNegativeOffset_ShouldSubtractOffsetFromBasePort()
         {
             // Arrange
@@ -80,7 +81,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             port.Should().Be(ServiceConstants.BasePublisherPort + offset, "Publisher port should subtract offset from base port");
         }
         
-        [Fact]
+        [Test]
         public void GetSubscriberPort_WithNegativeOffset_ShouldSubtractOffsetFromBasePort()
         {
             // Arrange
@@ -93,7 +94,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             port.Should().Be(ServiceConstants.BaseSubscriberPort + offset, "Subscriber port should subtract offset from base port");
         }
         
-        [Fact]
+        [Test]
         public void NormalizePort_WithPortInRange_ShouldReturnSamePort()
         {
             // Arrange
@@ -106,7 +107,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             normalizedPort.Should().Be(port, "Normalize should return the same port if it's in valid range");
         }
         
-        [Fact]
+        [Test]
         public void NormalizePort_WithPortBelowRange_ShouldAdjustToMinimumPort()
         {
             // Arrange
@@ -119,7 +120,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             normalizedPort.Should().Be(1024, "Normalize should adjust to minimum valid port");
         }
         
-        [Fact]
+        [Test]
         public void NormalizePort_WithPortAboveRange_ShouldAdjustToMaximumPort()
         {
             // Arrange
@@ -132,7 +133,7 @@ namespace MSA.Foundation.Tests.ServiceManagement
             normalizedPort.Should().Be(65535, "Normalize should adjust to maximum valid port");
         }
         
-        [Fact]
+        [Test]
         public void ServiceTypeIds_ShouldAllBeUnique()
         {
             // Arrange & Act

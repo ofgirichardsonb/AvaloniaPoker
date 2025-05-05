@@ -2,19 +2,20 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MSA.Foundation.Messaging;
-using Xunit;
+using NUnit.Framework;
 using FluentAssertions;
 using System.Reflection;
 using Moq;
 
 namespace MSA.Foundation.Tests.Messaging
 {
+    [TestFixture]
     public class SocketCommunicationAdapterTests
     {
         private readonly int _testPort = 5555;
         private readonly string _testHost = "localhost";
         
-        [Fact]
+        [Test]
         public void Constructor_WithValidParameters_ShouldInitializeCorrectly()
         {
             // Arrange & Act
@@ -25,7 +26,7 @@ namespace MSA.Foundation.Tests.Messaging
             adapter.Should().BeAssignableTo<ISocketCommunicationAdapter>();
         }
         
-        [Fact]
+        [Test]
         public void Dispose_ShouldCleanupResources()
         {
             // Arrange
@@ -38,7 +39,7 @@ namespace MSA.Foundation.Tests.Messaging
             disposeAction.Should().NotThrow();
         }
         
-        [Fact]
+        [Test]
         public void Start_ShouldInitializeSocketsCorrectly()
         {
             // Arrange
@@ -52,7 +53,7 @@ namespace MSA.Foundation.Tests.Messaging
             adapter.Stop();
         }
         
-        [Fact]
+        [Test]
         public void SendMessage_ShouldReturnFalse_WhenNotStarted()
         {
             // Arrange
@@ -65,7 +66,7 @@ namespace MSA.Foundation.Tests.Messaging
             result.Should().BeFalse("SendMessage should return false when not started");
         }
         
-        [Fact]
+        [Test]
         public void SendMessage_AfterStart_ShouldAttemptToSendMessage()
         {
             // This test is modified to run reliably in all environments
@@ -83,7 +84,7 @@ namespace MSA.Foundation.Tests.Messaging
             adapter.Stop();
         }
         
-        [Fact]
+        [Test]
         public void Subscribe_ShouldReturnSubscriptionId()
         {
             // Arrange
@@ -96,7 +97,7 @@ namespace MSA.Foundation.Tests.Messaging
             subscriptionId.Should().NotBeNullOrEmpty("Subscribe should return a non-empty subscription ID");
         }
         
-        [Fact]
+        [Test]
         public void SubscribeAll_ShouldReturnSubscriptionId()
         {
             // Arrange
@@ -109,7 +110,7 @@ namespace MSA.Foundation.Tests.Messaging
             subscriptionId.Should().NotBeNullOrEmpty("SubscribeAll should return a non-empty subscription ID");
         }
         
-        [Fact]
+        [Test]
         public void Unsubscribe_WithValidId_ShouldReturnTrue()
         {
             // Arrange
@@ -123,7 +124,7 @@ namespace MSA.Foundation.Tests.Messaging
             result.Should().BeTrue("Unsubscribe should return true for a valid subscription ID");
         }
         
-        [Fact]
+        [Test]
         public void Unsubscribe_WithInvalidId_ShouldReturnFalse()
         {
             // Arrange
@@ -136,7 +137,7 @@ namespace MSA.Foundation.Tests.Messaging
             result.Should().BeFalse("Unsubscribe should return false for an invalid subscription ID");
         }
         
-        [Fact]
+        [Test]
         public void Stop_ShouldClearAllResources()
         {
             // Arrange
@@ -151,7 +152,7 @@ namespace MSA.Foundation.Tests.Messaging
             sendResult.Should().BeFalse("After stopping, SendMessage should return false");
         }
         
-        [Fact]
+        [Test]
         public void ReceiveMessages_ShouldNotifySubscribers()
         {
             // Arrange
@@ -179,7 +180,7 @@ namespace MSA.Foundation.Tests.Messaging
             messageReceived.Should().BeTrue("The subscriber should be notified when a message is received");
         }
         
-        [Fact]
+        [Test]
         public void LogVerbose_WithVerboseEnabled_ShouldLogToConsole()
         {
             // This tests the verbose logging functionality
@@ -194,7 +195,7 @@ namespace MSA.Foundation.Tests.Messaging
             stopAction.Should().NotThrow("Operations with verbose logging enabled should not throw");
         }
         
-        [Fact]
+        [Test]
         public void Start_CalledMultipleTimes_ShouldNotCreateMultipleSockets()
         {
             // Arrange
@@ -220,7 +221,7 @@ namespace MSA.Foundation.Tests.Messaging
             adapter.Stop();
         }
         
-        [Fact]
+        [Test]
         public void Subscribe_WithSpecificTopic_ShouldOnlyReceiveMatchingMessages()
         {
             // Arrange
@@ -253,7 +254,7 @@ namespace MSA.Foundation.Tests.Messaging
             receivedNonMatchingMessage.Should().BeFalse("Subscriber should not receive non-matching topic messages");
         }
         
-        [Fact]
+        [Test]
         public void Stop_WhenAlreadyStopped_ShouldNotThrow()
         {
             // Arrange

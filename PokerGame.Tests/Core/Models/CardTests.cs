@@ -1,13 +1,14 @@
 using System;
 using PokerGame.Core.Models;
-using Xunit;
+using NUnit.Framework;
 using FluentAssertions;
 
 namespace PokerGame.Tests.New.Core.Models
 {
+    [TestFixture]
     public class CardTests
     {
-        [Fact]
+        [Test]
         public void Constructor_WithValidParameters_ShouldInitializeCorrectly()
         {
             // Arrange
@@ -22,7 +23,7 @@ namespace PokerGame.Tests.New.Core.Models
             card.Rank.Should().Be(rank);
         }
         
-        [Fact]
+        [Test]
         public void ToString_ShouldReturnFormattedString()
         {
             // Arrange
@@ -35,7 +36,7 @@ namespace PokerGame.Tests.New.Core.Models
             result.Should().Be("K♠");
         }
         
-        [Fact]
+        [Test]
         public void Equals_WithSameCardValues_ShouldReturnTrue()
         {
             // Arrange
@@ -49,7 +50,7 @@ namespace PokerGame.Tests.New.Core.Models
             areEqual.Should().BeTrue();
         }
         
-        [Fact]
+        [Test]
         public void Equals_WithDifferentCardValues_ShouldReturnFalse()
         {
             // Arrange
@@ -63,7 +64,7 @@ namespace PokerGame.Tests.New.Core.Models
             areEqual.Should().BeFalse();
         }
         
-        [Fact]
+        [Test]
         public void Equals_WithNull_ShouldReturnFalse()
         {
             // Arrange
@@ -76,7 +77,7 @@ namespace PokerGame.Tests.New.Core.Models
             areEqual.Should().BeFalse();
         }
         
-        [Fact]
+        [Test]
         public void GetHashCode_WithSameCardValues_ShouldReturnSameHashCode()
         {
             // Arrange
@@ -91,7 +92,7 @@ namespace PokerGame.Tests.New.Core.Models
             hashCode1.Should().Be(hashCode2);
         }
         
-        [Fact]
+        [Test]
         public void GetHashCode_WithDifferentCardValues_ShouldReturnDifferentHashCodes()
         {
             // Arrange
@@ -106,7 +107,7 @@ namespace PokerGame.Tests.New.Core.Models
             hashCode1.Should().NotBe(hashCode2);
         }
         
-        [Fact]
+        [Test]
         public void EqualityOperator_WithSameCardValues_ShouldReturnTrue()
         {
             // Arrange
@@ -120,7 +121,7 @@ namespace PokerGame.Tests.New.Core.Models
             areEqual.Should().BeTrue();
         }
         
-        [Fact]
+        [Test]
         public void InequalityOperator_WithDifferentCardValues_ShouldReturnTrue()
         {
             // Arrange

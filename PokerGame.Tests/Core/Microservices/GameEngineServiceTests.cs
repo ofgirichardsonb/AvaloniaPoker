@@ -7,15 +7,16 @@ using MSA.Foundation.Messaging;
 using MSA.Foundation.ServiceManagement;
 using PokerGame.Core.Models;
 using PokerGame.Core.Microservices;
-using Xunit;
+using NUnit.Framework;
 using FluentAssertions;
 using Moq;
 
 namespace PokerGame.Tests.New.Core.Microservices
 {
+    [TestFixture]
     public class GameEngineServiceTests
     {
-        [Fact]
+        [Test]
         public void Constructor_WithValidParameters_ShouldInitializeCorrectly()
         {
             // Arrange
@@ -28,7 +29,7 @@ namespace PokerGame.Tests.New.Core.Microservices
             service.Should().NotBeNull();
         }
         
-        [Fact]
+        [Test]
         public void AddPlayer_ShouldAddPlayerToGame()
         {
             // Arrange
@@ -51,7 +52,7 @@ namespace PokerGame.Tests.New.Core.Microservices
             players[playerId].Name.Should().Be(playerName);
         }
         
-        [Fact]
+        [Test]
         public void RemovePlayer_WithExistingPlayer_ShouldRemovePlayerFromGame()
         {
             // Arrange
@@ -74,7 +75,7 @@ namespace PokerGame.Tests.New.Core.Microservices
             players.Should().NotContainKey(playerId);
         }
         
-        [Fact]
+        [Test]
         public void GetPlayerCount_ShouldReturnCorrectCount()
         {
             // Arrange
@@ -93,7 +94,7 @@ namespace PokerGame.Tests.New.Core.Microservices
             playerCount.Should().Be(3);
         }
         
-        [Fact]
+        [Test]
         public void GetPlayerById_WithExistingPlayer_ShouldReturnPlayer()
         {
             // Arrange
@@ -114,7 +115,7 @@ namespace PokerGame.Tests.New.Core.Microservices
             player.Name.Should().Be(playerName);
         }
         
-        [Fact]
+        [Test]
         public void GetPlayerById_WithNonExistingPlayer_ShouldReturnNull()
         {
             // Arrange
@@ -128,7 +129,7 @@ namespace PokerGame.Tests.New.Core.Microservices
             player.Should().BeNull();
         }
         
-        [Fact]
+        [Test]
         public void DealHoleCards_ShouldDealTwoCardsToAllPlayers()
         {
             // Arrange
@@ -177,7 +178,7 @@ namespace PokerGame.Tests.New.Core.Microservices
             }
         }
         
-        [Fact]
+        [Test]
         public void DealCommunityCards_ShouldDealCorrectNumberOfCards()
         {
             // Arrange

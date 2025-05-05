@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 using MSA.Foundation.Messaging;
 using MSA.Foundation.ServiceManagement;
 using MSA.Foundation.Telemetry;
-using Xunit;
+using NUnit.Framework;
 using FluentAssertions;
 using System.Collections.Generic;
 using Moq;
@@ -15,9 +15,10 @@ using MSAEC = MSA.Foundation.ServiceManagement.ExecutionContext;
 
 namespace MSA.Foundation.Tests.Integration
 {
+    [TestFixture]
     public class FoundationIntegrationTests
     {
-        [Fact]
+        [Test]
         public async Task MessageBroker_WithTelemetry_ShouldTrackMessages()
         {
             // Arrange
@@ -59,7 +60,7 @@ namespace MSA.Foundation.Tests.Integration
             telemetryService.Flush();
         }
         
-        [Fact]
+        [Test]
         public void ExecutionContext_WithMessageBroker_ShouldShareServiceId()
         {
             // Arrange
@@ -79,7 +80,7 @@ namespace MSA.Foundation.Tests.Integration
             messageBroker.Stop();
         }
         
-        [Fact]
+        [Test]
         public void ServiceConstants_WithPortOffset_ShouldProvideConsistentPorts()
         {
             // Arrange
@@ -96,7 +97,7 @@ namespace MSA.Foundation.Tests.Integration
                 "Subscriber port should be base port plus offset");
         }
         
-        [Fact]
+        [Test]
         public void TelemetryService_WithExecutionContext_ShouldTrackOperationWithServiceId()
         {
             // Arrange
@@ -121,7 +122,7 @@ namespace MSA.Foundation.Tests.Integration
             telemetryService.Flush();
         }
         
-        [Fact]
+        [Test]
         public async Task Integration_AllComponents_ShouldWorkTogether()
         {
             // Arrange
@@ -164,7 +165,7 @@ namespace MSA.Foundation.Tests.Integration
             executionContext.Cancel();
         }
         
-        [Fact]
+        [Test]
         public async Task MessageBroker_WithMockedAdapter_ShouldReceiveMessages()
         {
             // Arrange
@@ -225,7 +226,7 @@ namespace MSA.Foundation.Tests.Integration
             mockAdapter.Verify(m => m.Stop(), Times.Once);
         }
         
-        [Fact]
+        [Test]
         public async Task MessageBroker_WithAcknowledgment_ShouldSendAckMessages()
         {
             // Arrange
