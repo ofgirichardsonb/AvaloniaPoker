@@ -12,6 +12,9 @@ All notable changes to the Cross-Platform Poker Game will be documented in this 
 - Table limits ($1000 max chips, $100 max bet)
 - Comprehensive diagnostic logging
 - Standalone deployment capabilities for Windows and macOS
+- Standardized test infrastructure with NUnit and Coverlet for coverage analysis
+- GitHub Actions workflow for continuous integration testing
+- Automated test script for running tests with coverage reporting
 
 ### Changed
 - Migrated from NetMQ to Channel-based messaging architecture

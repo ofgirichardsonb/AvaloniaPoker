@@ -14,11 +14,9 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
-    <PackageReference Include="xunit" Version="2.5.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+    <PackageReference Include="NUnit.Analyzers" Version="3.9.0" />
     <PackageReference Include="Moq" Version="4.20.69" />
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
   </ItemGroup>
@@ -30,7 +28,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="Xunit" />
+    <Using Include="NUnit.Framework" />
+    <Using Include="MSA.Foundation.ServiceManagement.ExecutionContext" Alias="MSAEC" />
+    <Using Include="FluentAssertions" />
+    <Using Include="Moq" />
+    <Using Include="PokerGame.Core.Models" />
+    <Using Include="PokerGame.Core.Game" />
+    <Using Include="PokerGame.Core.Microservices" />
+    <Using Include="MSA.Foundation.Messaging" />
+    <Using Include="MSA.Foundation.ServiceManagement" />
   </ItemGroup>
 
 </Project>

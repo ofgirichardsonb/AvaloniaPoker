@@ -18,6 +18,8 @@ A sophisticated Texas Hold'em poker game leveraging advanced microservices archi
 - **PokerGame.Core**: Contains the core game logic, models, and AI players
 - **PokerGame.Avalonia**: Cross-platform GUI interface built with Avalonia UI
 - **PokerGame.Services**: Service implementations for the poker game
+- **PokerGame.Tests**: Comprehensive test suite for core game components
+- **MSA.Foundation.Tests**: Test suite for foundation architecture components
 - **PokerGame.Abstractions**: Interface definitions and abstractions for the poker game services
 
 ## Architecture
@@ -59,6 +61,28 @@ cd PokerGame
 ./build-standalone.sh
 ```
 The executable will be created in the `publish` directory.
+
+### Running Tests
+
+The project includes comprehensive test suites for both MSA.Foundation and PokerGame.Core components. Use the provided script to run tests with coverage:
+
+```bash
+# Run all tests with coverage
+./run-tests.sh
+
+# Run tests for a specific project
+./run-tests.sh MSA.Foundation.Tests
+./run-tests.sh PokerGame.Tests
+```
+
+Test coverage results will be generated in the `coverage-results` directory. To generate an HTML report, install the ReportGenerator tool:
+
+```bash
+dotnet tool install -g dotnet-reportgenerator-globaltool
+reportgenerator -reports:./coverage-results/**/*.xml -targetdir:./coverage-report -reporttypes:Html
+```
+
+Then open `./coverage-report/index.html` in your browser to view detailed coverage information.
 
 ## Release Notes for v1.0.0
 
