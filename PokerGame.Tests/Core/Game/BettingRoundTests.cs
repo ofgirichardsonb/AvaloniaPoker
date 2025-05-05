@@ -221,15 +221,15 @@ namespace PokerGame.Tests.Core.Game
             // First player raises
             _bettingRound.ProcessAction(_players[0], new PlayerAction(
                 ActionType.Raise,
-                _players[0].Id,
-                _bettingRound.CurrentBet * 2
+                _bettingRound.CurrentBet * 2,
+                _players[0].Id
             ));
             
             // Second player calls
             _bettingRound.ProcessAction(_players[1], new PlayerAction(
                 ActionType.Call,
-                _players[1].Id,
-                _bettingRound.CurrentBet
+                _bettingRound.CurrentBet,
+                _players[1].Id
             ));
             
             // Third player hasn't acted yet
@@ -252,22 +252,22 @@ namespace PokerGame.Tests.Core.Game
             // First player raises
             _bettingRound.ProcessAction(_players[0], new PlayerAction(
                 ActionType.Raise,
-                _players[0].Id,
-                _bettingRound.CurrentBet * 2
+                _bettingRound.CurrentBet * 2,
+                _players[0].Id
             ));
             
             // Second player calls the raise
             _bettingRound.ProcessAction(_players[1], new PlayerAction(
                 ActionType.Call,
-                _players[1].Id,
-                _bettingRound.CurrentBet
+                _bettingRound.CurrentBet,
+                _players[1].Id
             ));
             
             // Third player folds
             _bettingRound.ProcessAction(_players[2], new PlayerAction(
                 ActionType.Fold,
-                _players[2].Id,
-                0
+                0,
+                _players[2].Id
             ));
             
             // Act
@@ -288,14 +288,14 @@ namespace PokerGame.Tests.Core.Game
             // First two players fold
             _bettingRound.ProcessAction(_players[0], new PlayerAction(
                 ActionType.Fold,
-                _players[0].Id,
-                0
+                0,
+                _players[0].Id
             ));
             
             _bettingRound.ProcessAction(_players[1], new PlayerAction(
                 ActionType.Fold,
-                _players[1].Id,
-                0
+                0,
+                _players[1].Id
             ));
             
             // Act

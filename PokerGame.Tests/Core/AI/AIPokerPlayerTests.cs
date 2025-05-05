@@ -4,7 +4,7 @@ using PokerGame.Core.AI;
 using PokerGame.Core.Models;
 using System.Collections.Generic;
 using PokerGame.Core.Game;
-using System;
+using CardModel = PokerGame.Core.Models.Card;
 
 namespace PokerGame.Tests.Core.AI;
 
@@ -13,7 +13,7 @@ public class AIPokerPlayerTests
 {
     private AIPokerPlayer _aiPlayer;
     private Player _playerModel;
-    private List<Card> _communityCards;
+    private List<CardModel> _communityCards;
     private int _currentBet;
     private int _bigBlind;
     private int _maxBet;
@@ -23,7 +23,7 @@ public class AIPokerPlayerTests
     {
         _playerModel = new Player("ai-player-1", "AI Player 1", 1000);
         
-        _communityCards = new List<Card>();
+        _communityCards = new List<CardModel>();
         _currentBet = 0;
         _bigBlind = 10;
         _maxBet = 100;
@@ -48,8 +48,8 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithPairInHand_ShouldCall()
     {
         // Arrange
-        _playerModel.HoleCards.AddCard(new Card(Rank.Seven, Suit.Hearts));
-        _playerModel.HoleCards.AddCard(new Card(Rank.Seven, Suit.Diamonds));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Seven, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Seven, Suit.Diamonds));
         _currentBet = 20;
         
         // Act
@@ -64,8 +64,8 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithHighCards_AndLowBet_ShouldCall()
     {
         // Arrange
-        _playerModel.HoleCards.AddCard(new Card(Rank.Ace, Suit.Hearts));
-        _playerModel.HoleCards.AddCard(new Card(Rank.King, Suit.Diamonds));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ace, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.King, Suit.Diamonds));
         _currentBet = 5; // Low bet
         
         // Act
@@ -80,8 +80,8 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithLowCards_AndHighBet_ShouldFold()
     {
         // Arrange
-        _playerModel.HoleCards.AddCard(new Card(Rank.Two, Suit.Hearts));
-        _playerModel.HoleCards.AddCard(new Card(Rank.Four, Suit.Diamonds));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Two, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Four, Suit.Diamonds));
         _currentBet = 50; // High bet
         
         // Act
@@ -95,8 +95,8 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithGoodHand_ShouldRaise()
     {
         // Arrange
-        _playerModel.HoleCards.AddCard(new Card(Rank.Ace, Suit.Hearts));
-        _playerModel.HoleCards.AddCard(new Card(Rank.Ace, Suit.Diamonds));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ace, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ace, Suit.Diamonds));
         _currentBet = 20;
         
         // Act
@@ -112,8 +112,8 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithNoCurrentBet_ShouldCheckOrBet()
     {
         // Arrange
-        _playerModel.HoleCards.AddCard(new Card(Rank.Ten, Suit.Hearts));
-        _playerModel.HoleCards.AddCard(new Card(Rank.Jack, Suit.Diamonds));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ten, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Jack, Suit.Diamonds));
         _currentBet = 0;
         
         // Act
@@ -132,12 +132,12 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithPossibleStraightDraw_ShouldCall()
     {
         // Arrange
-        _playerModel.HoleCards.AddCard(new Card(Rank.Ten, Suit.Hearts));
-        _playerModel.HoleCards.AddCard(new Card(Rank.Jack, Suit.Diamonds));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ten, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Jack, Suit.Diamonds));
         
-        _communityCards.Add(new Card(Rank.Nine, Suit.Clubs));
-        _communityCards.Add(new Card(Rank.Eight, Suit.Spades));
-        _communityCards.Add(new Card(Rank.Two, Suit.Hearts));
+        _communityCards.Add(new CardModel(Rank.Nine, Suit.Clubs));
+        _communityCards.Add(new CardModel(Rank.Eight, Suit.Spades));
+        _communityCards.Add(new CardModel(Rank.Two, Suit.Hearts));
         
         _currentBet = 15;
         
@@ -153,12 +153,12 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithPossibleFlushDraw_ShouldCall()
     {
         // Arrange
-        _playerModel.HoleCards.AddCard(new Card(Rank.Two, Suit.Hearts));
-        _playerModel.HoleCards.AddCard(new Card(Rank.Seven, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Two, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Seven, Suit.Hearts));
         
-        _communityCards.Add(new Card(Rank.Ace, Suit.Hearts));
-        _communityCards.Add(new Card(Rank.Ten, Suit.Hearts));
-        _communityCards.Add(new Card(Rank.Six, Suit.Diamonds));
+        _communityCards.Add(new CardModel(Rank.Ace, Suit.Hearts));
+        _communityCards.Add(new CardModel(Rank.Ten, Suit.Hearts));
+        _communityCards.Add(new CardModel(Rank.Six, Suit.Diamonds));
         
         _currentBet = 25;
         
@@ -174,9 +174,9 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithCurrentBetHigherThanChips_ShouldFold()
     {
         // Arrange
-        _playerModel.HoleCards.AddCard(new Card(Rank.Ten, Suit.Hearts));
-        _playerModel.HoleCards.AddCard(new Card(Rank.Jack, Suit.Diamonds));
-        _playerModel.ChipCount = 10;
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ten, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Jack, Suit.Diamonds));
+        _playerModel.Chips = 10;
         _currentBet = 100;
         
         // Act
@@ -190,8 +190,8 @@ public class AIPokerPlayerTests
     public void MakeDecision_WhenCanCheckIsFalse_AndCurrentBetZero_ShouldNotCheck()
     {
         // Arrange
-        _playerModel.HoleCards.AddCard(new Card(Rank.Ten, Suit.Hearts));
-        _playerModel.HoleCards.AddCard(new Card(Rank.Jack, Suit.Diamonds));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ten, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Jack, Suit.Diamonds));
         _currentBet = 0;
         
         // Act
@@ -207,8 +207,8 @@ public class AIPokerPlayerTests
     public void MakeDecision_WhenCanCheckIsTrue_AndCurrentBetZero_AllowsCheck()
     {
         // Arrange
-        _playerModel.HoleCards.AddCard(new Card(Rank.Two, Suit.Hearts));
-        _playerModel.HoleCards.AddCard(new Card(Rank.Five, Suit.Diamonds)); // Lower value hand
+        _playerModel.HoleCards.Add(new CardModel(Rank.Two, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Five, Suit.Diamonds)); // Lower value hand
         _currentBet = 0;
         
         // Act
@@ -222,8 +222,8 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithVeryStrongHand_ShouldRaiseHighAmount()
     {
         // Arrange - Pocket Aces
-        _playerModel.HoleCards.AddCard(new Card(Rank.Ace, Suit.Hearts));
-        _playerModel.HoleCards.AddCard(new Card(Rank.Ace, Suit.Spades));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ace, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ace, Suit.Spades));
         _currentBet = 10;
         
         // Act

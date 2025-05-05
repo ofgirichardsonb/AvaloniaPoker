@@ -54,15 +54,15 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithPairInHand_ShouldCall()
     {
         // Arrange
-        _playerModel.HoleCards.Add(new CardModel { Rank = "7", Suit = "Hearts" });
-        _playerModel.HoleCards.Add(new CardModel { Rank = "7", Suit = "Diamonds" });
+        _playerModel.HoleCards.Add(new CardModel(Rank.Seven, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Seven, Suit.Diamonds));
         _currentBet = 20;
         
         // Act
         var decision = _aiPlayer.MakeDecision(_communityCards, _currentBet, false);
         
         // Assert
-        Assert.That(decision.ActionType, Is.EqualTo(PlayerActionType.Call));
+        Assert.That(decision.ActionType, Is.EqualTo(ActionType.Call));
         Assert.That(decision.Amount, Is.EqualTo(_currentBet));
     }
     
@@ -70,15 +70,15 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithHighCards_AndLowBet_ShouldCall()
     {
         // Arrange
-        _playerModel.HoleCards.Add(new CardModel { Rank = "A", Suit = "Hearts" });
-        _playerModel.HoleCards.Add(new CardModel { Rank = "K", Suit = "Diamonds" });
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ace, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.King, Suit.Diamonds));
         _currentBet = 5; // Low bet
         
         // Act
         var decision = _aiPlayer.MakeDecision(_communityCards, _currentBet, false);
         
         // Assert
-        Assert.That(decision.ActionType, Is.EqualTo(PlayerActionType.Call));
+        Assert.That(decision.ActionType, Is.EqualTo(ActionType.Call));
         Assert.That(decision.Amount, Is.EqualTo(_currentBet));
     }
     
@@ -86,30 +86,30 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithLowCards_AndHighBet_ShouldFold()
     {
         // Arrange
-        _playerModel.HoleCards.Add(new CardModel { Rank = "2", Suit = "Hearts" });
-        _playerModel.HoleCards.Add(new CardModel { Rank = "4", Suit = "Diamonds" });
+        _playerModel.HoleCards.Add(new CardModel(Rank.Two, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Four, Suit.Diamonds));
         _currentBet = 50; // High bet
         
         // Act
         var decision = _aiPlayer.MakeDecision(_communityCards, _currentBet, false);
         
         // Assert
-        Assert.That(decision.ActionType, Is.EqualTo(PlayerActionType.Fold));
+        Assert.That(decision.ActionType, Is.EqualTo(ActionType.Fold));
     }
     
     [Test]
     public void MakeDecision_WithGoodHand_ShouldRaise()
     {
         // Arrange
-        _playerModel.HoleCards.Add(new CardModel { Rank = "A", Suit = "Hearts" });
-        _playerModel.HoleCards.Add(new CardModel { Rank = "A", Suit = "Diamonds" });
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ace, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ace, Suit.Diamonds));
         _currentBet = 20;
         
         // Act
         var decision = _aiPlayer.MakeDecision(_communityCards, _currentBet, false);
         
         // Assert
-        Assert.That(decision.ActionType, Is.EqualTo(PlayerActionType.Raise));
+        Assert.That(decision.ActionType, Is.EqualTo(ActionType.Raise));
         Assert.That(decision.Amount, Is.GreaterThan(_currentBet));
         Assert.That(decision.Amount, Is.LessThanOrEqualTo(_maxBet));
     }
@@ -118,16 +118,16 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithNoCurrentBet_ShouldCheckOrBet()
     {
         // Arrange
-        _playerModel.HoleCards.Add(new CardModel { Rank = "10", Suit = "Hearts" });
-        _playerModel.HoleCards.Add(new CardModel { Rank = "J", Suit = "Diamonds" });
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ten, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Jack, Suit.Diamonds));
         _currentBet = 0;
         
         // Act
         var decision = _aiPlayer.MakeDecision(_communityCards, _currentBet, false);
         
         // Assert
-        Assert.That(decision.ActionType, Is.AnyOf(PlayerActionType.Check, PlayerActionType.Bet));
-        if (decision.ActionType == PlayerActionType.Bet)
+        Assert.That(decision.ActionType, Is.AnyOf(ActionType.Check, ActionType.Bet));
+        if (decision.ActionType == ActionType.Bet)
         {
             Assert.That(decision.Amount, Is.GreaterThan(0));
             Assert.That(decision.Amount, Is.LessThanOrEqualTo(_maxBet));
@@ -138,12 +138,12 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithPossibleStraightDraw_ShouldCall()
     {
         // Arrange
-        _playerModel.HoleCards.Add(new CardModel { Rank = "10", Suit = "Hearts" });
-        _playerModel.HoleCards.Add(new CardModel { Rank = "J", Suit = "Diamonds" });
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ten, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Jack, Suit.Diamonds));
         
-        _communityCards.Add(new CardModel { Rank = "9", Suit = "Clubs" });
-        _communityCards.Add(new CardModel { Rank = "8", Suit = "Spades" });
-        _communityCards.Add(new CardModel { Rank = "2", Suit = "Hearts" });
+        _communityCards.Add(new CardModel(Rank.Nine, Suit.Clubs));
+        _communityCards.Add(new CardModel(Rank.Eight, Suit.Spades));
+        _communityCards.Add(new CardModel(Rank.Two, Suit.Hearts));
         
         _currentBet = 15;
         
@@ -151,7 +151,7 @@ public class AIPokerPlayerTests
         var decision = _aiPlayer.MakeDecision(_communityCards, _currentBet, false);
         
         // Assert
-        Assert.That(decision.ActionType, Is.EqualTo(PlayerActionType.Call));
+        Assert.That(decision.ActionType, Is.EqualTo(ActionType.Call));
         Assert.That(decision.Amount, Is.EqualTo(_currentBet));
     }
     
@@ -159,12 +159,12 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithPossibleFlushDraw_ShouldCall()
     {
         // Arrange
-        _playerModel.HoleCards.Add(new CardModel { Rank = "2", Suit = "Hearts" });
-        _playerModel.HoleCards.Add(new CardModel { Rank = "7", Suit = "Hearts" });
+        _playerModel.HoleCards.Add(new CardModel(Rank.Two, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Seven, Suit.Hearts));
         
-        _communityCards.Add(new CardModel { Rank = "A", Suit = "Hearts" });
-        _communityCards.Add(new CardModel { Rank = "10", Suit = "Hearts" });
-        _communityCards.Add(new CardModel { Rank = "6", Suit = "Diamonds" });
+        _communityCards.Add(new CardModel(Rank.Ace, Suit.Hearts));
+        _communityCards.Add(new CardModel(Rank.Ten, Suit.Hearts));
+        _communityCards.Add(new CardModel(Rank.Six, Suit.Diamonds));
         
         _currentBet = 25;
         
@@ -172,7 +172,7 @@ public class AIPokerPlayerTests
         var decision = _aiPlayer.MakeDecision(_communityCards, _currentBet, false);
         
         // Assert
-        Assert.That(decision.ActionType, Is.EqualTo(PlayerActionType.Call));
+        Assert.That(decision.ActionType, Is.EqualTo(ActionType.Call));
         Assert.That(decision.Amount, Is.EqualTo(_currentBet));
     }
     
@@ -180,8 +180,8 @@ public class AIPokerPlayerTests
     public void MakeDecision_WithCurrentBetHigherThanChips_ShouldFold()
     {
         // Arrange
-        _playerModel.HoleCards.Add(new CardModel { Rank = "10", Suit = "Hearts" });
-        _playerModel.HoleCards.Add(new CardModel { Rank = "J", Suit = "Diamonds" });
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ten, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Jack, Suit.Diamonds));
         _playerModel.ChipCount = 10;
         _currentBet = 100;
         
@@ -189,23 +189,23 @@ public class AIPokerPlayerTests
         var decision = _aiPlayer.MakeDecision(_communityCards, _currentBet, false);
         
         // Assert
-        Assert.That(decision.ActionType, Is.EqualTo(PlayerActionType.Fold));
+        Assert.That(decision.ActionType, Is.EqualTo(ActionType.Fold));
     }
     
     [Test]
     public void MakeDecision_WhenCanCheckIsFalse_AndCurrentBetZero_ShouldNotCheck()
     {
         // Arrange
-        _playerModel.HoleCards.Add(new CardModel { Rank = "10", Suit = "Hearts" });
-        _playerModel.HoleCards.Add(new CardModel { Rank = "J", Suit = "Diamonds" });
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ten, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Jack, Suit.Diamonds));
         _currentBet = 0;
         
         // Act
         var decision = _aiPlayer.MakeDecision(_communityCards, _currentBet, false);
         
         // Assert
-        Assert.That(decision.ActionType, Is.Not.EqualTo(PlayerActionType.Check));
-        Assert.That(decision.ActionType, Is.EqualTo(PlayerActionType.Bet));
+        Assert.That(decision.ActionType, Is.Not.EqualTo(ActionType.Check));
+        Assert.That(decision.ActionType, Is.EqualTo(ActionType.Bet));
         Assert.That(decision.Amount, Is.GreaterThan(0));
     }
     
@@ -213,30 +213,30 @@ public class AIPokerPlayerTests
     public void MakeDecision_WhenCanCheckIsTrue_AndCurrentBetZero_AllowsCheck()
     {
         // Arrange
-        _playerModel.HoleCards.Add(new CardModel { Rank = "2", Suit = "Hearts" });
-        _playerModel.HoleCards.Add(new CardModel { Rank = "5", Suit = "Diamonds" }); // Lower value hand
+        _playerModel.HoleCards.Add(new CardModel(Rank.Two, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Five, Suit.Diamonds)); // Lower value hand
         _currentBet = 0;
         
         // Act
         var decision = _aiPlayer.MakeDecision(_communityCards, _currentBet, true);
         
         // Assert
-        Assert.That(decision.ActionType, Is.AnyOf(PlayerActionType.Check, PlayerActionType.Bet));
+        Assert.That(decision.ActionType, Is.AnyOf(ActionType.Check, ActionType.Bet));
     }
     
     [Test]
     public void MakeDecision_WithVeryStrongHand_ShouldRaiseHighAmount()
     {
         // Arrange - Pocket Aces
-        _playerModel.HoleCards.Add(new CardModel { Rank = "A", Suit = "Hearts" });
-        _playerModel.HoleCards.Add(new CardModel { Rank = "A", Suit = "Spades" });
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ace, Suit.Hearts));
+        _playerModel.HoleCards.Add(new CardModel(Rank.Ace, Suit.Spades));
         _currentBet = 10;
         
         // Act
         var decision = _aiPlayer.MakeDecision(_communityCards, _currentBet, false);
         
         // Assert
-        Assert.That(decision.ActionType, Is.EqualTo(PlayerActionType.Raise));
+        Assert.That(decision.ActionType, Is.EqualTo(ActionType.Raise));
         Assert.That(decision.Amount, Is.GreaterThan(_currentBet * 2)); // Should raise significantly
     }
 }

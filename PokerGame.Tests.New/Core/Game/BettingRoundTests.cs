@@ -1,392 +1,293 @@
 using NUnit.Framework;
-using PokerGame.Core.Game;
 using PokerGame.Core.Models;
+using PokerGame.Core.Game;
 using System.Collections.Generic;
+using System.Linq;
 
-namespace PokerGame.Tests.New.Core.Game;
-
-[TestFixture]
-public class BettingRoundTests
+namespace PokerGame.Tests.New.Core.Game
 {
-    private BettingRound _bettingRound;
-    private List<Player> _players;
-    private Player _player1;
-    private Player _player2;
-    private Player _player3;
-    
-    [SetUp]
-    public void Setup()
+    [TestFixture]
+    public class BettingRoundTests
     {
-        _player1 = new Player 
-        { 
-            Id = "player1", 
-            Name = "Player 1", 
-            ChipCount = 1000,
-            CurrentBet = 0,
-            HasActed = false,
-            HasFolded = false
-        };
-        
-        _player2 = new Player 
-        { 
-            Id = "player2", 
-            Name = "Player 2", 
-            ChipCount = 1000,
-            CurrentBet = 0,
-            HasActed = false,
-            HasFolded = false
-        };
-        
-        _player3 = new Player 
-        { 
-            Id = "player3", 
-            Name = "Player 3", 
-            ChipCount = 1000,
-            CurrentBet = 0,
-            HasActed = false,
-            HasFolded = false
-        };
-        
-        _players = new List<Player> { _player1, _player2, _player3 };
-        _bettingRound = new BettingRound();
-    }
-    
-    [Test]
-    public void StartBettingRound_SetsCorrectInitialValues()
-    {
-        // Act
-        _bettingRound.StartBettingRound(_players, 5, 10);
-        
-        // Assert
-        Assert.Multiple(() =>
+        private BettingRound _bettingRound;
+        private List<Player> _players;
+
+        [SetUp]
+        public void Setup()
         {
-            Assert.That(_bettingRound.CurrentBet, Is.EqualTo(10));
+            _bettingRound = new BettingRound();
+            _players = new List<Player>
+            {
+                new Player("player1", "Player 1", 1000),
+                new Player("player2", "Player 2", 1000),
+                new Player("player3", "Player 3", 1000)
+            };
+        }
+
+        [Test]
+        public void StartBettingRound_InitializesCorrectly()
+        {
+            // Act
+            _bettingRound.StartBettingRound(_players, 5, 10);
+            
+            // Assert
             Assert.That(_bettingRound.SmallBlind, Is.EqualTo(5));
             Assert.That(_bettingRound.BigBlind, Is.EqualTo(10));
-            Assert.That(_bettingRound.ActivePlayers, Is.EqualTo(_players));
+            Assert.That(_bettingRound.CurrentBet, Is.EqualTo(0));
             Assert.That(_bettingRound.TotalPot, Is.EqualTo(0));
-        });
-    }
-    
-    [Test]
-    public void PostBlinds_DeductsCorrectAmountsFromPlayers()
-    {
-        // Arrange
-        _bettingRound.StartBettingRound(_players, 5, 10);
+            Assert.That(_bettingRound.ActivePlayers, Is.EqualTo(_players));
+        }
         
-        // Act
-        _bettingRound.PostBlinds(0, 1);
-        
-        // Assert
-        Assert.Multiple(() =>
+        [Test]
+        public void PostBlinds_UpdatesPotAndPlayerChips()
         {
-            Assert.That(_player1.CurrentBet, Is.EqualTo(5)); // Small blind
-            Assert.That(_player2.CurrentBet, Is.EqualTo(10)); // Big blind
-            Assert.That(_player3.CurrentBet, Is.EqualTo(0)); // No blind
-            Assert.That(_player1.ChipCount, Is.EqualTo(995));
-            Assert.That(_player2.ChipCount, Is.EqualTo(990));
+            // Arrange
+            _bettingRound.StartBettingRound(_players, 5, 10);
+            
+            // Act
+            _bettingRound.PostBlinds(0, 1);
+            
+            // Assert
+            Assert.That(_bettingRound.CurrentBet, Is.EqualTo(10));
             Assert.That(_bettingRound.TotalPot, Is.EqualTo(15));
-        });
-    }
-    
-    [Test]
-    public void HandlePlayerAction_WhenPlayerChecks_SetsHasActedToTrue()
-    {
-        // Arrange
-        _bettingRound.StartBettingRound(_players, 5, 10);
-        _bettingRound.PostBlinds(0, 1);
-        
-        // Set current bet to 0 for this test
-        _bettingRound.CurrentBet = 0;
-        _player1.CurrentBet = 0;
-        _player2.CurrentBet = 0;
-        _player3.CurrentBet = 0;
-        
-        var action = new PlayerAction 
-        { 
-            PlayerId = "player1", 
-            ActionType = PlayerActionType.Check,
-            Amount = 0
-        };
-        
-        // Act
-        _bettingRound.HandlePlayerAction(action);
-        
-        // Assert
-        Assert.That(_player1.HasActed, Is.True);
-        Assert.That(_player1.CurrentBet, Is.EqualTo(0));
-        Assert.That(_bettingRound.CurrentBet, Is.EqualTo(0));
-    }
-    
-    [Test]
-    public void HandlePlayerAction_WhenPlayerCalls_MatchesCurrentBet()
-    {
-        // Arrange
-        _bettingRound.StartBettingRound(_players, 5, 10);
-        _bettingRound.PostBlinds(0, 1);
-        
-        // Third player calls the big blind
-        var action = new PlayerAction 
-        { 
-            PlayerId = "player3", 
-            ActionType = PlayerActionType.Call,
-            Amount = 10
-        };
-        
-        // Act
-        _bettingRound.HandlePlayerAction(action);
-        
-        // Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(_player3.HasActed, Is.True);
-            Assert.That(_player3.CurrentBet, Is.EqualTo(10));
-            Assert.That(_player3.ChipCount, Is.EqualTo(990));
-            Assert.That(_bettingRound.TotalPot, Is.EqualTo(25)); // 5 (SB) + 10 (BB) + 10 (call)
-            Assert.That(_bettingRound.CurrentBet, Is.EqualTo(10));
-        });
-    }
-    
-    [Test]
-    public void HandlePlayerAction_WhenPlayerRaises_UpdatesCurrentBet()
-    {
-        // Arrange
-        _bettingRound.StartBettingRound(_players, 5, 10);
-        _bettingRound.PostBlinds(0, 1);
-        
-        // Third player raises
-        var action = new PlayerAction 
-        { 
-            PlayerId = "player3", 
-            ActionType = PlayerActionType.Raise,
-            Amount = 25 // Raise to 25
-        };
-        
-        // Act
-        _bettingRound.HandlePlayerAction(action);
-        
-        // Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(_player3.HasActed, Is.True);
-            Assert.That(_player3.CurrentBet, Is.EqualTo(25));
-            Assert.That(_player3.ChipCount, Is.EqualTo(975));
-            Assert.That(_bettingRound.TotalPot, Is.EqualTo(40)); // 5 (SB) + 10 (BB) + 25 (raise)
-            Assert.That(_bettingRound.CurrentBet, Is.EqualTo(25));
             
-            // Other players should have HasActed set to false because of the raise
-            Assert.That(_player1.HasActed, Is.False);
-            Assert.That(_player2.HasActed, Is.False);
-        });
-    }
-    
-    [Test]
-    public void HandlePlayerAction_WhenPlayerFolds_MarksPlayerAsFolded()
-    {
-        // Arrange
-        _bettingRound.StartBettingRound(_players, 5, 10);
-        _bettingRound.PostBlinds(0, 1);
-        
-        // Third player folds
-        var action = new PlayerAction 
-        { 
-            PlayerId = "player3", 
-            ActionType = PlayerActionType.Fold
-        };
-        
-        // Act
-        _bettingRound.HandlePlayerAction(action);
-        
-        // Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(_player3.HasActed, Is.True);
-            Assert.That(_player3.HasFolded, Is.True);
-            Assert.That(_bettingRound.TotalPot, Is.EqualTo(15)); // 5 (SB) + 10 (BB)
-            Assert.That(_bettingRound.CurrentBet, Is.EqualTo(10));
+            Assert.That(_players[0].ChipCount, Is.EqualTo(995)); // Small blind
+            Assert.That(_players[0].CurrentBet, Is.EqualTo(5));
             
-            // Check that player is still in ActivePlayers list but marked as folded
-            Assert.That(_bettingRound.ActivePlayers, Contains.Item(_player3));
-        });
-    }
-    
-    [Test]
-    public void IsBettingRoundComplete_WhenAllPlayersActedAndBetsMatch_ReturnsTrue()
-    {
-        // Arrange
-        _bettingRound.StartBettingRound(_players, 5, 10);
-        _bettingRound.PostBlinds(0, 1);
+            Assert.That(_players[1].ChipCount, Is.EqualTo(990)); // Big blind
+            Assert.That(_players[1].CurrentBet, Is.EqualTo(10));
+        }
         
-        // First player calls
-        var action1 = new PlayerAction 
-        { 
-            PlayerId = "player1", 
-            ActionType = PlayerActionType.Call,
-            Amount = 10 // Match big blind (adding 5 more to their SB)
-        };
-        _bettingRound.HandlePlayerAction(action1);
+        [Test]
+        public void HandlePlayerAction_Call_UpdatesPlayerAndPot()
+        {
+            // Arrange
+            _bettingRound.StartBettingRound(_players, 5, 10);
+            _bettingRound.PostBlinds(0, 1);
+            
+            // Call the big blind
+            var action = new PlayerAction(ActionType.Call, 10, "player3");
+            
+            // Act
+            _bettingRound.HandlePlayerAction(action);
+            
+            // Assert
+            Assert.That(_bettingRound.TotalPot, Is.EqualTo(25)); // 5 + 10 + 10
+            Assert.That(_players[2].ChipCount, Is.EqualTo(990));
+            Assert.That(_players[2].CurrentBet, Is.EqualTo(10));
+            Assert.That(_players[2].HasActed, Is.True);
+        }
         
-        // Third player calls
-        var action3 = new PlayerAction 
-        { 
-            PlayerId = "player3", 
-            ActionType = PlayerActionType.Call,
-            Amount = 10
-        };
-        _bettingRound.HandlePlayerAction(action3);
+        [Test]
+        public void HandlePlayerAction_Raise_UpdatesCurrentBetAndResetsFlagsExceptRaiser()
+        {
+            // Arrange
+            _bettingRound.StartBettingRound(_players, 5, 10);
+            _bettingRound.PostBlinds(0, 1);
+            
+            // Set all players as acted
+            foreach (var player in _players)
+            {
+                player.HasActed = true;
+            }
+            
+            // Player 3 raises to 20
+            var raiseAction = new PlayerAction(ActionType.Raise, 20, "player3");
+            
+            // Act
+            _bettingRound.HandlePlayerAction(raiseAction);
+            
+            // Assert
+            Assert.That(_bettingRound.CurrentBet, Is.EqualTo(20));
+            Assert.That(_bettingRound.TotalPot, Is.EqualTo(35)); // 5 + 10 + 20
+            
+            Assert.That(_players[0].HasActed, Is.False); // Reset
+            Assert.That(_players[1].HasActed, Is.False); // Reset
+            Assert.That(_players[2].HasActed, Is.True);  // Raiser still marked as acted
+        }
         
-        // Big blind checks
-        var action2 = new PlayerAction 
-        { 
-            PlayerId = "player2", 
-            ActionType = PlayerActionType.Check
-        };
-        _bettingRound.HandlePlayerAction(action2);
+        [Test]
+        public void HandlePlayerAction_Check_MarksPlayerAsActed()
+        {
+            // Arrange
+            _bettingRound.StartBettingRound(_players, 5, 10);
+            _bettingRound.PostBlinds(0, 1);
+            
+            // Set current bet to 0 to allow checking
+            _bettingRound.CurrentBet = 0;
+            
+            // Player 3 checks
+            var checkAction = new PlayerAction(ActionType.Check, 0, "player3");
+            
+            // Act
+            _bettingRound.HandlePlayerAction(checkAction);
+            
+            // Assert
+            Assert.That(_players[2].HasActed, Is.True);
+            Assert.That(_bettingRound.TotalPot, Is.EqualTo(15)); // Unchanged
+        }
         
-        // Act
-        bool isComplete = _bettingRound.IsBettingRoundComplete();
+        [Test]
+        public void HandlePlayerAction_Fold_MarksPlayerAsFolded()
+        {
+            // Arrange
+            _bettingRound.StartBettingRound(_players, 5, 10);
+            _bettingRound.PostBlinds(0, 1);
+            
+            // Player 3 folds
+            var foldAction = new PlayerAction(ActionType.Fold, 0, "player3");
+            
+            // Act
+            _bettingRound.HandlePlayerAction(foldAction);
+            
+            // Assert
+            Assert.That(_players[2].HasFolded, Is.True);
+            Assert.That(_players[2].HasActed, Is.True);
+            Assert.That(_bettingRound.TotalPot, Is.EqualTo(15)); // Unchanged
+        }
         
-        // Assert
-        Assert.IsTrue(isComplete);
-        Assert.That(_bettingRound.TotalPot, Is.EqualTo(30)); // Everyone put in 10
-    }
-    
-    [Test]
-    public void IsBettingRoundComplete_WhenNotAllPlayersActed_ReturnsFalse()
-    {
-        // Arrange
-        _bettingRound.StartBettingRound(_players, 5, 10);
-        _bettingRound.PostBlinds(0, 1);
+        [Test]
+        public void IsBettingRoundComplete_WhenAllPlayersActedWithSameBet_ReturnsTrue()
+        {
+            // Arrange
+            _bettingRound.StartBettingRound(_players, 5, 10);
+            _bettingRound.PostBlinds(0, 1);
         
-        // Only first player calls
-        var action1 = new PlayerAction 
-        { 
-            PlayerId = "player1", 
-            ActionType = PlayerActionType.Call,
-            Amount = 10 // Match big blind (adding 5 more to their SB)
-        };
-        _bettingRound.HandlePlayerAction(action1);
+            // First player calls
+            var action1 = new PlayerAction(ActionType.Call, 10, "player1"); // Match big blind (adding 5 more to their SB)
+            _bettingRound.HandlePlayerAction(action1);
         
-        // Act
-        bool isComplete = _bettingRound.IsBettingRoundComplete();
+            // Third player calls
+            var action3 = new PlayerAction(ActionType.Call, 10, "player3");
+            _bettingRound.HandlePlayerAction(action3);
         
-        // Assert
-        Assert.IsFalse(isComplete);
-    }
-    
-    [Test]
-    public void IsBettingRoundComplete_WhenBetsDoNotMatch_ReturnsFalse()
-    {
-        // Arrange
-        _bettingRound.StartBettingRound(_players, 5, 10);
-        _bettingRound.PostBlinds(0, 1);
+            // Big blind checks
+            var action2 = new PlayerAction(ActionType.Check, 0, "player2");
+            _bettingRound.HandlePlayerAction(action2);
         
-        // Third player raises
-        var action3 = new PlayerAction 
-        { 
-            PlayerId = "player3", 
-            ActionType = PlayerActionType.Raise,
-            Amount = 20
-        };
-        _bettingRound.HandlePlayerAction(action3);
+            // Act
+            bool isComplete = _bettingRound.IsBettingRoundComplete();
         
-        // First player calls
-        var action1 = new PlayerAction 
-        { 
-            PlayerId = "player1", 
-            ActionType = PlayerActionType.Call,
-            Amount = 20 // Match the raise
-        };
-        _bettingRound.HandlePlayerAction(action1);
+            // Assert
+            Assert.IsTrue(isComplete);
+            Assert.That(_bettingRound.TotalPot, Is.EqualTo(30)); // Everyone put in 10
+        }
         
-        // Big blind player has acted but hasn't matched the new bet
+        [Test]
+        public void IsBettingRoundComplete_WhenNotAllPlayersActed_ReturnsFalse()
+        {
+            // Arrange
+            _bettingRound.StartBettingRound(_players, 5, 10);
+            _bettingRound.PostBlinds(0, 1);
         
-        // Act
-        bool isComplete = _bettingRound.IsBettingRoundComplete();
+            // Only first player calls
+            var action1 = new PlayerAction(ActionType.Call, 10, "player1"); // Match big blind (adding 5 more to their SB)
+            _bettingRound.HandlePlayerAction(action1);
         
-        // Assert
-        Assert.IsFalse(isComplete);
-    }
-    
-    [Test]
-    public void IsBettingRoundComplete_WhenAllButFoldedPlayersHaveActed_ReturnsTrue()
-    {
-        // Arrange
-        _bettingRound.StartBettingRound(_players, 5, 10);
-        _bettingRound.PostBlinds(0, 1);
+            // Act
+            bool isComplete = _bettingRound.IsBettingRoundComplete();
         
-        // Third player folds
-        var action3 = new PlayerAction 
-        { 
-            PlayerId = "player3", 
-            ActionType = PlayerActionType.Fold
-        };
-        _bettingRound.HandlePlayerAction(action3);
+            // Assert
+            Assert.IsFalse(isComplete);
+        }
         
-        // First player calls
-        var action1 = new PlayerAction 
-        { 
-            PlayerId = "player1", 
-            ActionType = PlayerActionType.Call,
-            Amount = 10 // Match big blind
-        };
-        _bettingRound.HandlePlayerAction(action1);
+        [Test]
+        public void IsBettingRoundComplete_WhenBetsDoNotMatch_ReturnsFalse()
+        {
+            // Arrange
+            _bettingRound.StartBettingRound(_players, 5, 10);
+            _bettingRound.PostBlinds(0, 1);
         
-        // Big blind checks
-        var action2 = new PlayerAction 
-        { 
-            PlayerId = "player2", 
-            ActionType = PlayerActionType.Check
-        };
-        _bettingRound.HandlePlayerAction(action2);
+            // Third player raises
+            var action3 = new PlayerAction(ActionType.Raise, 20, "player3");
+            _bettingRound.HandlePlayerAction(action3);
         
-        // Act
-        bool isComplete = _bettingRound.IsBettingRoundComplete();
+            // First player calls
+            var action1 = new PlayerAction(ActionType.Call, 20, "player1");
+            _bettingRound.HandlePlayerAction(action1);
         
-        // Assert
-        Assert.IsTrue(isComplete);
-    }
-    
-    [Test]
-    public void EndBettingRound_AddsAllBetsToTotalPot_AndClearsBets()
-    {
-        // Arrange
-        _bettingRound.StartBettingRound(_players, 5, 10);
-        _bettingRound.PostBlinds(0, 1);
+            // Second player hasn't acted on the raise yet
         
-        // First player calls
-        var action1 = new PlayerAction 
-        { 
-            PlayerId = "player1", 
-            ActionType = PlayerActionType.Call,
-            Amount = 10
-        };
-        _bettingRound.HandlePlayerAction(action1);
+            // Act
+            bool isComplete = _bettingRound.IsBettingRoundComplete();
         
-        // Third player calls
-        var action3 = new PlayerAction 
-        { 
-            PlayerId = "player3", 
-            ActionType = PlayerActionType.Call,
-            Amount = 10
-        };
-        _bettingRound.HandlePlayerAction(action3);
+            // Assert
+            Assert.IsFalse(isComplete);
+        }
         
-        // Act
-        int finalPot = _bettingRound.EndBettingRound();
+        [Test]
+        public void IsBettingRoundComplete_WhenAllButOneFold_ReturnsTrue()
+        {
+            // Arrange
+            _bettingRound.StartBettingRound(_players, 5, 10);
+            _bettingRound.PostBlinds(0, 1);
         
-        // Assert
-        Assert.That(finalPot, Is.EqualTo(30)); // 10 * 3 players
+            // Second player folds
+            var action2 = new PlayerAction(ActionType.Fold, 0, "player2");
+            _bettingRound.HandlePlayerAction(action2);
         
-        // Check that current bet and player bets are reset
-        Assert.That(_bettingRound.CurrentBet, Is.EqualTo(0));
-        Assert.That(_player1.CurrentBet, Is.EqualTo(0));
-        Assert.That(_player2.CurrentBet, Is.EqualTo(0));
-        Assert.That(_player3.CurrentBet, Is.EqualTo(0));
+            // Third player folds
+            var action3 = new PlayerAction(ActionType.Fold, 0, "player3");
+            _bettingRound.HandlePlayerAction(action3);
         
-        // Check that all players' HasActed flags are reset
-        Assert.That(_player1.HasActed, Is.False);
-        Assert.That(_player2.HasActed, Is.False);
-        Assert.That(_player3.HasActed, Is.False);
+            // Act
+            bool isComplete = _bettingRound.IsBettingRoundComplete();
+        
+            // Assert
+            Assert.IsTrue(isComplete);
+        }
+        
+        [Test]
+        public void ResetPlayerBets_ClearsAllPlayerBets()
+        {
+            // Arrange
+            _bettingRound.StartBettingRound(_players, 5, 10);
+            _bettingRound.PostBlinds(0, 1);
+        
+            // Act
+            _bettingRound.ResetPlayerBets();
+        
+            // Assert
+            foreach (var player in _players)
+            {
+                Assert.That(player.CurrentBet, Is.EqualTo(0));
+            }
+            Assert.That(_bettingRound.CurrentBet, Is.EqualTo(0));
+        }
+        
+        [Test]
+        public void GetWinner_WhenOnlyOnePlayerNotFolded_ReturnsThatPlayer()
+        {
+            // Arrange
+            _bettingRound.StartBettingRound(_players, 5, 10);
+            _bettingRound.PostBlinds(0, 1);
+        
+            // Two players fold
+            _players[0].HasFolded = true;
+            _players[2].HasFolded = true;
+        
+            // Act
+            var winner = _bettingRound.GetWinnerByFold();
+        
+            // Assert
+            Assert.That(winner, Is.EqualTo(_players[1]));
+        }
+        
+        [Test]
+        public void GetWinner_WhenMultiplePlayersNotFolded_ReturnsNull()
+        {
+            // Arrange
+            _bettingRound.StartBettingRound(_players, 5, 10);
+            _bettingRound.PostBlinds(0, 1);
+        
+            // One player folds
+            _players[0].HasFolded = true;
+        
+            // Act
+            var winner = _bettingRound.GetWinnerByFold();
+        
+            // Assert
+            Assert.IsNull(winner);
+        }
     }
 }

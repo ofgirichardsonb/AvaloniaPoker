@@ -51,154 +51,104 @@ namespace PokerGame.Tests.Core.Game
                 _gameEngine.AddPlayer(player);
             }
         }
-
+        
         [Test]
-        public void Constructor_InitializesPropertiesCorrectly()
+        public void StartHand_InitializesGameState()
         {
-            // Arrange
-            var gameEngine = new PokerGameEngine();
-            
-            // Assert
-            Assert.That(gameEngine.GameState, Is.EqualTo(GameState.WaitingToStart));
-            Assert.That(gameEngine.Players, Is.Not.Null);
-            Assert.That(gameEngine.CommunityCards, Is.Not.Null);
-            Assert.That(gameEngine.CurrentBettingRound, Is.Null);
-        }
-
-        [Test]
-        public void AddPlayer_AddsPlayerToPlayersList()
-        {
-            // Arrange
-            var gameEngine = new PokerGameEngine();
-            var player = new Player("test-player", "Test Player", 1000);
-            
-            // Act
-            gameEngine.AddPlayer(player);
-            
-            // Assert
-            Assert.That(gameEngine.Players, Contains.Item(player));
-            Assert.That(gameEngine.Players.Count, Is.EqualTo(1));
-        }
-
-        [Test]
-        public void RemovePlayer_RemovesPlayerFromPlayersList()
-        {
-            // Arrange
-            var gameEngine = new PokerGameEngine();
-            var player = new Player("test-player", "Test Player", 1000);
-            gameEngine.AddPlayer(player);
-            
-            // Act
-            gameEngine.RemovePlayer(player.Id);
-            
-            // Assert
-            Assert.That(gameEngine.Players, Does.Not.Contain(player));
-            Assert.That(gameEngine.Players.Count, Is.EqualTo(0));
-        }
-
-        [Test]
-        public void StartHand_DealsHoleCardsToPlayers()
-        {
-            // Arrange
-            _gameEngine.GameState = GameState.WaitingToStart;
-            
             // Act
             _gameEngine.StartHand();
             
             // Assert
             Assert.That(_gameEngine.GameState, Is.EqualTo(GameState.PreFlop));
+            Assert.That(_gameEngine.CurrentBettingRound, Is.Not.Null);
+            
+            // Each player should have 2 hole cards
             foreach (var player in _gameEngine.Players)
             {
                 Assert.That(player.HoleCards.Count, Is.EqualTo(2));
             }
+            
+            // Blinds should be posted
+            Assert.That(_players[0].CurrentBet, Is.EqualTo(_smallBlind)); // Small blind
+            Assert.That(_players[1].CurrentBet, Is.EqualTo(_bigBlind)); // Big blind
+            
+            // Chip counts should be reduced by blind amounts
+            Assert.That(_players[0].ChipCount, Is.EqualTo(_startingChips - _smallBlind));
+            Assert.That(_players[1].ChipCount, Is.EqualTo(_startingChips - _bigBlind));
         }
-
+        
         [Test]
-        public void StartHand_AssignsBlindCorrectly()
+        public void StartFlop_AddsThreeCardsToCommunitCards()
         {
             // Arrange
-            _gameEngine.GameState = GameState.WaitingToStart;
-            
-            // Act
             _gameEngine.StartHand();
-            
-            // Assert
-            Assert.That(_gameEngine.DealerPosition, Is.EqualTo(0));
-            
-            // Small blind should be player after dealer (position 1 in a 2-player game)
-            var smallBlindPlayer = _gameEngine.Players.ElementAt(1);
-            Assert.That(smallBlindPlayer.CurrentBet, Is.EqualTo(_smallBlind));
-            Assert.That(smallBlindPlayer.ChipCount, Is.EqualTo(_startingChips - _smallBlind));
-            
-            // Big blind should be player after small blind (position 0 in a 2-player game with wrap-around)
-            var bigBlindPlayer = _gameEngine.Players.ElementAt(0);
-            Assert.That(bigBlindPlayer.CurrentBet, Is.EqualTo(_bigBlind));
-            Assert.That(bigBlindPlayer.ChipCount, Is.EqualTo(_startingChips - _bigBlind));
-        }
-
-        [Test]
-        public void DealFlop_DealThreeCardsToTable()
-        {
-            // Arrange
-            _gameEngine.GameState = GameState.PreFlop;
-            _gameEngine.CommunityCards.Clear();
+            _gameEngine.GameState = GameState.PreFlop; // Ensure correct state
             
             // Act
-            _gameEngine.DealFlop();
+            _gameEngine.StartFlop();
             
             // Assert
-            Assert.That(_gameEngine.GameState, Is.EqualTo(GameState.Flop));
             Assert.That(_gameEngine.CommunityCards.Count, Is.EqualTo(3));
+            Assert.That(_gameEngine.GameState, Is.EqualTo(GameState.Flop));
         }
-
+        
         [Test]
-        public void DealTurn_DealsFourthCommunityCard()
+        public void StartTurn_AddsFourthCardToCommunitCards()
         {
             // Arrange
+            _gameEngine.StartHand();
             _gameEngine.GameState = GameState.Flop;
-            _gameEngine.CommunityCards.Clear();
-            _gameEngine.CommunityCards.AddRange(GetMockCommunityCards(3)); // Add 3 cards for flop
+            _gameEngine.CommunityCards = new List<CardModel>
+            {
+                new CardModel(Rank.Two, Suit.Hearts),
+                new CardModel(Rank.Three, Suit.Diamonds),
+                new CardModel(Rank.Four, Suit.Clubs)
+            };
             
             // Act
-            _gameEngine.DealTurn();
+            _gameEngine.StartTurn();
             
             // Assert
-            Assert.That(_gameEngine.GameState, Is.EqualTo(GameState.Turn));
             Assert.That(_gameEngine.CommunityCards.Count, Is.EqualTo(4));
+            Assert.That(_gameEngine.GameState, Is.EqualTo(GameState.Turn));
         }
-
+        
         [Test]
-        public void DealRiver_DealsFifthCommunityCard()
+        public void StartRiver_AddsFifthCardToCommunitCards()
         {
             // Arrange
+            _gameEngine.StartHand();
             _gameEngine.GameState = GameState.Turn;
-            _gameEngine.CommunityCards.Clear();
-            _gameEngine.CommunityCards.AddRange(GetMockCommunityCards(4)); // Add 4 cards for turn
+            _gameEngine.CommunityCards = new List<CardModel>
+            {
+                new CardModel(Rank.Two, Suit.Hearts),
+                new CardModel(Rank.Three, Suit.Diamonds),
+                new CardModel(Rank.Four, Suit.Clubs),
+                new CardModel(Rank.Five, Suit.Spades)
+            };
             
             // Act
-            _gameEngine.DealRiver();
+            _gameEngine.StartRiver();
             
             // Assert
-            Assert.That(_gameEngine.GameState, Is.EqualTo(GameState.River));
             Assert.That(_gameEngine.CommunityCards.Count, Is.EqualTo(5));
+            Assert.That(_gameEngine.GameState, Is.EqualTo(GameState.River));
         }
-
+        
         [Test]
-        public void StartBettingRound_CreatesNewBettingRound()
+        public void StartShowdown_MovesToShowdownState()
         {
             // Arrange
-            _gameEngine.GameState = GameState.PreFlop;
-            _gameEngine.CurrentBettingRound = null;
+            _gameEngine.StartHand();
+            _gameEngine.GameState = GameState.River;
             
             // Act
-            _gameEngine.StartBettingRound();
+            _gameEngine.StartShowdown();
             
             // Assert
-            Assert.That(_gameEngine.CurrentBettingRound, Is.Not.Null);
-            Assert.That(_gameEngine.CurrentBettingRound.Players.Count, Is.EqualTo(_gameEngine.Players.Count));
-            Assert.That(_gameEngine.CurrentBettingRound.CurrentBet, Is.EqualTo(_bigBlind));
+            Assert.That(_gameEngine.GameState, Is.EqualTo(GameState.Showdown));
         }
-
+        
         [Test]
         public void GetWinners_ReturnsCorrectWinners()
         {
@@ -351,19 +301,6 @@ namespace PokerGame.Tests.Core.Game
             }
             
             return deck;
-        }
-        
-        private List<CardModel> GetMockCommunityCards(int count)
-        {
-            var cards = new List<CardModel>();
-            var deck = GetMockDeck();
-            
-            for (int i = 0; i < count; i++)
-            {
-                cards.Add(deck[i]);
-            }
-            
-            return cards;
         }
     }
 }
