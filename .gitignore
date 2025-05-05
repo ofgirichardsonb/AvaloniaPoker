@@ -152,6 +152,7 @@ coverage*.info
 tools/
 backup/
 attached_assets/
+archived_tests/
 workflow_input.txt
 
 appsettings*.json
