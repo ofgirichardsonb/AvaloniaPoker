@@ -27,8 +27,8 @@ namespace PokerGame.Tests.Core.Game
             // Setup players
             _players = new List<Player>
             {
-                new Player { Id = "player1", Name = "Player 1", ChipCount = _startingChips, HoleCards = new List<CardModel>() },
-                new Player { Id = "player2", Name = "Player 2", ChipCount = _startingChips, HoleCards = new List<CardModel>() }
+                new Player("player1", "Player 1", _startingChips),
+                new Player("player2", "Player 2", _startingChips)
             };
 
             // Setup mock card deck service
@@ -70,7 +70,7 @@ namespace PokerGame.Tests.Core.Game
         {
             // Arrange
             var gameEngine = new PokerGameEngine();
-            var player = new Player { Id = "test-player", Name = "Test Player", ChipCount = 1000 };
+            var player = new Player("test-player", "Test Player", 1000);
             
             // Act
             gameEngine.AddPlayer(player);
@@ -85,7 +85,7 @@ namespace PokerGame.Tests.Core.Game
         {
             // Arrange
             var gameEngine = new PokerGameEngine();
-            var player = new Player { Id = "test-player", Name = "Test Player", ChipCount = 1000 };
+            var player = new Player("test-player", "Test Player", 1000);
             gameEngine.AddPlayer(player);
             
             // Act
@@ -206,21 +206,21 @@ namespace PokerGame.Tests.Core.Game
             _gameEngine.GameState = GameState.River;
             _players[0].HoleCards = new List<CardModel>
             {
-                new CardModel { Rank = "A", Suit = "Spades" },
-                new CardModel { Rank = "K", Suit = "Spades" }
+                new CardModel(Rank.Ace, Suit.Spades),
+                new CardModel(Rank.King, Suit.Spades)
             };
             _players[1].HoleCards = new List<CardModel>
             {
-                new CardModel { Rank = "2", Suit = "Hearts" },
-                new CardModel { Rank = "3", Suit = "Diamonds" }
+                new CardModel(Rank.Two, Suit.Hearts),
+                new CardModel(Rank.Three, Suit.Diamonds)
             };
             _gameEngine.CommunityCards = new List<CardModel>
             {
-                new CardModel { Rank = "10", Suit = "Spades" },
-                new CardModel { Rank = "J", Suit = "Spades" },
-                new CardModel { Rank = "Q", Suit = "Spades" },
-                new CardModel { Rank = "9", Suit = "Hearts" },
-                new CardModel { Rank = "2", Suit = "Clubs" }
+                new CardModel(Rank.Ten, Suit.Spades),
+                new CardModel(Rank.Jack, Suit.Spades),
+                new CardModel(Rank.Queen, Suit.Spades),
+                new CardModel(Rank.Nine, Suit.Hearts),
+                new CardModel(Rank.Two, Suit.Clubs)
             };
             
             // With these cards, player 1 has a royal flush, player 2 has a pair of 2s
@@ -239,12 +239,7 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             _gameEngine.StartHand(); // Setup game state
             var player = _gameEngine.Players.ElementAt(0);
-            var action = new PlayerAction
-            {
-                ActionType = PlayerActionType.Call,
-                PlayerId = player.Id,
-                Amount = _bigBlind // Match the big blind
-            };
+            var action = new PlayerAction(ActionType.Call, _bigBlind, player.Id); // Match the big blind
             
             // Capture player's chip count before action
             var initialChipCount = player.ChipCount;
@@ -265,12 +260,7 @@ namespace PokerGame.Tests.Core.Game
             _gameEngine.StartHand(); // Setup game state
             var player = _gameEngine.Players.ElementAt(0);
             var raiseAmount = _bigBlind * 2;
-            var action = new PlayerAction
-            {
-                ActionType = PlayerActionType.Raise,
-                PlayerId = player.Id,
-                Amount = raiseAmount
-            };
+            var action = new PlayerAction(ActionType.Raise, raiseAmount, player.Id);
             
             // Capture player's chip count before action
             var initialChipCount = player.ChipCount;
@@ -291,11 +281,7 @@ namespace PokerGame.Tests.Core.Game
             // Arrange
             _gameEngine.StartHand(); // Setup game state
             var player = _gameEngine.Players.ElementAt(0);
-            var action = new PlayerAction
-            {
-                ActionType = PlayerActionType.Fold,
-                PlayerId = player.Id
-            };
+            var action = new PlayerAction(ActionType.Fold, 0, player.Id);
             
             // Act
             _gameEngine.ProcessPlayerAction(action);
@@ -313,11 +299,7 @@ namespace PokerGame.Tests.Core.Game
             _gameEngine.StartBettingRound();
             var player = _gameEngine.Players.ElementAt(0);
             player.HasActed = false;
-            var action = new PlayerAction
-            {
-                ActionType = PlayerActionType.Check,
-                PlayerId = player.Id
-            };
+            var action = new PlayerAction(ActionType.Check, 0, player.Id);
             
             // Act
             _gameEngine.ProcessPlayerAction(action);
@@ -354,14 +336,17 @@ namespace PokerGame.Tests.Core.Game
         private List<CardModel> GetMockDeck()
         {
             var deck = new List<CardModel>();
-            string[] suits = { "Hearts", "Diamonds", "Clubs", "Spades" };
-            string[] ranks = { "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A" };
+            Suit[] suits = { Suit.Hearts, Suit.Diamonds, Suit.Clubs, Suit.Spades };
+            Rank[] ranks = { 
+                Rank.Two, Rank.Three, Rank.Four, Rank.Five, Rank.Six, Rank.Seven, 
+                Rank.Eight, Rank.Nine, Rank.Ten, Rank.Jack, Rank.Queen, Rank.King, Rank.Ace 
+            };
             
             foreach (var suit in suits)
             {
                 foreach (var rank in ranks)
                 {
-                    deck.Add(new CardModel { Rank = rank, Suit = suit });
+                    deck.Add(new CardModel(rank, suit));
                 }
             }
             

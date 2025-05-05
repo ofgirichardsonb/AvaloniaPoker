@@ -33,7 +33,7 @@ namespace PokerGame.Core.AI
         public PlayerAction MakeDecision(List<Card> communityCards, int currentBet, bool canCheck)
         {
             // Evaluate hand strength to make decision
-            double handStrength = EvaluateHandStrength(_player.HoleCards, communityCards, GameNS.GameState.Unknown);
+            double handStrength = EvaluateHandStrength(_player.HoleCards, communityCards, GameNS.GameState.PreFlop);
             
             // Cannot bet more than the player has
             if (currentBet > _player.Chips)
@@ -47,7 +47,7 @@ namespace PokerGame.Core.AI
                 // With strong hand, 50% chance to bet
                 if (handStrength > 0.6 && _random.NextDouble() > 0.5)
                 {
-                    int betAmount = CalculateRaiseAmount(BigBlind, MaxBet, _player.HoleCards, communityCards, GameNS.GameState.Unknown);
+                    int betAmount = CalculateRaiseAmount(BigBlind, MaxBet, _player.HoleCards, communityCards, GameNS.GameState.PreFlop);
                     return new PlayerAction(ActionType.Bet, betAmount, _player.Id);
                 }
                 return new PlayerAction(ActionType.Check, 0, _player.Id);
@@ -56,14 +56,14 @@ namespace PokerGame.Core.AI
             // If no current bet but cannot check, must bet
             if (currentBet == 0 && !canCheck)
             {
-                int betAmount = CalculateRaiseAmount(BigBlind, MaxBet, _player.HoleCards, communityCards, GameNS.GameState.Unknown);
+                int betAmount = CalculateRaiseAmount(BigBlind, MaxBet, _player.HoleCards, communityCards, GameNS.GameState.PreFlop);
                 return new PlayerAction(ActionType.Bet, betAmount, _player.Id);
             }
             
             // If very strong hand
             if (handStrength > 0.7)
             {
-                int raiseAmount = CalculateRaiseAmount(currentBet + BigBlind, MaxBet, _player.HoleCards, communityCards, GameNS.GameState.Unknown);
+                int raiseAmount = CalculateRaiseAmount(currentBet + BigBlind, MaxBet, _player.HoleCards, communityCards, GameNS.GameState.PreFlop);
                 return new PlayerAction(ActionType.Raise, raiseAmount, _player.Id);
             }
             

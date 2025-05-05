@@ -22,9 +22,9 @@ namespace PokerGame.Tests.Core.Game
             // Create test players
             _players = new List<Player>
             {
-                new Player { Id = "player1", Name = "Player 1", ChipCount = _startingChips },
-                new Player { Id = "player2", Name = "Player 2", ChipCount = _startingChips },
-                new Player { Id = "player3", Name = "Player 3", ChipCount = _startingChips }
+                new Player("player1", "Player 1", _startingChips),
+                new Player("player2", "Player 2", _startingChips),
+                new Player("player3", "Player 3", _startingChips)
             };
             
             // Create betting round
@@ -90,12 +90,11 @@ namespace PokerGame.Tests.Core.Game
             int playerChipsBeforeCall = _players[0].ChipCount;
             
             // Act
-            _bettingRound.ProcessAction(_players[0], new PlayerAction 
-            {
-                PlayerId = _players[0].Id,
-                ActionType = PlayerActionType.Call,
-                Amount = callAmount
-            });
+            _bettingRound.ProcessAction(_players[0], new PlayerAction(
+                ActionType.Call,
+                callAmount,
+                _players[0].Id
+            ));
             
             // Assert
             Assert.That(_players[0].CurrentBet, Is.EqualTo(callAmount));
@@ -117,12 +116,11 @@ namespace PokerGame.Tests.Core.Game
             int raiseAmount = _bettingRound.CurrentBet * 2;
             
             // Act
-            _bettingRound.ProcessAction(_players[0], new PlayerAction 
-            {
-                PlayerId = _players[0].Id,
-                ActionType = PlayerActionType.Raise,
-                Amount = raiseAmount
-            });
+            _bettingRound.ProcessAction(_players[0], new PlayerAction(
+                ActionType.Raise,
+                raiseAmount,
+                _players[0].Id
+            ));
             
             // Assert
             Assert.That(_bettingRound.CurrentBet, Is.EqualTo(raiseAmount));
@@ -144,11 +142,11 @@ namespace PokerGame.Tests.Core.Game
             _bettingRound.InitializeRound(_players, state, dealerPosition, _smallBlind, _bigBlind);
             
             // Act
-            _bettingRound.ProcessAction(_players[0], new PlayerAction 
-            {
-                PlayerId = _players[0].Id,
-                ActionType = PlayerActionType.Fold
-            });
+            _bettingRound.ProcessAction(_players[0], new PlayerAction(
+                ActionType.Fold,
+                0,
+                _players[0].Id
+            ));
             
             // Assert
             Assert.That(_players[0].HasFolded, Is.True);
@@ -175,11 +173,11 @@ namespace PokerGame.Tests.Core.Game
             _bettingRound.InitializeRound(_players, state, dealerPosition, 0, 0);
             
             // Act
-            _bettingRound.ProcessAction(_players[0], new PlayerAction 
-            {
-                PlayerId = _players[0].Id,
-                ActionType = PlayerActionType.Check
-            });
+            _bettingRound.ProcessAction(_players[0], new PlayerAction(
+                ActionType.Check,
+                0,
+                _players[0].Id
+            ));
             
             // Assert
             Assert.That(_players[0].HasActed, Is.True);
@@ -198,12 +196,11 @@ namespace PokerGame.Tests.Core.Game
             for (int i = 0; i < _players.Count; i++)
             {
                 var playerIndex = _bettingRound.GetNextPlayerIndex();
-                _bettingRound.ProcessAction(_players[playerIndex], new PlayerAction 
-                {
-                    PlayerId = _players[playerIndex].Id,
-                    ActionType = PlayerActionType.Call,
-                    Amount = _bettingRound.CurrentBet
-                });
+                _bettingRound.ProcessAction(_players[playerIndex], new PlayerAction(
+                    ActionType.Call,
+                    _bettingRound.CurrentBet,
+                    _players[playerIndex].Id
+                ));
             }
             
             // Act
@@ -222,20 +219,18 @@ namespace PokerGame.Tests.Core.Game
             _bettingRound.InitializeRound(_players, state, dealerPosition, _smallBlind, _bigBlind);
             
             // First player raises
-            _bettingRound.ProcessAction(_players[0], new PlayerAction 
-            {
-                PlayerId = _players[0].Id,
-                ActionType = PlayerActionType.Raise,
-                Amount = _bettingRound.CurrentBet * 2
-            });
+            _bettingRound.ProcessAction(_players[0], new PlayerAction(
+                ActionType.Raise,
+                _players[0].Id,
+                _bettingRound.CurrentBet * 2
+            ));
             
             // Second player calls
-            _bettingRound.ProcessAction(_players[1], new PlayerAction 
-            {
-                PlayerId = _players[1].Id,
-                ActionType = PlayerActionType.Call,
-                Amount = _bettingRound.CurrentBet
-            });
+            _bettingRound.ProcessAction(_players[1], new PlayerAction(
+                ActionType.Call,
+                _players[1].Id,
+                _bettingRound.CurrentBet
+            ));
             
             // Third player hasn't acted yet
             
@@ -255,27 +250,25 @@ namespace PokerGame.Tests.Core.Game
             _bettingRound.InitializeRound(_players, state, dealerPosition, _smallBlind, _bigBlind);
             
             // First player raises
-            _bettingRound.ProcessAction(_players[0], new PlayerAction 
-            {
-                PlayerId = _players[0].Id,
-                ActionType = PlayerActionType.Raise,
-                Amount = _bettingRound.CurrentBet * 2
-            });
+            _bettingRound.ProcessAction(_players[0], new PlayerAction(
+                ActionType.Raise,
+                _players[0].Id,
+                _bettingRound.CurrentBet * 2
+            ));
             
             // Second player calls the raise
-            _bettingRound.ProcessAction(_players[1], new PlayerAction 
-            {
-                PlayerId = _players[1].Id,
-                ActionType = PlayerActionType.Call,
-                Amount = _bettingRound.CurrentBet
-            });
+            _bettingRound.ProcessAction(_players[1], new PlayerAction(
+                ActionType.Call,
+                _players[1].Id,
+                _bettingRound.CurrentBet
+            ));
             
             // Third player folds
-            _bettingRound.ProcessAction(_players[2], new PlayerAction 
-            {
-                PlayerId = _players[2].Id,
-                ActionType = PlayerActionType.Fold
-            });
+            _bettingRound.ProcessAction(_players[2], new PlayerAction(
+                ActionType.Fold,
+                _players[2].Id,
+                0
+            ));
             
             // Act
             bool isComplete = _bettingRound.IsBettingRoundComplete();
@@ -293,17 +286,17 @@ namespace PokerGame.Tests.Core.Game
             _bettingRound.InitializeRound(_players, state, dealerPosition, _smallBlind, _bigBlind);
             
             // First two players fold
-            _bettingRound.ProcessAction(_players[0], new PlayerAction 
-            {
-                PlayerId = _players[0].Id,
-                ActionType = PlayerActionType.Fold
-            });
+            _bettingRound.ProcessAction(_players[0], new PlayerAction(
+                ActionType.Fold,
+                _players[0].Id,
+                0
+            ));
             
-            _bettingRound.ProcessAction(_players[1], new PlayerAction 
-            {
-                PlayerId = _players[1].Id,
-                ActionType = PlayerActionType.Fold
-            });
+            _bettingRound.ProcessAction(_players[1], new PlayerAction(
+                ActionType.Fold,
+                _players[1].Id,
+                0
+            ));
             
             // Act
             bool isComplete = _bettingRound.IsBettingRoundComplete();

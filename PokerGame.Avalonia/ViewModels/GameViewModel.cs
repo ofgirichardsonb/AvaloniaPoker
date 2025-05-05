@@ -36,7 +36,7 @@ namespace PokerGame.Avalonia.ViewModels
         private string _logMessages = "";
         
         // AI Player stuff
-        private AIPokerPlayer _aiPlayer = new AIPokerPlayer();
+        private AIPokerPlayer? _aiPlayer = null;
         private Dictionary<string, bool> _aiPlayers = new Dictionary<string, bool>();
         
         public GameViewModel()
@@ -431,6 +431,12 @@ namespace PokerGame.Avalonia.ViewModels
             // Track this player as an AI player
             _aiPlayers[playerName] = true;
             
+            // Create or update the AI player decision maker if needed
+            if (_aiPlayer == null)
+            {
+                _aiPlayer = new AIPokerPlayer(player);
+            }
+            
             // Show a message that the AI player was added
             string message = $"Added AI opponent {playerName} to the game.";
             ShowMessage(message);
@@ -687,6 +693,13 @@ namespace PokerGame.Avalonia.ViewModels
                 if (player.Name.Contains("AI"))
                 {
                     _aiPlayers[player.Name] = true;
+                    
+                    // Initialize the AI decision maker if needed
+                    if (_aiPlayer == null)
+                    {
+                        Console.WriteLine($"★★★★★ [UI] Initializing AI player decision maker with player {player.Name} ★★★★★");
+                        _aiPlayer = new AIPokerPlayer(player);
+                    }
                 }
                 
                 // Deduplicate cards for this player
